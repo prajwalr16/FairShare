@@ -1,0 +1,29 @@
+
+# React Native
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Expo
+expo-env.d.ts
+
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/.pytest_cache/
+*.pyc
+
+# Environment
+.env
+.env.local
+.env.*
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
