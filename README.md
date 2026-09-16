@@ -1,10 +1,12 @@
-# FairShare v0.1
 
-Production-first Splitwise clone.
+# FairShare Sprint 1
 
-## Stack
-- React Native (Expo)
-- FastAPI (Python)
-- Supabase
+## Run backend
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload
 
-This is the first repository scaffold.
+## Run mobile
+cd mobile
+npm install
+npx expo start

@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "FairShare",
+    "slug": "fairshare",
+    "scheme": "fairshare",
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
