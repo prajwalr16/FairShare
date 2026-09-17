@@ -1,0 +1,11 @@
+import React,{useEffect,useState} from 'react';
+import {SafeAreaView,FlatList,Text,Pressable,StyleSheet} from 'react-native';
+import {Ionicons} from '@expo/vector-icons';
+import {supabase} from '../../config/supabase';
+import {getGroups,createGroup} from '../../services/groupService';
+import GroupCard from '../../components/GroupCard';
+import CreateGroupModal from '../../components/CreateGroupModal';
+export default function HomeScreen(){const[g,setG]=useState([]);const[o,setO]=useState(false);const[u,setU]=useState(null);
+useEffect(()=>{(async()=>{const {data:{user}}=await supabase.auth.getUser();setU(user);if(user){const {data}=await getGroups(user.id);if(data)setG(data);}})()},[]);
+const add=async(x)=>{if(!u)return;const {data}=await createGroup(u.id,x);if(data)setG([data,...g]);};
+return <SafeAreaView style={s.c}><FlatList data={g} keyExtractor={(i)=>i.id||i.name} contentContainerStyle={{padding:18,paddingBottom:100}} ListHeaderComponent={<Text style={s.h}>Your Groups</Text>} ListEmptyComponent={<Text style={s.e}>No groups yet. Tap + to create your first group.</Text>} renderItem={({item})=><GroupCard name={item.name} type={item.type} currency={item.currency}/>}/><Pressable style={s.f} onPress={()=>setO(true)}><Ionicons name='add' size={30} color='white'/></Pressable><CreateGroupModal visible={o} onClose={()=>setO(false)} onCreate={add}/></SafeAreaView>};const s=StyleSheet.create({c:{flex:1,backgroundColor:'#0F172A'},h:{color:'white',fontSize:30,fontWeight:'700',marginBottom:20},e:{color:'#94A3B8',textAlign:'center',marginTop:80},f:{position:'absolute',right:24,bottom:28,width:62,height:62,borderRadius:31,backgroundColor:'#0EA5A4',alignItems:'center',justifyContent:'center'}});

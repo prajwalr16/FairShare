@@ -1,0 +1,1 @@
+export const GROUP_TYPES=['Trip','Home','Friends','Office','Other'] as const;
