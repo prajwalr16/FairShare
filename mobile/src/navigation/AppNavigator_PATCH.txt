@@ -1,0 +1,3 @@
+// Add this screen to AppNavigator
+// import ResetPasswordScreen from "../screens/auth/ResetPasswordScreen";
+// <Stack.Screen name="ResetPassword" component={ResetPasswordScreen}/>
