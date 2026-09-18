@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StatusBar,
@@ -54,6 +55,8 @@ export default function AddExpenseScreen() {
   const [splitType, setSplitType] = useState<SplitType>('Equal');
   const [splitInputs, setSplitInputs] = useState<SplitInput[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [payerId, setPayerId] = useState<string | null>(null);
+  const [payerPickerVisible, setPayerPickerVisible] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [saving, setSaving] = useState(false);
   const [valuesCustomized, setValuesCustomized] = useState(false);
@@ -69,6 +72,8 @@ export default function AddExpenseScreen() {
           setMembers([]);
           setSelectedIds([]);
           setSplitInputs([]);
+          setCurrentUserId(null);
+          setPayerId(null);
           setLoadingMembers(false);
         }
         return;
@@ -83,6 +88,7 @@ export default function AddExpenseScreen() {
 
       const userId = userResult.data.user?.id || null;
       setCurrentUserId(userId);
+      setPayerId(userId);
 
       if (memberResult.error) {
         setMembers([]);
@@ -132,6 +138,19 @@ export default function AddExpenseScreen() {
       ),
     [members, selectedIds]
   );
+
+  const payer = useMemo(
+    () =>
+      members.find((member) => member.user_id === payerId) || null,
+    [members, payerId]
+  );
+
+  const payerName = useMemo(() => {
+    if (!payer) {
+      return currentUserId ? 'You' : 'Select member';
+    }
+    return payer.full_name?.trim() || payer.email || 'Member';
+  }, [currentUserId, payer]);
 
   const effectiveInputs = useMemo(() => {
     const byId = new Map(
@@ -277,6 +296,19 @@ export default function AddExpenseScreen() {
       return;
     }
 
+    if (!payerId) {
+      Alert.alert('Select payer', 'Choose which group member paid this expense.');
+      return;
+    }
+
+    if (!members.some((member) => member.user_id === payerId)) {
+      Alert.alert(
+        'Invalid payer',
+        'The selected payer is not an active member of this group.'
+      );
+      return;
+    }
+
     if (selectedIds.length === 0) {
       Alert.alert(
         'Select members',
@@ -305,7 +337,7 @@ export default function AddExpenseScreen() {
       groupId,
       title: cleanTitle,
       amount: Number(amount.toFixed(2)),
-      paidBy: currentUserId,
+      paidBy: payerId,
       splitType,
       splits: effectiveInputs,
     });
@@ -431,6 +463,33 @@ export default function AddExpenseScreen() {
                 />
               </View>
               <Text style={styles.helperText}>Group currency: INR</Text>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.label}>Paid by</Text>
+              <Pressable
+                style={styles.payerSelector}
+                onPress={() => setPayerPickerVisible(true)}
+                disabled={loadingMembers || members.length === 0}
+              >
+                <View style={styles.payerSelectorIcon}>
+                  <Ionicons name="wallet-outline" size={20} color="#0EA5A4" />
+                </View>
+                <View style={styles.payerSelectorInfo}>
+                  <Text style={styles.payerSelectorName} numberOfLines={1}>
+                    {payerName}
+                  </Text>
+                  <Text style={styles.payerSelectorMeta}>
+                    {payerId === currentUserId
+                      ? 'You paid this expense'
+                      : 'Another group member paid this expense'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-down" size={20} color="#94A3B8" />
+              </Pressable>
+              <Text style={styles.helperText}>
+                The payer can be different from the people sharing the expense.
+              </Text>
             </View>
 
             <View style={styles.section}>
@@ -600,18 +659,6 @@ export default function AddExpenseScreen() {
               </Text>
             </View>
 
-            <View style={styles.payerCard}>
-              <View style={styles.payerIcon}>
-                <Ionicons name="wallet-outline" size={20} color="#0EA5A4" />
-              </View>
-              <View style={styles.memberInfo}>
-                <Text style={styles.payerTitle}>Paid by you</Text>
-                <Text style={styles.memberMeta}>
-                  Payer selection will be expanded after split types are complete.
-                </Text>
-              </View>
-            </View>
-
             <Pressable
               style={[
                 styles.saveButton,
@@ -637,6 +684,86 @@ export default function AddExpenseScreen() {
           </ScrollView>
         </View>
       </SafeAreaView>
+
+      <Modal
+        visible={payerPickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPayerPickerVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            style={styles.modalDismissArea}
+            onPress={() => setPayerPickerVisible(false)}
+          />
+          <View style={styles.payerModalCard}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Paid by</Text>
+                <Text style={styles.modalSubtitle}>
+                  Select the active member who paid this expense.
+                </Text>
+              </View>
+              <Pressable
+                style={styles.modalCloseButton}
+                onPress={() => setPayerPickerVisible(false)}
+              >
+                <Ionicons name="close" size={20} color="#CBD5E1" />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.payerList}
+            >
+              {members.map((member) => {
+                const userId = member.user_id as string;
+                const selected = userId === payerId;
+
+                return (
+                  <Pressable
+                    key={member.id}
+                    style={[
+                      styles.payerRow,
+                      selected && styles.payerRowSelected,
+                    ]}
+                    onPress={() => {
+                      setPayerId(userId);
+                      setPayerPickerVisible(false);
+                    }}
+                  >
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>
+                        {displayName(member).charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.memberName} numberOfLines={1}>
+                        {displayName(member)}
+                      </Text>
+                      <Text style={styles.memberMeta}>
+                        {userId === currentUserId
+                          ? 'You'
+                          : member.role === 'owner'
+                            ? 'Owner'
+                            : 'Member'}
+                      </Text>
+                    </View>
+                    {selected ? (
+                      <View style={styles.payerCheck}>
+                        <Ionicons name="checkmark" size={17} color="#FFFFFF" />
+                      </View>
+                    ) : (
+                      <View style={styles.payerEmptyCheck} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -726,6 +853,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginTop: 7,
+  },
+  payerSelector: {
+    minHeight: 72,
+    borderRadius: 18,
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  payerSelectorIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
+  },
+  payerSelectorInfo: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 10,
+  },
+  payerSelectorName: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  payerSelectorMeta: {
+    color: '#64748B',
+    fontSize: 12,
+    marginTop: 3,
   },
   splitSelector: {
     gap: 9,
@@ -956,30 +1116,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
   },
-  payerCard: {
-    minHeight: 74,
-    borderRadius: 18,
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-  payerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: '#0F172A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 11,
-  },
-  payerTitle: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
   saveButton: {
     minHeight: 56,
     borderRadius: 17,
@@ -996,5 +1132,89 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.58)',
+  },
+  modalDismissArea: {
+    flex: 1,
+  },
+  payerModalCard: {
+    maxHeight: '75%',
+    backgroundColor: '#0F172A',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 28,
+  },
+  modalHandle: {
+    alignSelf: 'center',
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#334155',
+    marginBottom: 18,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    color: '#FFFFFF',
+    fontSize: 21,
+    fontWeight: '800',
+  },
+  modalSubtitle: {
+    color: '#64748B',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
+    maxWidth: 280,
+  },
+  modalCloseButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    backgroundColor: '#1E293B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  payerList: {
+    gap: 9,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  payerRow: {
+    minHeight: 62,
+    borderRadius: 17,
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  payerRowSelected: {
+    borderWidth: 1,
+    borderColor: '#0EA5A4',
+  },
+  payerCheck: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#0EA5A4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  payerEmptyCheck: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#475569',
   },
 });

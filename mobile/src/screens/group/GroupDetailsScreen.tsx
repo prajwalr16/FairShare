@@ -8,6 +8,12 @@ import {
   RefreshControl,
   StatusBar,
   Alert,
+  Switch,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import {
   SafeAreaView,
@@ -29,6 +35,19 @@ import {
   removeGroupMember,
   GroupMember,
 } from '../../services/memberService';
+import {
+  getGroupBalances,
+  GroupBalance,
+} from '../../services/balanceService';
+import {
+  getGroupDebtRelationships,
+  DebtRelationship,
+} from '../../services/debtService';
+import {
+  getGroupSettlements,
+  recordSettlement,
+  GroupSettlement,
+} from '../../services/settlementService';
 
 type Expense = {
   id: string;
@@ -39,6 +58,37 @@ type Expense = {
   created_at?: string | null;
 };
 
+function money(value: number | string | null | undefined) {
+  const amount = Number(value ?? 0);
+  return `₹${amount.toFixed(2)}`;
+}
+
+function displayName(balance: GroupBalance) {
+  return balance.full_name?.trim() || balance.email?.trim() || 'Member';
+}
+
+function balanceLabel(balance: GroupBalance) {
+  const net = Number(balance.net_balance ?? 0);
+
+  if (Math.abs(net) < 0.005) {
+    return 'Settled';
+  }
+
+  return net > 0
+    ? `is owed ${money(net)}`
+    : `owes ${money(Math.abs(net))}`;
+}
+
+function signedBalance(balance: GroupBalance) {
+  const net = Number(balance.net_balance ?? 0);
+
+  if (Math.abs(net) < 0.005) {
+    return money(0);
+  }
+
+  return `${net > 0 ? '+' : '-'}${money(Math.abs(net))}`;
+}
+
 export default function GroupDetailsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -48,25 +98,48 @@ export default function GroupDetailsScreen() {
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [members, setMembers] = useState<GroupMember[]>([]);
+  const [balances, setBalances] = useState<GroupBalance[]>([]);
+  const [settlements, setSettlements] = useState<GroupSettlement[]>([]);
+  const [debtSets, setDebtSets] = useState<{
+    direct: DebtRelationship[];
+    simplified: DebtRelationship[];
+  }>({
+    direct: [],
+    simplified: [],
+  });
+  const [simplifyDebts, setSimplifyDebts] = useState(true);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
+  const [settleModalVisible, setSettleModalVisible] = useState(false);
+  const [selectedDebt, setSelectedDebt] = useState<DebtRelationship | null>(null);
+  const [settlementAmountText, setSettlementAmountText] = useState('');
+  const [settlementNote, setSettlementNote] = useState('');
+  const [settlementSaving, setSettlementSaving] = useState(false);
 
   const loadGroupData = useCallback(async () => {
     if (!groupId) {
       setExpenses([]);
       setMembers([]);
+      setBalances([]);
+      setSettlements([]);
+      setDebtSets({ direct: [], simplified: [] });
       setLoading(false);
       return;
     }
 
     const userResult = await supabase.auth.getUser();
 
-    const [expenseResult, memberResult, groupResult] =
-      await Promise.all([
+    const [
+      expenseResult,
+      memberResult,
+      groupResult,
+      balanceResult,
+      settlementResult,
+    ] = await Promise.all([
         supabase
           .from('expenses')
           .select('*')
@@ -80,6 +153,8 @@ export default function GroupDetailsScreen() {
           .select('owner_id')
           .eq('id', groupId)
           .single(),
+        getGroupBalances(groupId),
+        getGroupSettlements(groupId),
       ]);
 
     if (expenseResult.error) {
@@ -91,6 +166,16 @@ export default function GroupDetailsScreen() {
       setExpenses(expenseResult.data || []);
     }
 
+    if (settlementResult.error) {
+      console.log(
+        'Failed to load settlements:',
+        settlementResult.error.message
+      );
+      setSettlements([]);
+    } else {
+      setSettlements((settlementResult.data || []) as GroupSettlement[]);
+    }
+
     if (memberResult.error) {
       console.log(
         'Failed to load members:',
@@ -98,6 +183,41 @@ export default function GroupDetailsScreen() {
       );
     } else {
       setMembers(memberResult.data || []);
+    }
+
+    let loadedBalances: GroupBalance[] = [];
+
+    if (balanceResult.error) {
+      console.log(
+        'Failed to load balances:',
+        balanceResult.error.message
+      );
+      setBalances([]);
+      setDebtSets({ direct: [], simplified: [] });
+    } else {
+      loadedBalances = (balanceResult.data || []) as GroupBalance[];
+      setBalances(loadedBalances);
+    }
+
+    if (expenseResult.error || balanceResult.error) {
+      setDebtSets({ direct: [], simplified: [] });
+    } else {
+      const debtResult = await getGroupDebtRelationships(
+        (expenseResult.data || []) as Expense[],
+        loadedBalances
+      );
+
+      if (debtResult.error) {
+        console.log(
+          'Failed to calculate debt relationships:',
+          debtResult.error.message
+        );
+        setDebtSets({ direct: [], simplified: [] });
+      } else {
+        setDebtSets(
+          debtResult.data || { direct: [], simplified: [] }
+        );
+      }
     }
 
     setOwnerId(groupResult.data?.owner_id || null);
@@ -119,13 +239,10 @@ export default function GroupDetailsScreen() {
 
   const handleAddMember = async (email: string) => {
     if (!groupId) {
-      throw new Error(
-        'Group information is missing.'
-      );
+      throw new Error('Group information is missing.');
     }
 
-    const { data, error } =
-      await addGroupMember(groupId, email);
+    const { data, error } = await addGroupMember(groupId, email);
 
     if (error) {
       throw error;
@@ -146,9 +263,90 @@ export default function GroupDetailsScreen() {
     }
   };
 
-  const handleRemoveMember = (
-    member: GroupMember
-  ) => {
+  const openSettlementModal = (debt: DebtRelationship) => {
+    if (!currentUserId) {
+      Alert.alert('Not signed in', 'Please sign in again and retry.');
+      return;
+    }
+
+    if (
+      debt.from_user_id !== currentUserId &&
+      debt.to_user_id !== currentUserId
+    ) {
+      return;
+    }
+
+    setSelectedDebt(debt);
+    setSettlementAmountText(debt.amount.toFixed(2));
+    setSettlementNote('');
+    setSettleModalVisible(true);
+  };
+
+  const closeSettlementModal = () => {
+    if (settlementSaving) return;
+
+    setSettleModalVisible(false);
+    setSelectedDebt(null);
+    setSettlementAmountText('');
+    setSettlementNote('');
+  };
+
+  const handleRecordSettlement = async () => {
+    if (!groupId || !selectedDebt) return;
+
+    const normalized = settlementAmountText.replace(/,/g, '').trim();
+
+    if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
+      Alert.alert(
+        'Invalid amount',
+        'Enter a valid settlement amount with up to 2 decimal places.'
+      );
+      return;
+    }
+
+    const amount = Number(normalized);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      Alert.alert('Invalid amount', 'Settlement amount must be greater than 0.');
+      return;
+    }
+
+    if (amount > selectedDebt.amount + 0.005) {
+      Alert.alert(
+        'Amount too high',
+        `The maximum amount for this debt is ${money(selectedDebt.amount)}.`
+      );
+      return;
+    }
+
+    if (settlementNote.trim().length > 200) {
+      Alert.alert('Note too long', 'Keep the settlement note within 200 characters.');
+      return;
+    }
+
+    setSettlementSaving(true);
+
+    const { error } = await recordSettlement({
+      groupId,
+      fromUserId: selectedDebt.from_user_id,
+      toUserId: selectedDebt.to_user_id,
+      amount: Number(amount.toFixed(2)),
+      note: settlementNote,
+    });
+
+    setSettlementSaving(false);
+
+    if (error) {
+      Alert.alert('Unable to record payment', error.message);
+      return;
+    }
+
+    closeSettlementModal();
+    await loadGroupData();
+    Alert.alert('Payment recorded', `${money(amount)} settlement recorded successfully.`);
+  };
+
+  const handleRemoveMember = (member: GroupMember) => {
     if (!member.id) return;
 
     Alert.alert(
@@ -163,14 +361,10 @@ export default function GroupDetailsScreen() {
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
-            const { error } =
-              await removeGroupMember(member.id);
+            const { error } = await removeGroupMember(member.id);
 
             if (error) {
-              return Alert.alert(
-                'Unable to remove',
-                error.message
-              );
+              return Alert.alert('Unable to remove', error.message);
             }
 
             await loadGroupData();
@@ -181,10 +375,75 @@ export default function GroupDetailsScreen() {
   };
 
   const totalExpenses = expenses.reduce(
-    (sum, expense) =>
-      sum + Number(expense.amount ?? 0),
+    (sum, expense) => sum + Number(expense.amount ?? 0),
     0
   );
+
+  const currentBalance = balances.find(
+    (balance) => balance.user_id === currentUserId
+  );
+
+  const currentNet = Number(currentBalance?.net_balance ?? 0);
+  const currentBalanceTitle =
+    Math.abs(currentNet) < 0.005
+      ? 'You are settled'
+      : currentNet > 0
+        ? 'You are owed'
+        : 'You owe';
+  const currentBalanceAmount = money(Math.abs(currentNet));
+
+  const directDebtsAfterSettlements = debtSets.direct
+    .map((debt) => {
+      const settledAmount = settlements
+        .filter(
+          (settlement) =>
+            settlement.from_user_id === debt.from_user_id &&
+            settlement.to_user_id === debt.to_user_id
+        )
+        .reduce(
+          (sum, settlement) => sum + Number(settlement.amount ?? 0),
+          0
+        );
+
+      return {
+        ...debt,
+        amount: Math.max(
+          0,
+          Number((Number(debt.amount ?? 0) - settledAmount).toFixed(2))
+        ),
+      };
+    })
+    .filter((debt) => debt.amount > 0.005);
+
+  const visibleDebts = simplifyDebts
+    ? debtSets.simplified
+    : directDebtsAfterSettlements;
+
+  function debtDisplayName(userId: string, fallback: string) {
+    if (userId === currentUserId) return 'You';
+    return fallback;
+  }
+
+  function debtDescription(debt: DebtRelationship) {
+    const from = debtDisplayName(
+      debt.from_user_id,
+      debt.from_name
+    );
+    const to = debtDisplayName(
+      debt.to_user_id,
+      debt.to_name
+    );
+
+    if (debt.from_user_id === currentUserId) {
+      return `You owe ${to}`;
+    }
+
+    if (debt.to_user_id === currentUserId) {
+      return `${from} owes you`;
+    }
+
+    return `${from} owes ${to}`;
+  }
 
   return (
     <>
@@ -212,10 +471,7 @@ export default function GroupDetailsScreen() {
             </Pressable>
 
             <View style={styles.headerTextContainer}>
-              <Text
-                style={styles.groupName}
-                numberOfLines={1}
-              >
+              <Text style={styles.groupName} numberOfLines={1}>
                 {groupName || 'Group'}
               </Text>
 
@@ -250,13 +506,336 @@ export default function GroupDetailsScreen() {
 
                   <Text style={styles.expenseCount}>
                     {expenses.length}{' '}
-                    {expenses.length === 1
-                      ? 'expense'
-                      : 'expenses'}
+                    {expenses.length === 1 ? 'expense' : 'expenses'}
+                  </Text>
+                </View>
+
+                <View style={styles.balanceCard}>
+                  <View style={styles.balanceHeaderRow}>
+                    <View style={styles.balanceIcon}>
+                      <Ionicons
+                        name="wallet-outline"
+                        size={21}
+                        color="#0EA5A4"
+                      />
+                    </View>
+
+                    <View style={styles.balanceHeaderText}>
+                      <Text style={styles.balanceTitle}>
+                        Your Balance
+                      </Text>
+
+                      <Text style={styles.balanceSubtitle}>
+                        Based on all recorded expenses
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text
+                    style={[
+                      styles.yourBalanceAmount,
+                      currentNet > 0 && styles.positiveAmount,
+                      currentNet < 0 && styles.negativeAmount,
+                    ]}
+                  >
+                    {currentBalance
+                      ? currentBalanceAmount
+                      : money(0)}
+                  </Text>
+
+                  <Text style={styles.yourBalanceLabel}>
+                    {currentBalance
+                      ? currentBalanceTitle
+                      : 'No balance data yet'}
                   </Text>
                 </View>
 
                 <View style={styles.sectionHeader}>
+                  <View>
+                    <Text style={styles.sectionTitle}>
+                      Balances
+                    </Text>
+
+                    <Text style={styles.sectionSubtitle}>
+                      What each member has paid and owes
+                    </Text>
+                  </View>
+                </View>
+
+                {balances.length ? (
+                  <View style={styles.balanceList}>
+                    {balances.map((balance) => {
+                      const isCurrentUser =
+                        balance.user_id === currentUserId;
+                      const net = Number(balance.net_balance ?? 0);
+                      const isSettled = Math.abs(net) < 0.005;
+
+                      return (
+                        <View
+                          key={balance.user_id}
+                          style={styles.memberBalanceCard}
+                        >
+                          <View style={styles.memberBalanceAvatar}>
+                            <Text
+                              style={styles.memberBalanceAvatarText}
+                            >
+                              {displayName(balance)
+                                .charAt(0)
+                                .toUpperCase()}
+                            </Text>
+                          </View>
+
+                          <View style={styles.memberBalanceInfo}>
+                            <Text
+                              style={styles.memberBalanceName}
+                              numberOfLines={1}
+                            >
+                              {isCurrentUser
+                                ? 'You'
+                                : displayName(balance)}
+                            </Text>
+
+                            <Text style={styles.memberBalanceMeta}>
+                              Paid {money(balance.total_paid)}
+                              {'  •  '}
+                              Share {money(balance.total_owed)}
+                            </Text>
+
+                            <View style={styles.memberBalanceStatusRow}>
+                              <Text
+                                style={styles.memberBalanceStatus}
+                                numberOfLines={1}
+                              >
+                                {balanceLabel(balance)}
+                              </Text>
+
+                              <Text
+                                style={[
+                                  styles.memberBalanceAmount,
+                                  isSettled && styles.settledAmount,
+                                  net > 0 && styles.positiveAmount,
+                                  net < 0 && styles.negativeAmount,
+                                ]}
+                              >
+                                {signedBalance(balance)}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <View style={styles.noBalanceCard}>
+                    <Ionicons
+                      name="wallet-outline"
+                      size={26}
+                      color="#64748B"
+                    />
+                    <Text style={styles.noBalanceText}>
+                      Add an expense to start calculating balances.
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.debtSectionHeader}>
+                  <View style={styles.debtHeaderText}>
+                    <Text style={styles.sectionTitle}>
+                      Who owes whom
+                    </Text>
+
+                    <Text style={styles.sectionSubtitle}>
+                      {simplifyDebts
+                        ? 'Minimized payment relationships'
+                        : 'Individual expense obligations'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.simplifyToggleContainer}>
+                    <Text style={styles.simplifyLabel}>
+                      Simplify Debts
+                    </Text>
+
+                    <Switch
+                      value={simplifyDebts}
+                      onValueChange={setSimplifyDebts}
+                      trackColor={{
+                        false: '#334155',
+                        true: '#0F766E',
+                      }}
+                      thumbColor={simplifyDebts ? '#0EA5A4' : '#CBD5E1'}
+                    />
+                  </View>
+                </View>
+
+                {visibleDebts.length ? (
+                  <View style={styles.debtList}>
+                    {visibleDebts.map((debt, index) => (
+                      <View
+                        key={`${debt.from_user_id}-${debt.to_user_id}-${index}`}
+                        style={styles.debtCard}
+                      >
+                        <View style={styles.debtIcon}>
+                          <Ionicons
+                            name="arrow-forward-outline"
+                            size={18}
+                            color="#0EA5A4"
+                          />
+                        </View>
+
+                        <View style={styles.debtInfo}>
+                          <Text
+                            style={styles.debtDescription}
+                            numberOfLines={1}
+                          >
+                            {debtDescription(debt)}
+                          </Text>
+
+                          <Text style={styles.debtParties} numberOfLines={1}>
+                            {debtDisplayName(debt.from_user_id, debt.from_name)}
+                            {'  →  '}
+                            {debtDisplayName(debt.to_user_id, debt.to_name)}
+                          </Text>
+                        </View>
+
+                        <View style={styles.debtActions}>
+                          <Text style={styles.debtAmount}>
+                            {money(debt.amount)}
+                          </Text>
+
+                          {currentUserId &&
+                          (debt.from_user_id === currentUserId ||
+                            debt.to_user_id === currentUserId) ? (
+                            <Pressable
+                              style={styles.settleButton}
+                              onPress={() => openSettlementModal(debt)}
+                              disabled={settlementSaving}
+                            >
+                              <Text style={styles.settleButtonText}>
+                                Settle Up
+                              </Text>
+                            </Pressable>
+                          ) : null}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.noDebtCard}>
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={26}
+                      color="#22C55E"
+                    />
+                    <Text style={styles.noDebtText}>
+                      No outstanding debts. Everyone is settled.
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.sectionHeader}>
+                  <View>
+                    <Text style={styles.sectionTitle}>
+                      Settlement History
+                    </Text>
+
+                    <Text style={styles.sectionSubtitle}>
+                      Recent payments recorded in this group
+                    </Text>
+                  </View>
+                </View>
+
+                {settlements.length ? (
+                  <View style={styles.settlementList}>
+                    {settlements.map((settlement) => {
+                      const fromName =
+                        settlement.from_user_id === currentUserId
+                          ? 'You'
+                          : balances.find(
+                              (balance) =>
+                                balance.user_id === settlement.from_user_id
+                            )?.full_name?.trim() ||
+                            balances.find(
+                              (balance) =>
+                                balance.user_id === settlement.from_user_id
+                            )?.email ||
+                            'Member';
+
+                      const toName =
+                        settlement.to_user_id === currentUserId
+                          ? 'You'
+                          : balances.find(
+                              (balance) =>
+                                balance.user_id === settlement.to_user_id
+                            )?.full_name?.trim() ||
+                            balances.find(
+                              (balance) =>
+                                balance.user_id === settlement.to_user_id
+                            )?.email ||
+                            'Member';
+
+                      const createdDate = new Date(settlement.created_at);
+                      const dateLabel = Number.isNaN(createdDate.getTime())
+                        ? ''
+                        : createdDate.toLocaleDateString([], {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          });
+
+                      return (
+                        <View
+                          key={settlement.id}
+                          style={styles.settlementCard}
+                        >
+                          <View style={styles.settlementIcon}>
+                            <Ionicons
+                              name="checkmark-done-outline"
+                              size={18}
+                              color="#22C55E"
+                            />
+                          </View>
+
+                          <View style={styles.settlementInfo}>
+                            <Text
+                              style={styles.settlementDescription}
+                              numberOfLines={1}
+                            >
+                              {fromName} paid {toName}
+                            </Text>
+
+                            <Text
+                              style={styles.settlementMeta}
+                              numberOfLines={1}
+                            >
+                              {dateLabel}
+                              {settlement.note?.trim()
+                                ? `  •  ${settlement.note.trim()}`
+                                : ''}
+                            </Text>
+                          </View>
+
+                          <Text style={styles.settlementAmount}>
+                            {money(settlement.amount)}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <View style={styles.noSettlementCard}>
+                    <Ionicons
+                      name="swap-horizontal-outline"
+                      size={26}
+                      color="#64748B"
+                    />
+                    <Text style={styles.noSettlementText}>
+                      No settlements recorded yet.
+                    </Text>
+                  </View>
+                )}
+
+                <View style={[styles.sectionHeader, styles.membersHeader]}>
                   <View>
                     <Text style={styles.sectionTitle}>
                       Members
@@ -264,18 +843,14 @@ export default function GroupDetailsScreen() {
 
                     <Text style={styles.sectionSubtitle}>
                       {members.length}{' '}
-                      {members.length === 1
-                        ? 'member'
-                        : 'members'}
+                      {members.length === 1 ? 'member' : 'members'}
                     </Text>
                   </View>
 
                   {currentUserId === ownerId ? (
                     <Pressable
                       style={styles.addMemberButton}
-                      onPress={() =>
-                        setShowAddMember(true)
-                      }
+                      onPress={() => setShowAddMember(true)}
                     >
                       <Ionicons
                         name="person-add-outline"
@@ -283,9 +858,7 @@ export default function GroupDetailsScreen() {
                         color="#FFFFFF"
                       />
 
-                      <Text
-                        style={styles.addMemberText}
-                      >
+                      <Text style={styles.addMemberText}>
                         Add
                       </Text>
                     </Pressable>
@@ -303,10 +876,8 @@ export default function GroupDetailsScreen() {
                       member={member}
                       isOwner={isOwner}
                       onRemove={
-                        currentUserId === ownerId &&
-                        !isOwner
-                          ? () =>
-                              handleRemoveMember(member)
+                        currentUserId === ownerId && !isOwner
+                          ? () => handleRemoveMember(member)
                           : undefined
                       }
                     />
@@ -339,8 +910,7 @@ export default function GroupDetailsScreen() {
                   </Text>
 
                   <Text style={styles.emptyText}>
-                    Add your first expense to start
-                    tracking this group.
+                    Add your first expense to start tracking this group.
                   </Text>
                 </View>
               ) : null
@@ -365,6 +935,119 @@ export default function GroupDetailsScreen() {
               color="#FFFFFF"
             />
           </Pressable>
+
+          <Modal
+            visible={settleModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={closeSettlementModal}
+          >
+            <KeyboardAvoidingView
+              style={styles.modalOverlay}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            >
+              <View style={styles.settlementModalCard}>
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalHeaderText}>
+                    <Text style={styles.modalTitle}>Settle Up</Text>
+                    <Text style={styles.modalSubtitle}>
+                      Record a payment between group members.
+                    </Text>
+                  </View>
+
+                  <Pressable
+                    style={styles.modalCloseButton}
+                    onPress={closeSettlementModal}
+                    disabled={settlementSaving}
+                  >
+                    <Ionicons
+                      name="close"
+                      size={20}
+                      color="#CBD5E1"
+                    />
+                  </Pressable>
+                </View>
+
+                {selectedDebt ? (
+                  <>
+                    <View style={styles.settlementSummary}>
+                      <Text style={styles.settlementSummaryLabel}>
+                        Payment
+                      </Text>
+                      <Text style={styles.settlementSummaryText}>
+                        {selectedDebt.from_user_id === currentUserId
+                          ? 'You'
+                          : selectedDebt.from_name}
+                        {'  →  '}
+                        {selectedDebt.to_user_id === currentUserId
+                          ? 'You'
+                          : selectedDebt.to_name}
+                      </Text>
+                      <Text style={styles.settlementSummaryAmount}>
+                        Outstanding {money(selectedDebt.amount)}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.inputLabel}>Amount</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      value={settlementAmountText}
+                      onChangeText={(value) =>
+                        setSettlementAmountText(value.replace(/[^0-9.]/g, ''))
+                      }
+                      placeholder="0.00"
+                      placeholderTextColor="#64748B"
+                      keyboardType="decimal-pad"
+                      editable={!settlementSaving}
+                    />
+
+                    <Text style={styles.inputLabel}>Note (optional)</Text>
+                    <TextInput
+                      style={[styles.modalInput, styles.modalNoteInput]}
+                      value={settlementNote}
+                      onChangeText={setSettlementNote}
+                      placeholder="e.g. UPI payment"
+                      placeholderTextColor="#64748B"
+                      maxLength={200}
+                      multiline
+                      editable={!settlementSaving}
+                    />
+
+                    <Text style={styles.settlementHint}>
+                      Partial payments are allowed. The remaining balance will stay open.
+                    </Text>
+
+                    <View style={styles.modalActions}>
+                      <Pressable
+                        style={styles.modalCancelButton}
+                        onPress={closeSettlementModal}
+                        disabled={settlementSaving}
+                      >
+                        <Text style={styles.modalCancelText}>Cancel</Text>
+                      </Pressable>
+
+                      <Pressable
+                        style={[
+                          styles.modalSaveButton,
+                          settlementSaving && styles.disabledButton,
+                        ]}
+                        onPress={handleRecordSettlement}
+                        disabled={settlementSaving}
+                      >
+                        {settlementSaving ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text style={styles.modalSaveText}>
+                            Record Payment
+                          </Text>
+                        )}
+                      </Pressable>
+                    </View>
+                  </>
+                ) : null}
+              </View>
+            </KeyboardAvoidingView>
+          </Modal>
 
           <AddMemberModal
             visible={showAddMember}
@@ -431,7 +1114,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E293B',
     borderRadius: 22,
     padding: 22,
-    marginBottom: 26,
+    marginBottom: 14,
   },
 
   summaryLabel: {
@@ -453,6 +1136,58 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 
+  balanceCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 22,
+    padding: 22,
+    marginBottom: 26,
+  },
+
+  balanceHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  balanceIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  balanceHeaderText: {
+    flex: 1,
+  },
+
+  balanceTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+
+  balanceSubtitle: {
+    color: '#64748B',
+    fontSize: 12,
+    marginTop: 4,
+  },
+
+  yourBalanceAmount: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '800',
+    marginTop: 20,
+  },
+
+  yourBalanceLabel: {
+    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -472,6 +1207,186 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+  balanceList: {
+    marginBottom: 28,
+  },
+
+  memberBalanceCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  memberBalanceAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  memberBalanceAvatarText: {
+    color: '#0EA5A4',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  memberBalanceInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  memberBalanceName: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  memberBalanceMeta: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 4,
+  },
+
+  memberBalanceStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    minWidth: 0,
+  },
+
+  memberBalanceStatus: {
+    color: '#94A3B8',
+    fontSize: 11,
+    flex: 1,
+    marginRight: 10,
+  },
+
+  memberBalanceAmount: {
+    fontSize: 15,
+    fontWeight: '800',
+    flexShrink: 0,
+  },
+
+  positiveAmount: {
+    color: '#22C55E',
+  },
+
+  negativeAmount: {
+    color: '#F97316',
+  },
+
+  settledAmount: {
+    color: '#94A3B8',
+  },
+
+  noBalanceCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 28,
+    alignItems: 'center',
+  },
+
+  noBalanceText: {
+    color: '#64748B',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+
+  debtSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+
+  debtHeaderText: {
+    flex: 1,
+    paddingRight: 10,
+  },
+
+  simplifyToggleContainer: {
+    alignItems: 'flex-end',
+    marginLeft: 8,
+  },
+
+  simplifyLabel: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+
+  debtList: {
+    marginBottom: 28,
+  },
+
+  debtCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  debtIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
+  },
+
+  debtInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  debtDescription: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  debtParties: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 4,
+  },
+
+  debtAmount: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    marginLeft: 10,
+  },
+
+  noDebtCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 22,
+    marginBottom: 28,
+    alignItems: 'center',
+  },
+
+  noDebtText: {
+    color: '#94A3B8',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+
   addMemberButton: {
     minHeight: 40,
     paddingHorizontal: 14,
@@ -486,6 +1401,242 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+
+  debtActions: {
+    alignItems: 'flex-end',
+    marginLeft: 10,
+  },
+
+  settleButton: {
+    marginTop: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 9,
+    backgroundColor: '#0F766E',
+  },
+
+  settleButtonText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  settlementList: {
+    marginBottom: 28,
+  },
+
+  settlementCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  settlementIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
+  },
+
+  settlementInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  settlementDescription: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  settlementMeta: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 4,
+  },
+
+  settlementAmount: {
+    color: '#22C55E',
+    fontSize: 15,
+    fontWeight: '800',
+    marginLeft: 10,
+  },
+
+  noSettlementCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 22,
+    marginBottom: 28,
+    alignItems: 'center',
+  },
+
+  noSettlementText: {
+    color: '#94A3B8',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.78)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+
+  settlementModalCard: {
+    width: '100%',
+    maxWidth: 430,
+    backgroundColor: '#1E293B',
+    borderRadius: 22,
+    padding: 20,
+  },
+
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 18,
+  },
+
+  modalHeaderText: {
+    flex: 1,
+    paddingRight: 12,
+  },
+
+  modalTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+
+  modalSubtitle: {
+    color: '#94A3B8',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 5,
+  },
+
+  modalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  settlementSummary: {
+    backgroundColor: '#0F172A',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 18,
+  },
+
+  settlementSummaryLabel: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+
+  settlementSummaryText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+
+  settlementSummaryAmount: {
+    color: '#94A3B8',
+    fontSize: 12,
+    marginTop: 5,
+  },
+
+  inputLabel: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 7,
+    marginTop: 2,
+  },
+
+  modalInput: {
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 13,
+    color: '#FFFFFF',
+    fontSize: 16,
+    minHeight: 48,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+  },
+
+  modalNoteInput: {
+    minHeight: 78,
+    paddingTop: 12,
+    textAlignVertical: 'top',
+  },
+
+  settlementHint: {
+    color: '#64748B',
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 18,
+  },
+
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+
+  modalCancelButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 13,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+
+  modalCancelText: {
+    color: '#CBD5E1',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  modalSaveButton: {
+    flex: 1.25,
+    minHeight: 48,
+    borderRadius: 13,
+    backgroundColor: '#0EA5A4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  modalSaveText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  disabledButton: {
+    opacity: 0.65,
+  },
+
+  membersHeader: {
+    marginTop: 4,
   },
 
   expensesHeading: {
