@@ -1,12 +1,41 @@
 import { supabase } from '../config/supabase';
 
-export const signUp = (email:string,password:string)=>
-  supabase.auth.signUp({ email, password });
+export async function signUp(
+  email: string,
+  password: string,
+  fullName = ''
+) {
+  return await supabase.auth.signUp({
+    email: email.trim().toLowerCase(),
+    password,
+    options: {
+      data: {
+        full_name: fullName.trim(),
+      },
+    },
+  });
+}
 
-export const signIn = (email:string,password:string)=>
-  supabase.auth.signInWithPassword({ email, password });
+export async function signIn(
+  email: string,
+  password: string
+) {
+  return await supabase.auth.signInWithPassword({
+    email: email.trim().toLowerCase(),
+    password,
+  });
+}
 
-export const forgotPassword = (email:string)=>
-  supabase.auth.resetPasswordForEmail(email);
+export async function signOut() {
+  return await supabase.auth.signOut();
+}
 
-export const signOut = ()=>supabase.auth.signOut();
+export async function forgotPassword(
+  email: string,
+  redirectTo: string
+) {
+  return await supabase.auth.resetPasswordForEmail(
+    email.trim().toLowerCase(),
+    { redirectTo }
+  );
+}
