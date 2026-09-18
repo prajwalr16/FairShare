@@ -1,0 +1,5 @@
+import React,{useState} from 'react';
+import {SafeAreaView,Text,TextInput,Pressable,StyleSheet} from 'react-native';
+import SplitTypeSelector from '../../components/SplitTypeSelector';
+export default function AddExpenseScreen(){const[t,setT]=useState('Equal');const[a,setA]=useState('');return <SafeAreaView style={s.c}><Text style={s.h}>Add Expense</Text><TextInput style={s.i} placeholder='Expense title' placeholderTextColor='#94A3B8'/><TextInput style={s.i} placeholder='Amount (INR)' placeholderTextColor='#94A3B8' keyboardType='numeric' value={a} onChangeText={setA}/><SplitTypeSelector value={t} onChange={setT}/><Pressable style={s.b}><Text style={s.bt}>Save Expense</Text></Pressable></SafeAreaView>}
+const s=StyleSheet.create({c:{flex:1,backgroundColor:'#0F172A',padding:24},h:{color:'white',fontSize:30,fontWeight:'700',marginBottom:24},i:{backgroundColor:'#1E293B',color:'white',padding:16,borderRadius:14,marginBottom:16},b:{backgroundColor:'#0EA5A4',padding:16,borderRadius:14,alignItems:'center',marginTop:24},bt:{color:'white',fontWeight:'700'}});

@@ -1,5 +1,180 @@
-import React,{useState} from 'react';
-import {SafeAreaView,ScrollView,Text,TextInput,StyleSheet,Pressable,View,ActivityIndicator,Alert} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
-import {signIn} from '../../services/authService';
-export default function LoginScreen(){const nav=useNavigation<any>();const[e,setE]=useState('');const[p,setP]=useState('');const[sh,setSh]=useState(false);const[l,setL]=useState(false);const go=async()=>{if(!e||!p)return Alert.alert('Error','Enter email and password');setL(true);const{error}=await signIn(e,p);setL(false);if(error)return Alert.alert('Login Failed',error.message);nav.reset({index:0,routes:[{name:'Home'}]});};return <SafeAreaView style={s.c}><ScrollView contentContainerStyle={s.cc}><Text style={s.t}>Welcome Back</Text><TextInput style={s.i} placeholder='Email' placeholderTextColor='#94A3B8' autoCapitalize='none' value={e} onChangeText={setE}/><View style={s.pb}><TextInput style={s.pi} placeholder='Password' placeholderTextColor='#94A3B8' secureTextEntry={!sh} value={p} onChangeText={setP}/><Pressable onPress={()=>setSh(!sh)}><Text style={s.lk}>{sh?'Hide':'Show'}</Text></Pressable></View><Pressable style={s.b} onPress={go} disabled={l}>{l?<ActivityIndicator color='white'/>:<Text style={s.bt}>Sign In</Text>}</Pressable><Pressable onPress={()=>nav.navigate('ForgotPassword')}><Text style={s.lk}>Forgot Password?</Text></Pressable><Pressable onPress={()=>nav.navigate('SignUp')}><Text style={s.lk}>Create Account</Text></Pressable></ScrollView></SafeAreaView>};const s=StyleSheet.create({c:{flex:1,backgroundColor:'#0F172A'},cc:{flexGrow:1,padding:24,paddingBottom:60,justifyContent:'center'},t:{color:'white',fontSize:32,fontWeight:'700',marginBottom:24},i:{backgroundColor:'#1E293B',color:'white',padding:16,borderRadius:14,marginBottom:16},pb:{backgroundColor:'#1E293B',borderRadius:14,paddingHorizontal:16,flexDirection:'row',alignItems:'center',marginBottom:20},pi:{flex:1,color:'white',paddingVertical:16},b:{backgroundColor:'#0EA5A4',padding:16,borderRadius:14,alignItems:'center'},bt:{color:'white',fontWeight:'700'},lk:{color:'#0EA5A4',textAlign:'center',marginTop:20}});
+import React, { useState } from 'react';
+import {
+  SafeAreaView,
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  Alert,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+
+import PasswordInput from '../../components/PasswordInput';
+import { supabase } from '../../config/supabase';
+
+export default function LoginScreen() {
+  const navigation = useNavigation<any>();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const signIn = async () => {
+    if (!email || !password) {
+      return Alert.alert('Missing fields', 'Please enter email and password.');
+    }
+
+    setLoading(true);
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    setLoading(false);
+
+    if (error) {
+      return Alert.alert('Login Failed', error.message);
+    }
+
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Home' }],
+    });
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.card}>
+        <Text style={styles.title}>Welcome Back</Text>
+
+        <Text style={styles.subtitle}>
+          Sign in to continue using FairShare.
+        </Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          placeholderTextColor="#94A3B8"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={email}
+          onChangeText={setEmail}
+        />
+
+        <View style={styles.spacing} />
+
+        <PasswordInput
+          placeholder="Password"
+          value={password}
+          onChangeText={setPassword}
+        />
+
+        <Pressable
+          style={styles.forgotButton}
+          onPress={() => navigation.navigate('ForgotPassword')}
+        >
+          <Text style={styles.forgotText}>Forgot Password?</Text>
+        </Pressable>
+
+        <Pressable
+          style={[
+            styles.button,
+            loading && { opacity: 0.7 },
+          ]}
+          onPress={signIn}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>
+            {loading ? 'Signing In...' : 'Sign In'}
+          </Text>
+        </Pressable>
+
+        <Pressable onPress={() => navigation.navigate('SignUp')}>
+          <Text style={styles.footer}>
+            Don't have an account?{' '}
+            <Text style={styles.link}>Create Account</Text>
+          </Text>
+        </Pressable>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    padding: 24,
+  },
+
+  card: {
+    backgroundColor: '#1E293B',
+    borderRadius: 24,
+    padding: 24,
+  },
+
+  title: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  subtitle: {
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+
+  input: {
+    backgroundColor: '#0F172A',
+    color: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+
+  spacing: {
+    height: 14,
+  },
+
+  forgotButton: {
+    alignSelf: 'flex-end',
+    marginTop: 12,
+  },
+
+  forgotText: {
+    color: '#0EA5A4',
+    fontWeight: '600',
+  },
+
+  button: {
+    backgroundColor: '#0EA5A4',
+    paddingVertical: 16,
+    borderRadius: 14,
+    marginTop: 24,
+  },
+
+  buttonText: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+
+  footer: {
+    color: '#CBD5E1',
+    textAlign: 'center',
+    marginTop: 24,
+  },
+
+  link: {
+    color: '#0EA5A4',
+    fontWeight: '700',
+  },
+});

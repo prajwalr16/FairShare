@@ -1,52 +1,138 @@
-import React,{useState} from 'react';
-import {SafeAreaView,ScrollView,Text,StyleSheet,Pressable,ActivityIndicator,Alert} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
-import {supabase} from '../../config/supabase';
+import React, { useState } from 'react';
+import {
+  SafeAreaView,
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  Pressable,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+
 import PasswordInput from '../../components/PasswordInput';
+import { supabase } from '../../config/supabase';
 
-export default function ResetPasswordScreen(){
-  const navigation=useNavigation<any>();
-  const[p,setP]=useState('');
-  const[c,setC]=useState('');
-  const[loading,setLoading]=useState(false);
+export default function ResetPasswordScreen() {
+  const navigation = useNavigation<any>();
 
-  const updatePassword=async()=>{
-    if(p.length<8) return Alert.alert('Error','Password must be at least 8 characters.');
-    if(p!==c) return Alert.alert('Error','Passwords do not match.');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
-    setLoading(true);
-    const {error}=await supabase.auth.updateUser({password:p});
-    setLoading(false);
+  const updatePassword = async () => {
+    if (!password || !confirmPassword) {
+      return Alert.alert('Missing fields', 'Please enter both passwords.');
+    }
 
-    if(error) return Alert.alert('Reset Failed',error.message);
+    if (password !== confirmPassword) {
+      return Alert.alert('Passwords do not match');
+    }
 
-    Alert.alert('Success','Password updated.',[
-      {text:'Login',onPress:()=>navigation.navigate('Login')}
-    ]);
+    if (password.length < 6) {
+      return Alert.alert(
+        'Weak password',
+        'Password must be at least 6 characters.'
+      );
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password,
+    });
+
+    if (error) {
+      return Alert.alert('Error', error.message);
+    }
+
+    Alert.alert(
+      'Success',
+      'Password updated successfully.',
+      [
+        {
+          text: 'Continue',
+          onPress: () =>
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            }),
+        },
+      ]
+    );
   };
 
-  return(
-    <SafeAreaView style={s.container}>
-      <ScrollView contentContainerStyle={s.content}>
-        <Text style={s.title}>Reset Password</Text>
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.card}>
+        <Text style={styles.title}>Reset Password</Text>
 
-        <PasswordInput placeholder='New Password' value={p} onChangeText={setP}/>
+        <Text style={styles.subtitle}>
+          Create a new password for your FairShare account.
+        </Text>
 
-        <PasswordInput placeholder='Confirm Password' value={c} onChangeText={setC}/>
+        <PasswordInput
+          placeholder="New Password"
+          value={password}
+          onChangeText={setPassword}
+        />
 
-        <Pressable style={s.button} onPress={updatePassword}>
-          {loading ? <ActivityIndicator color='white'/> : <Text style={s.buttonText}>Update Password</Text>}
+        <View style={styles.spacing} />
+
+        <PasswordInput
+          placeholder="Confirm Password"
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+        />
+
+        <Pressable style={styles.button} onPress={updatePassword}>
+          <Text style={styles.buttonText}>Update Password</Text>
         </Pressable>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
-const s=StyleSheet.create({
-  container:{flex:1,backgroundColor:'#0F172A'},
-  content:{flexGrow:1,padding:24,justifyContent:'center'},
-  title:{color:'white',fontSize:30,fontWeight:'700',marginBottom:24},
-  
-  button:{backgroundColor:'#0EA5A4',padding:16,borderRadius:14,alignItems:'center'},
-  buttonText:{color:'white',fontWeight:'700'}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    padding: 24,
+  },
+
+  card: {
+    backgroundColor: '#1E293B',
+    borderRadius: 24,
+    padding: 24,
+  },
+
+  title: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  subtitle: {
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+
+  spacing: {
+    height: 14,
+  },
+
+  button: {
+    backgroundColor: '#0EA5A4',
+    paddingVertical: 16,
+    borderRadius: 14,
+    marginTop: 24,
+  },
+
+  buttonText: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: '700',
+    fontSize: 16,
+  },
 });

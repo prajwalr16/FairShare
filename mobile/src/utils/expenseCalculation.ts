@@ -1,0 +1,1 @@
+export function equalSplit(amount:number,members:number){if(members<=0)return 0;return Number((amount/members).toFixed(2));}
