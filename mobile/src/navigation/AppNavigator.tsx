@@ -21,6 +21,8 @@ import AcceptInviteScreen from '../screens/auth/AcceptInviteScreen';
 import HomeScreen from '../screens/home/HomeScreen';
 import GroupDetailsScreen from '../screens/group/GroupDetailsScreen';
 import AddExpenseScreen from '../screens/expense/AddExpenseScreen';
+import ExpenseDetailsScreen from '../screens/expense/ExpenseDetailsScreen';
+import EditExpenseScreen from '../screens/expense/EditExpenseScreen';
 
 const Stack = createNativeStackNavigator();
 export const navigationRef = createNavigationContainerRef();
@@ -42,6 +44,8 @@ const linking = {
       Home: 'home',
       GroupDetails: 'group-details',
       AddExpense: 'add-expense',
+      ExpenseDetails: 'expense-details',
+      EditExpense: 'edit-expense',
     },
   },
 };
@@ -193,6 +197,8 @@ export default function AppNavigator() {
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="GroupDetails" component={GroupDetailsScreen} />
         <Stack.Screen name="AddExpense" component={AddExpenseScreen} />
+        <Stack.Screen name="ExpenseDetails" component={ExpenseDetailsScreen} />
+        <Stack.Screen name="EditExpense" component={EditExpenseScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

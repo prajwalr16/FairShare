@@ -19,6 +19,13 @@ export type RecordSettlementInput = {
   note?: string;
 };
 
+export type UpdateSettlementInput = {
+  groupId: string;
+  settlementId: string;
+  amount: number;
+  note?: string;
+};
+
 export async function recordSettlement(input: RecordSettlementInput) {
   const cleanNote = input.note?.trim() || null;
 
@@ -28,6 +35,27 @@ export async function recordSettlement(input: RecordSettlementInput) {
     p_to_user_id: input.toUserId,
     p_amount: Number(input.amount.toFixed(2)),
     p_note: cleanNote,
+  });
+}
+
+export async function updateSettlement(input: UpdateSettlementInput) {
+  const cleanNote = input.note?.trim() || null;
+
+  return await supabase.rpc('update_group_settlement', {
+    p_group_id: input.groupId,
+    p_settlement_id: input.settlementId,
+    p_amount: Number(input.amount.toFixed(2)),
+    p_note: cleanNote,
+  });
+}
+
+export async function deleteSettlement(
+  groupId: string,
+  settlementId: string
+) {
+  return await supabase.rpc('delete_group_settlement', {
+    p_group_id: groupId,
+    p_settlement_id: settlementId,
   });
 }
 

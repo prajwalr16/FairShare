@@ -1,14 +1,17 @@
 import React from 'react';
 import {
-  View,
-  Text,
+  Pressable,
   StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 
 type Expense = {
-  id?: string;
-  title?: string;
+  id: string;
+  group_id?: string;
+  title?: string | null;
   amount?: number | string | null;
   split_type?: string | null;
   paid_by?: string | null;
@@ -16,147 +19,112 @@ type Expense = {
 };
 
 type Props = {
-  expense?: Expense | null;
+  expense: Expense;
 };
 
+function money(value: number | string | null | undefined) {
+  const amount = Number(value ?? 0);
+  return `₹${Number.isFinite(amount) ? amount.toFixed(2) : '0.00'}`;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return '';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return date.toLocaleDateString([], {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function splitLabel(splitType?: string | null) {
+  return splitType?.trim() || 'Equal';
+}
+
 export default function ExpenseCard({ expense }: Props) {
-  const safeAmount = Number(expense?.amount ?? 0);
-
-  const title =
-    expense?.title?.trim() || 'Expense';
-
-  const splitType =
-    expense?.split_type || 'Equal';
-
-  const formattedAmount =
-    Number.isFinite(safeAmount)
-      ? safeAmount.toFixed(2)
-      : '0.00';
-
-  let formattedDate = '';
-
-  if (expense?.created_at) {
-    const date = new Date(expense.created_at);
-
-    if (!Number.isNaN(date.getTime())) {
-      formattedDate = date.toLocaleDateString(
-        'en-IN',
-        {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-        }
-      );
-    }
-  }
+  const navigation = useNavigation<any>();
+  const dateLabel = formatDate(expense.created_at);
 
   return (
-    <View style={styles.card}>
+    <Pressable
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      onPress={() =>
+        navigation.navigate('ExpenseDetails', {
+          expenseId: expense.id,
+          groupId: expense.group_id,
+        })
+      }
+    >
       <View style={styles.iconContainer}>
-        <Ionicons
-          name="receipt-outline"
-          size={22}
-          color="#0EA5A4"
-        />
+        <Ionicons name="receipt-outline" size={19} color="#0EA5A4" />
       </View>
 
-      <View style={styles.details}>
-        <Text
-          style={styles.title}
-          numberOfLines={1}
-        >
-          {title}
+      <View style={styles.info}>
+        <Text style={styles.title} numberOfLines={1}>
+          {expense.title?.trim() || 'Expense'}
         </Text>
 
-        <View style={styles.metaRow}>
-          <Text style={styles.splitType}>
-            {splitType}
-          </Text>
-
-          {formattedDate ? (
-            <>
-              <Text style={styles.dot}>
-                •
-              </Text>
-
-              <Text style={styles.date}>
-                {formattedDate}
-              </Text>
-            </>
-          ) : null}
-        </View>
+        <Text style={styles.meta} numberOfLines={1}>
+          {splitLabel(expense.split_type)}
+          {dateLabel ? `  •  ${dateLabel}` : ''}
+        </Text>
       </View>
 
       <View style={styles.amountContainer}>
-        <Text style={styles.amount}>
-          ₹{formattedAmount}
-        </Text>
+        <Text style={styles.amount}>{money(expense.amount)}</Text>
+        <Ionicons name="chevron-forward" size={18} color="#64748B" />
       </View>
-    </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#1E293B',
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 16,
+    padding: 15,
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
   },
-
+  cardPressed: {
+    opacity: 0.78,
+  },
   iconContainer: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 13,
     backgroundColor: '#0F172A',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
-
-  details: {
+  info: {
     flex: 1,
     minWidth: 0,
   },
-
   title: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
   },
-
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-
-  splitType: {
+  meta: {
     color: '#94A3B8',
-    fontSize: 12,
+    fontSize: 11,
+    marginTop: 4,
   },
-
-  dot: {
-    color: '#475569',
-    fontSize: 12,
-    marginHorizontal: 6,
-  },
-
-  date: {
-    color: '#64748B',
-    fontSize: 12,
-  },
-
   amountContainer: {
-    marginLeft: 12,
+    marginLeft: 10,
     alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: 6,
   },
-
   amount: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
   },
 });

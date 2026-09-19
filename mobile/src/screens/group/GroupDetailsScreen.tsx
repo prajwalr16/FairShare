@@ -46,6 +46,8 @@ import {
 import {
   getGroupSettlements,
   recordSettlement,
+  updateSettlement,
+  deleteSettlement,
   GroupSettlement,
 } from '../../services/settlementService';
 
@@ -119,6 +121,13 @@ export default function GroupDetailsScreen() {
   const [settlementAmountText, setSettlementAmountText] = useState('');
   const [settlementNote, setSettlementNote] = useState('');
   const [settlementSaving, setSettlementSaving] = useState(false);
+  const [selectedSettlement, setSelectedSettlement] = useState<GroupSettlement | null>(null);
+  const [settlementDetailsVisible, setSettlementDetailsVisible] = useState(false);
+  const [editingSettlement, setEditingSettlement] = useState(false);
+  const [editSettlementAmountText, setEditSettlementAmountText] = useState('');
+  const [editSettlementNote, setEditSettlementNote] = useState('');
+  const [settlementUpdating, setSettlementUpdating] = useState(false);
+  const [settlementDeleting, setSettlementDeleting] = useState(false);
 
   const loadGroupData = useCallback(async () => {
     if (!groupId) {
@@ -289,6 +298,150 @@ export default function GroupDetailsScreen() {
     setSelectedDebt(null);
     setSettlementAmountText('');
     setSettlementNote('');
+  };
+
+  const openSettlementDetails = (settlement: GroupSettlement) => {
+    setSelectedSettlement(settlement);
+    setEditingSettlement(false);
+    setEditSettlementAmountText(Number(settlement.amount ?? 0).toFixed(2));
+    setEditSettlementNote(settlement.note?.trim() || '');
+    setSettlementDetailsVisible(true);
+  };
+
+  const closeSettlementDetails = () => {
+    if (settlementUpdating || settlementDeleting) return;
+
+    setSettlementDetailsVisible(false);
+    setSelectedSettlement(null);
+    setEditingSettlement(false);
+    setEditSettlementAmountText('');
+    setEditSettlementNote('');
+  };
+
+  const canManageSettlement = (settlement: GroupSettlement) =>
+    !!currentUserId &&
+    (currentUserId === ownerId || settlement.created_by === currentUserId);
+
+  const startEditingSettlement = () => {
+    if (!selectedSettlement || !canManageSettlement(selectedSettlement)) return;
+
+    setEditSettlementAmountText(
+      Number(selectedSettlement.amount ?? 0).toFixed(2)
+    );
+    setEditSettlementNote(selectedSettlement.note?.trim() || '');
+    setEditingSettlement(true);
+  };
+
+  const cancelEditingSettlement = () => {
+    if (settlementUpdating) return;
+    if (selectedSettlement) {
+      setEditSettlementAmountText(
+        Number(selectedSettlement.amount ?? 0).toFixed(2)
+      );
+      setEditSettlementNote(selectedSettlement.note?.trim() || '');
+    }
+    setEditingSettlement(false);
+  };
+
+  const handleUpdateSettlement = async () => {
+    if (!groupId || !selectedSettlement) return;
+
+    const normalized = editSettlementAmountText.replace(/,/g, '').trim();
+
+    if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
+      Alert.alert(
+        'Invalid amount',
+        'Enter a valid settlement amount with up to 2 decimal places.'
+      );
+      return;
+    }
+
+    const amount = Number(normalized);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      Alert.alert('Invalid amount', 'Settlement amount must be greater than 0.');
+      return;
+    }
+
+    if (editSettlementNote.trim().length > 200) {
+      Alert.alert(
+        'Note too long',
+        'Keep the settlement note within 200 characters.'
+      );
+      return;
+    }
+
+    setSettlementUpdating(true);
+
+    const { error } = await updateSettlement({
+      groupId,
+      settlementId: selectedSettlement.id,
+      amount: Number(amount.toFixed(2)),
+      note: editSettlementNote,
+    });
+
+    setSettlementUpdating(false);
+
+    if (error) {
+      Alert.alert('Unable to update settlement', error.message);
+      return;
+    }
+
+    setSettlementDetailsVisible(false);
+    setSelectedSettlement(null);
+    setEditingSettlement(false);
+    await loadGroupData();
+    Alert.alert('Settlement updated', 'The settlement was updated successfully.');
+  };
+
+  const handleDeleteSettlement = () => {
+    if (!groupId || !selectedSettlement) return;
+
+    const payer =
+      selectedSettlement.from_user_id === currentUserId
+        ? 'You'
+        : selectedSettlement.from_user_id === ownerId
+          ? 'Group owner'
+          : selectedSettlement.from_user_id;
+
+    Alert.alert(
+      'Delete settlement?',
+      `Delete this ${money(selectedSettlement.amount)} payment${payer ? ` from ${payer}` : ''}?\n\nThe outstanding balance will be recalculated.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setSettlementDeleting(true);
+
+            const { error } = await deleteSettlement(
+              groupId,
+              selectedSettlement.id
+            );
+
+            setSettlementDeleting(false);
+
+            if (error) {
+              Alert.alert('Unable to delete settlement', error.message);
+              return;
+            }
+
+            setSettlementDetailsVisible(false);
+            setSelectedSettlement(null);
+            setEditingSettlement(false);
+            await loadGroupData();
+            Alert.alert(
+              'Settlement deleted',
+              'The payment was deleted and balances were recalculated.'
+            );
+          },
+        },
+      ]
+    );
   };
 
   const handleRecordSettlement = async () => {
@@ -784,9 +937,13 @@ export default function GroupDetailsScreen() {
                           });
 
                       return (
-                        <View
+                        <Pressable
                           key={settlement.id}
-                          style={styles.settlementCard}
+                          style={({ pressed }) => [
+                            styles.settlementCard,
+                            pressed && styles.settlementCardPressed,
+                          ]}
+                          onPress={() => openSettlementDetails(settlement)}
                         >
                           <View style={styles.settlementIcon}>
                             <Ionicons
@@ -815,10 +972,17 @@ export default function GroupDetailsScreen() {
                             </Text>
                           </View>
 
-                          <Text style={styles.settlementAmount}>
-                            {money(settlement.amount)}
-                          </Text>
-                        </View>
+                          <View style={styles.settlementAmountContainer}>
+                            <Text style={styles.settlementAmount}>
+                              {money(settlement.amount)}
+                            </Text>
+                            <Ionicons
+                              name="chevron-forward"
+                              size={16}
+                              color="#64748B"
+                            />
+                          </View>
+                        </Pressable>
                       );
                     })}
                   </View>
@@ -1043,6 +1207,217 @@ export default function GroupDetailsScreen() {
                         )}
                       </Pressable>
                     </View>
+                  </>
+                ) : null}
+              </View>
+            </KeyboardAvoidingView>
+          </Modal>
+
+          <Modal
+            visible={settlementDetailsVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={closeSettlementDetails}
+          >
+            <KeyboardAvoidingView
+              style={styles.modalOverlay}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            >
+              <View style={styles.settlementModalCard}>
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalHeaderText}>
+                    <Text style={styles.modalTitle}>
+                      Settlement Details
+                    </Text>
+                    <Text style={styles.modalSubtitle}>
+                      View or manage this recorded payment.
+                    </Text>
+                  </View>
+
+                  <Pressable
+                    style={styles.modalCloseButton}
+                    onPress={closeSettlementDetails}
+                    disabled={settlementUpdating || settlementDeleting}
+                  >
+                    <Ionicons
+                      name="close"
+                      size={20}
+                      color="#CBD5E1"
+                    />
+                  </Pressable>
+                </View>
+
+                {selectedSettlement ? (
+                  <>
+                    <View style={styles.settlementSummary}>
+                      <Text style={styles.settlementSummaryLabel}>
+                        Payment
+                      </Text>
+                      <Text style={styles.settlementSummaryText}>
+                        {selectedSettlement.from_user_id === currentUserId
+                          ? 'You'
+                          : balances.find(
+                              (balance) =>
+                                balance.user_id ===
+                                selectedSettlement.from_user_id
+                            )?.full_name?.trim() ||
+                            balances.find(
+                              (balance) =>
+                                balance.user_id ===
+                                selectedSettlement.from_user_id
+                            )?.email ||
+                            'Member'}
+                        {'  →  '}
+                        {selectedSettlement.to_user_id === currentUserId
+                          ? 'You'
+                          : balances.find(
+                              (balance) =>
+                                balance.user_id === selectedSettlement.to_user_id
+                            )?.full_name?.trim() ||
+                            balances.find(
+                              (balance) =>
+                                balance.user_id === selectedSettlement.to_user_id
+                            )?.email ||
+                            'Member'}
+                      </Text>
+                      <Text style={styles.settlementSummaryAmount}>
+                        {new Date(selectedSettlement.created_at).toLocaleDateString([], {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </Text>
+                    </View>
+
+                    {editingSettlement ? (
+                      <>
+                        <Text style={styles.inputLabel}>Amount</Text>
+                        <TextInput
+                          style={styles.modalInput}
+                          value={editSettlementAmountText}
+                          onChangeText={(value) =>
+                            setEditSettlementAmountText(
+                              value.replace(/[^0-9.]/g, '')
+                            )
+                          }
+                          placeholder="0.00"
+                          placeholderTextColor="#64748B"
+                          keyboardType="decimal-pad"
+                          editable={!settlementUpdating}
+                        />
+
+                        <Text style={styles.inputLabel}>Note (optional)</Text>
+                        <TextInput
+                          style={[styles.modalInput, styles.modalNoteInput]}
+                          value={editSettlementNote}
+                          onChangeText={setEditSettlementNote}
+                          placeholder="e.g. UPI payment"
+                          placeholderTextColor="#64748B"
+                          maxLength={200}
+                          multiline
+                          editable={!settlementUpdating}
+                        />
+
+                        <Text style={styles.settlementHint}>
+                          The new amount cannot exceed the outstanding debt for this payment direction.
+                        </Text>
+
+                        <View style={styles.modalActions}>
+                          <Pressable
+                            style={styles.modalCancelButton}
+                            onPress={cancelEditingSettlement}
+                            disabled={settlementUpdating}
+                          >
+                            <Text style={styles.modalCancelText}>Cancel</Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={[
+                              styles.modalSaveButton,
+                              settlementUpdating && styles.disabledButton,
+                            ]}
+                            onPress={handleUpdateSettlement}
+                            disabled={settlementUpdating}
+                          >
+                            {settlementUpdating ? (
+                              <ActivityIndicator
+                                size="small"
+                                color="#FFFFFF"
+                              />
+                            ) : (
+                              <Text style={styles.modalSaveText}>
+                                Save Changes
+                              </Text>
+                            )}
+                          </Pressable>
+                        </View>
+                      </>
+                    ) : (
+                      <>
+                        <View style={styles.settlementDetailAmountBox}>
+                          <Text style={styles.settlementDetailAmountLabel}>
+                            Amount
+                          </Text>
+                          <Text style={styles.settlementDetailAmount}>
+                            {money(selectedSettlement.amount)}
+                          </Text>
+                        </View>
+
+                        <View style={styles.settlementDetailNoteBox}>
+                          <Text style={styles.settlementDetailAmountLabel}>
+                            Note
+                          </Text>
+                          <Text style={styles.settlementDetailNote}>
+                            {selectedSettlement.note?.trim() || 'No note added'}
+                          </Text>
+                        </View>
+
+                        {canManageSettlement(selectedSettlement) ? (
+                          <View style={styles.settlementManageActions}>
+                            <Pressable
+                              style={styles.modalCancelButton}
+                              onPress={startEditingSettlement}
+                              disabled={settlementDeleting}
+                            >
+                              <Ionicons
+                                name="create-outline"
+                                size={17}
+                                color="#CBD5E1"
+                              />
+                              <Text style={styles.modalCancelText}>Edit</Text>
+                            </Pressable>
+
+                            <Pressable
+                              style={styles.deleteSettlementButton}
+                              onPress={handleDeleteSettlement}
+                              disabled={settlementDeleting}
+                            >
+                              {settlementDeleting ? (
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#FFFFFF"
+                                />
+                              ) : (
+                                <>
+                                  <Ionicons
+                                    name="trash-outline"
+                                    size={17}
+                                    color="#FFFFFF"
+                                  />
+                                  <Text style={styles.deleteSettlementText}>
+                                    Delete
+                                  </Text>
+                                </>
+                              )}
+                            </Pressable>
+                          </View>
+                        ) : (
+                          <Text style={styles.settlementReadOnlyText}>
+                            Only the person who recorded this payment or the group owner can edit or delete it.
+                          </Text>
+                        )}
+                      </>
+                    )}
                   </>
                 ) : null}
               </View>
@@ -1435,6 +1810,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+  settlementCardPressed: {
+    opacity: 0.78,
+  },
+
   settlementIcon: {
     width: 40,
     height: 40,
@@ -1462,11 +1841,17 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+  settlementAmountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginLeft: 10,
+  },
+
   settlementAmount: {
     color: '#22C55E',
     fontSize: 15,
     fontWeight: '800',
-    marginLeft: 10,
   },
 
   noSettlementCard: {
@@ -1585,6 +1970,71 @@ const styles = StyleSheet.create({
     minHeight: 78,
     paddingTop: 12,
     textAlignVertical: 'top',
+  },
+
+  settlementDetailAmountBox: {
+    backgroundColor: '#0F172A',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 12,
+  },
+
+  settlementDetailAmountLabel: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+
+  settlementDetailAmount: {
+    color: '#22C55E',
+    fontSize: 27,
+    fontWeight: '800',
+    marginTop: 6,
+  },
+
+  settlementDetailNoteBox: {
+    backgroundColor: '#0F172A',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 18,
+  },
+
+  settlementDetailNote: {
+    color: '#CBD5E1',
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 6,
+  },
+
+  settlementManageActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+
+  deleteSettlementButton: {
+    flex: 1.1,
+    minHeight: 48,
+    borderRadius: 13,
+    backgroundColor: '#B91C1C',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 7,
+  },
+
+  deleteSettlementText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  settlementReadOnlyText: {
+    color: '#64748B',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 4,
   },
 
   settlementHint: {
