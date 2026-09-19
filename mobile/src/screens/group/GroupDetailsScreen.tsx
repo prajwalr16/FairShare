@@ -26,6 +26,7 @@ import {
 } from '@react-navigation/native';
 
 import { supabase } from '../../config/supabase';
+import { formatCurrency } from '../../utils/currency';
 import ExpenseCard from '../../components/ExpenseCard';
 import MemberCard from '../../components/MemberCard';
 import AddMemberModal from '../../components/AddMemberModal';
@@ -60,16 +61,15 @@ type Expense = {
   created_at?: string | null;
 };
 
-function money(value: number | string | null | undefined) {
-  const amount = Number(value ?? 0);
-  return `₹${amount.toFixed(2)}`;
+function money(value: number | string | null | undefined, currency: string) {
+  return formatCurrency(value, currency);
 }
 
 function displayName(balance: GroupBalance) {
   return balance.full_name?.trim() || balance.email?.trim() || 'Member';
 }
 
-function balanceLabel(balance: GroupBalance) {
+function balanceLabel(balance: GroupBalance, currency: string) {
   const net = Number(balance.net_balance ?? 0);
 
   if (Math.abs(net) < 0.005) {
@@ -77,18 +77,18 @@ function balanceLabel(balance: GroupBalance) {
   }
 
   return net > 0
-    ? `is owed ${money(net)}`
-    : `owes ${money(Math.abs(net))}`;
+    ? `is owed ${money(net, currency)}`
+    : `owes ${money(Math.abs(net), currency)}`;
 }
 
-function signedBalance(balance: GroupBalance) {
+function signedBalance(balance: GroupBalance, currency: string) {
   const net = Number(balance.net_balance ?? 0);
 
   if (Math.abs(net) < 0.005) {
-    return money(0);
+    return money(0, currency);
   }
 
-  return `${net > 0 ? '+' : '-'}${money(Math.abs(net))}`;
+  return `${net > 0 ? '+' : '-'}${money(Math.abs(net), currency)}`;
 }
 
 export default function GroupDetailsScreen() {
@@ -96,7 +96,7 @@ export default function GroupDetailsScreen() {
   const route = useRoute<any>();
 
   const groupId = route.params?.groupId;
-  const groupName = route.params?.groupName;
+  const routeGroupName = route.params?.groupName;
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [members, setMembers] = useState<GroupMember[]>([]);
@@ -112,6 +112,11 @@ export default function GroupDetailsScreen() {
   const [simplifyDebts, setSimplifyDebts] = useState(true);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentGroupName, setCurrentGroupName] = useState<string>(
+    routeGroupName || 'Group'
+  );
+  const [currentRole, setCurrentRole] = useState<string>('member');
+  const [currency, setCurrency] = useState('INR');
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -159,7 +164,7 @@ export default function GroupDetailsScreen() {
         getGroupMembers(groupId),
         supabase
           .from('groups')
-          .select('owner_id')
+          .select('owner_id,name,currency')
           .eq('id', groupId)
           .single(),
         getGroupBalances(groupId),
@@ -190,8 +195,16 @@ export default function GroupDetailsScreen() {
         'Failed to load members:',
         memberResult.error.message
       );
+      setCurrentRole('member');
     } else {
-      setMembers(memberResult.data || []);
+      const loadedMembers = memberResult.data || [];
+      setMembers(loadedMembers);
+
+      const callerId = userResult.data.user?.id || null;
+      const callerMember = loadedMembers.find(
+        (member) => member.user_id === callerId && member.status === 'active'
+      );
+      setCurrentRole(callerMember?.role || 'member');
     }
 
     let loadedBalances: GroupBalance[] = [];
@@ -229,8 +242,16 @@ export default function GroupDetailsScreen() {
       }
     }
 
-    setOwnerId(groupResult.data?.owner_id || null);
-    setCurrentUserId(userResult.data.user?.id || null);
+    const latestOwnerId = groupResult.data?.owner_id || null;
+    const latestUserId = userResult.data.user?.id || null;
+
+    setOwnerId(latestOwnerId);
+    setCurrentUserId(latestUserId);
+    setCurrentGroupName(groupResult.data?.name?.trim() || routeGroupName || 'Group');
+    setCurrency(groupResult.data?.currency || 'INR');
+    if (latestUserId && latestUserId === latestOwnerId) {
+      setCurrentRole('owner');
+    }
     setLoading(false);
   }, [groupId]);
 
@@ -406,7 +427,7 @@ export default function GroupDetailsScreen() {
 
     Alert.alert(
       'Delete settlement?',
-      `Delete this ${money(selectedSettlement.amount)} payment${payer ? ` from ${payer}` : ''}?\n\nThe outstanding balance will be recalculated.`,
+      `Delete this ${money(selectedSettlement.amount, currency)} payment${payer ? ` from ${payer}` : ''}?\n\nThe outstanding balance will be recalculated.`,
       [
         {
           text: 'Cancel',
@@ -467,7 +488,7 @@ export default function GroupDetailsScreen() {
     if (amount > selectedDebt.amount + 0.005) {
       Alert.alert(
         'Amount too high',
-        `The maximum amount for this debt is ${money(selectedDebt.amount)}.`
+        `The maximum amount for this debt is ${money(selectedDebt.amount, currency)}.`
       );
       return;
     }
@@ -496,7 +517,7 @@ export default function GroupDetailsScreen() {
 
     closeSettlementModal();
     await loadGroupData();
-    Alert.alert('Payment recorded', `${money(amount)} settlement recorded successfully.`);
+    Alert.alert('Payment recorded', `${money(amount, currency)} settlement recorded successfully.`);
   };
 
   const handleRemoveMember = (member: GroupMember) => {
@@ -527,6 +548,10 @@ export default function GroupDetailsScreen() {
     );
   };
 
+  const isOwner = currentUserId === ownerId || currentRole === 'owner';
+  const canManageMembers = isOwner || currentRole === 'admin';
+  const canWriteMoney = currentRole !== 'viewer';
+
   const totalExpenses = expenses.reduce(
     (sum, expense) => sum + Number(expense.amount ?? 0),
     0
@@ -543,7 +568,7 @@ export default function GroupDetailsScreen() {
       : currentNet > 0
         ? 'You are owed'
         : 'You owe';
-  const currentBalanceAmount = money(Math.abs(currentNet));
+  const currentBalanceAmount = money(Math.abs(currentNet), currency);
 
   const directDebtsAfterSettlements = debtSets.direct
     .map((debt) => {
@@ -625,13 +650,26 @@ export default function GroupDetailsScreen() {
 
             <View style={styles.headerTextContainer}>
               <Text style={styles.groupName} numberOfLines={1}>
-                {groupName || 'Group'}
+                {currentGroupName || 'Group'}
               </Text>
 
               <Text style={styles.headerSubtitle}>
                 Group Overview
               </Text>
             </View>
+
+            <Pressable
+              style={styles.settingsButton}
+              onPress={() =>
+                navigation.navigate('GroupSettings', {
+                  groupId,
+                  groupName: currentGroupName,
+                })
+              }
+              hitSlop={10}
+            >
+              <Ionicons name="settings-outline" size={21} color="#FFFFFF" />
+            </Pressable>
           </View>
 
           <FlatList
@@ -654,7 +692,7 @@ export default function GroupDetailsScreen() {
                   </Text>
 
                   <Text style={styles.totalAmount}>
-                    ₹{totalExpenses.toFixed(2)}
+                    {formatCurrency(totalExpenses, currency)}
                   </Text>
 
                   <Text style={styles.expenseCount}>
@@ -693,7 +731,7 @@ export default function GroupDetailsScreen() {
                   >
                     {currentBalance
                       ? currentBalanceAmount
-                      : money(0)}
+                      : money(0, currency)}
                   </Text>
 
                   <Text style={styles.yourBalanceLabel}>
@@ -749,9 +787,9 @@ export default function GroupDetailsScreen() {
                             </Text>
 
                             <Text style={styles.memberBalanceMeta}>
-                              Paid {money(balance.total_paid)}
+                              Paid {money(balance.total_paid, currency)}
                               {'  •  '}
-                              Share {money(balance.total_owed)}
+                              Share {money(balance.total_owed, currency)}
                             </Text>
 
                             <View style={styles.memberBalanceStatusRow}>
@@ -759,7 +797,7 @@ export default function GroupDetailsScreen() {
                                 style={styles.memberBalanceStatus}
                                 numberOfLines={1}
                               >
-                                {balanceLabel(balance)}
+                                {balanceLabel(balance, currency)}
                               </Text>
 
                               <Text
@@ -770,7 +808,7 @@ export default function GroupDetailsScreen() {
                                   net < 0 && styles.negativeAmount,
                                 ]}
                               >
-                                {signedBalance(balance)}
+                                {signedBalance(balance, currency)}
                               </Text>
                             </View>
                           </View>
@@ -853,10 +891,11 @@ export default function GroupDetailsScreen() {
 
                         <View style={styles.debtActions}>
                           <Text style={styles.debtAmount}>
-                            {money(debt.amount)}
+                            {money(debt.amount, currency)}
                           </Text>
 
-                          {currentUserId &&
+                          {canWriteMoney &&
+                          currentUserId &&
                           (debt.from_user_id === currentUserId ||
                             debt.to_user_id === currentUserId) ? (
                             <Pressable
@@ -974,7 +1013,7 @@ export default function GroupDetailsScreen() {
 
                           <View style={styles.settlementAmountContainer}>
                             <Text style={styles.settlementAmount}>
-                              {money(settlement.amount)}
+                              {money(settlement.amount, currency)}
                             </Text>
                             <Ionicons
                               name="chevron-forward"
@@ -1011,7 +1050,7 @@ export default function GroupDetailsScreen() {
                     </Text>
                   </View>
 
-                  {currentUserId === ownerId ? (
+                  {canManageMembers ? (
                     <Pressable
                       style={styles.addMemberButton}
                       onPress={() => setShowAddMember(true)}
@@ -1040,7 +1079,12 @@ export default function GroupDetailsScreen() {
                       member={member}
                       isOwner={isOwner}
                       onRemove={
-                        currentUserId === ownerId && !isOwner
+                        !isOwner &&
+                        (
+                          currentUserId === ownerId ||
+                          (currentRole === 'admin' &&
+                            member.role !== 'admin')
+                        )
                           ? () => handleRemoveMember(member)
                           : undefined
                       }
@@ -1080,25 +1124,27 @@ export default function GroupDetailsScreen() {
               ) : null
             }
             renderItem={({ item }) => (
-              <ExpenseCard expense={item} />
+              <ExpenseCard expense={item} currency={currency} />
             )}
           />
 
-          <Pressable
-            style={styles.addButton}
-            onPress={() =>
-              navigation.navigate('AddExpense', {
-                groupId,
-                groupName,
-              })
-            }
-          >
-            <Ionicons
-              name="add"
-              size={30}
-              color="#FFFFFF"
-            />
-          </Pressable>
+          {canWriteMoney ? (
+            <Pressable
+              style={styles.addButton}
+              onPress={() =>
+                navigation.navigate('AddExpense', {
+                  groupId,
+                  groupName: currentGroupName,
+                })
+              }
+            >
+              <Ionicons
+                name="add"
+                size={30}
+                color="#FFFFFF"
+              />
+            </Pressable>
+          ) : null}
 
           <Modal
             visible={settleModalVisible}
@@ -1148,7 +1194,7 @@ export default function GroupDetailsScreen() {
                           : selectedDebt.to_name}
                       </Text>
                       <Text style={styles.settlementSummaryAmount}>
-                        Outstanding {money(selectedDebt.amount)}
+                        Outstanding {money(selectedDebt.amount, currency)}
                       </Text>
                     </View>
 
@@ -1359,7 +1405,7 @@ export default function GroupDetailsScreen() {
                             Amount
                           </Text>
                           <Text style={styles.settlementDetailAmount}>
-                            {money(selectedSettlement.amount)}
+                            {money(selectedSettlement.amount, currency)}
                           </Text>
                         </View>
 
@@ -1466,6 +1512,17 @@ const styles = StyleSheet.create({
 
   headerTextContainer: {
     flex: 1,
+    minWidth: 0,
+  },
+
+  settingsButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#1E293B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
   },
 
   groupName: {

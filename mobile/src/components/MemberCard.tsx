@@ -68,7 +68,11 @@ export default function MemberCard({
               ? 'Owner'
               : pending
                 ? 'Pending invitation'
-                : 'Member'}
+                : member.role === 'admin'
+                  ? 'Admin'
+                  : member.role === 'viewer'
+                    ? 'Viewer'
+                    : 'Member'}
           </Text>
 
           {pending && name ? (

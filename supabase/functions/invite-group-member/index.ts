@@ -255,12 +255,37 @@ export default {
         );
       }
 
-      if (group.owner_id !== caller.id) {
+      let callerCanManageMembers = group.owner_id === caller.id;
+
+      if (!callerCanManageMembers) {
+        const { data: callerMembership, error: callerMembershipError } =
+          await admin
+            .from('group_members')
+            .select('role,status')
+            .eq('group_id', groupId)
+            .eq('user_id', caller.id)
+            .maybeSingle();
+
+        if (callerMembershipError) {
+          return json(
+            {
+              ok: false,
+              error: `Unable to verify group permissions: ${callerMembershipError.message}`,
+            },
+            500
+          );
+        }
+
+        callerCanManageMembers =
+          callerMembership?.status === 'active' &&
+          callerMembership?.role === 'admin';
+      }
+
+      if (!callerCanManageMembers) {
         return json(
           {
             ok: false,
-            error:
-              'Only the group owner can add members.',
+            error: 'You do not have permission to add members to this group.',
           },
           403
         );

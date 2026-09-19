@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { supabase } from '../../config/supabase';
+import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
 import { getGroupMembers, GroupMember } from '../../services/memberService';
 import {
   ExpenseSplitRecord,
@@ -42,8 +43,8 @@ const SPLIT_OPTIONS: Array<{
   { type: 'Shares', label: 'Shares', icon: 'grid-outline' },
 ];
 
-function money(value: number) {
-  return `₹${value.toFixed(2)}`;
+function money(value: number, currency: string) {
+  return formatCurrency(value, currency);
 }
 
 function displayName(member: GroupMember) {
@@ -142,6 +143,7 @@ export default function EditExpenseScreen() {
   const [saving, setSaving] = useState(false);
   const [valuesCustomized, setValuesCustomized] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currency, setCurrency] = useState('INR');
 
   useEffect(() => {
     let cancelled = false;
@@ -160,7 +162,7 @@ export default function EditExpenseScreen() {
         getExpenseDetails(expenseId),
         supabase
           .from('groups')
-          .select('id,owner_id')
+          .select('id,owner_id,currency')
           .eq('id', groupId)
           .maybeSingle(),
       ]);
@@ -170,6 +172,9 @@ export default function EditExpenseScreen() {
       const user = userResult.data.user || null;
       const userId = user?.id || null;
       setCurrentUserId(userId);
+      if (groupResult?.data?.currency) {
+        setCurrency(groupResult.data.currency);
+      }
 
       if (memberResult.error) {
         setLoading(false);
@@ -513,7 +518,7 @@ export default function EditExpenseScreen() {
           <View style={styles.section}>
             <Text style={styles.label}>Amount</Text>
             <View style={styles.amountInputWrapper}>
-              <Text style={styles.currency}>₹</Text>
+              <Text style={styles.currency}>{getCurrencySymbol(currency)}</Text>
               <TextInput
                 value={amountText}
                 onChangeText={setAmountText}
@@ -525,7 +530,7 @@ export default function EditExpenseScreen() {
                 editable={!saving}
               />
             </View>
-            <Text style={styles.helperText}>Group currency: INR</Text>
+            <Text style={styles.helperText}>Group currency: {currency}</Text>
           </View>
 
           <View style={styles.section}>
@@ -622,16 +627,16 @@ export default function EditExpenseScreen() {
                       </Text>
                       {selected ? (
                         splitType === 'Equal' ? (
-                          <Text style={styles.calculatedText}>{money(calculated)}</Text>
+                          <Text style={styles.calculatedText}>{money(calculated, currency)}</Text>
                         ) : (
-                          <Text style={styles.calculatedText}>{money(calculated)}</Text>
+                          <Text style={styles.calculatedText}>{money(calculated, currency)}</Text>
                         )
                       ) : null}
                     </View>
                     {selected && splitType !== 'Equal' && input ? (
                       <View style={styles.valueEditorContainer}>
                         <View style={styles.valueInputRow}>
-                          {splitType === 'Exact' ? <Text style={styles.valuePrefix}>₹</Text> : null}
+                          {splitType === 'Exact' ? <Text style={styles.valuePrefix}>{getCurrencySymbol(currency)}</Text> : null}
                           <TextInput
                             value={String(input.value || 0)}
                             onChangeText={(text) => updateSplitValue(userId, text)}
@@ -645,7 +650,7 @@ export default function EditExpenseScreen() {
                           {splitType === 'Percentage' ? <Text style={styles.valueSuffix}>%</Text> : null}
                           {splitType === 'Shares' ? <Text style={styles.valueSuffix}>share</Text> : null}
                         </View>
-                        <Text style={styles.calculatedText}>{money(calculated)}</Text>
+                        <Text style={styles.calculatedText}>{money(calculated, currency)}</Text>
                       </View>
                     ) : null}
                   </Pressable>
@@ -655,7 +660,7 @@ export default function EditExpenseScreen() {
 
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Split total</Text>
-              <Text style={styles.totalValue}>{money(total)}</Text>
+              <Text style={styles.totalValue}>{money(total, currency)}</Text>
             </View>
           </View>
 

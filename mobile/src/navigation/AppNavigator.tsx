@@ -23,6 +23,8 @@ import GroupDetailsScreen from '../screens/group/GroupDetailsScreen';
 import AddExpenseScreen from '../screens/expense/AddExpenseScreen';
 import ExpenseDetailsScreen from '../screens/expense/ExpenseDetailsScreen';
 import EditExpenseScreen from '../screens/expense/EditExpenseScreen';
+import HistoryScreen from '../screens/group/HistoryScreen';
+import GroupSettingsScreen from '../screens/group/GroupSettingsScreen';
 
 const Stack = createNativeStackNavigator();
 export const navigationRef = createNavigationContainerRef();
@@ -46,6 +48,8 @@ const linking = {
       AddExpense: 'add-expense',
       ExpenseDetails: 'expense-details',
       EditExpense: 'edit-expense',
+      GroupHistory: 'group-history',
+      GroupSettings: 'group-settings',
     },
   },
 };
@@ -199,6 +203,8 @@ export default function AppNavigator() {
         <Stack.Screen name="AddExpense" component={AddExpenseScreen} />
         <Stack.Screen name="ExpenseDetails" component={ExpenseDetailsScreen} />
         <Stack.Screen name="EditExpense" component={EditExpenseScreen} />
+        <Stack.Screen name="GroupHistory" component={HistoryScreen} />
+        <Stack.Screen name="GroupSettings" component={GroupSettingsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

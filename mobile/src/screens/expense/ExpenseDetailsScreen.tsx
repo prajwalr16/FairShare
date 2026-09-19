@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
 import { GroupMember, getGroupMembers } from '../../services/memberService';
+import { formatCurrency } from '../../utils/currency';
 import {
   deleteExpense,
   ExpenseDetailsRecord,
@@ -21,9 +22,8 @@ import {
   getExpenseDetails,
 } from '../../services/expenseService';
 
-function money(value: number | string | null | undefined) {
-  const amount = Number(value ?? 0);
-  return `₹${Number.isFinite(amount) ? amount.toFixed(2) : '0.00'}`;
+function money(value: number | string | null | undefined, currency: string) {
+  return formatCurrency(value, currency);
 }
 
 function formatDateTime(value?: string | null) {
@@ -58,6 +58,7 @@ export default function ExpenseDetailsScreen() {
   const [groupName, setGroupName] = useState('Group');
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [currency, setCurrency] = useState('INR');
 
   const load = useCallback(async () => {
     if (!expenseId) {
@@ -92,7 +93,7 @@ export default function ExpenseDetailsScreen() {
         import('../../config/supabase').then(({ supabase }) =>
           supabase
             .from('groups')
-            .select('name')
+            .select('name,currency')
             .eq('id', groupId)
             .maybeSingle()
         ),
@@ -102,8 +103,9 @@ export default function ExpenseDetailsScreen() {
         setMembers(membersResult.data || []);
       }
 
-      if (!groupResult.error && groupResult.data?.name) {
-        setGroupName(groupResult.data.name);
+      if (!groupResult.error && groupResult.data) {
+        if (groupResult.data.name) setGroupName(groupResult.data.name);
+        if (groupResult.data.currency) setCurrency(groupResult.data.currency);
       }
     }
 
@@ -231,7 +233,7 @@ export default function ExpenseDetailsScreen() {
               <Ionicons name="receipt-outline" size={25} color="#0EA5A4" />
             </View>
             <Text style={styles.title}>{expense.title}</Text>
-            <Text style={styles.heroAmount}>{money(expense.amount)}</Text>
+            <Text style={styles.heroAmount}>{money(expense.amount, currency)}</Text>
             <Text style={styles.heroMeta}>
               {expense.split_type} split  •  {formatDateTime(expense.created_at)}
             </Text>
@@ -256,7 +258,7 @@ export default function ExpenseDetailsScreen() {
                 {splits.length} {splits.length === 1 ? 'participant' : 'participants'}
               </Text>
             </View>
-            <Text style={styles.sectionTotal}>{money(splitTotal)}</Text>
+            <Text style={styles.sectionTotal}>{money(splitTotal, currency)}</Text>
           </View>
 
           <View style={styles.splitCard}>
@@ -274,7 +276,7 @@ export default function ExpenseDetailsScreen() {
                     {displayName(member)}
                   </Text>
 
-                  <Text style={styles.splitAmount}>{money(split.amount)}</Text>
+                  <Text style={styles.splitAmount}>{money(split.amount, currency)}</Text>
                 </View>
               );
             })}

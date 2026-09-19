@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { formatCurrency } from '../utils/currency';
 
 type Expense = {
   id: string;
@@ -20,12 +21,8 @@ type Expense = {
 
 type Props = {
   expense: Expense;
+  currency?: string | null;
 };
-
-function money(value: number | string | null | undefined) {
-  const amount = Number(value ?? 0);
-  return `₹${Number.isFinite(amount) ? amount.toFixed(2) : '0.00'}`;
-}
 
 function formatDate(value?: string | null) {
   if (!value) return '';
@@ -44,7 +41,7 @@ function splitLabel(splitType?: string | null) {
   return splitType?.trim() || 'Equal';
 }
 
-export default function ExpenseCard({ expense }: Props) {
+export default function ExpenseCard({ expense, currency = 'INR' }: Props) {
   const navigation = useNavigation<any>();
   const dateLabel = formatDate(expense.created_at);
 
@@ -74,7 +71,7 @@ export default function ExpenseCard({ expense }: Props) {
       </View>
 
       <View style={styles.amountContainer}>
-        <Text style={styles.amount}>{money(expense.amount)}</Text>
+        <Text style={styles.amount}>{formatCurrency(expense.amount, currency)}</Text>
         <Ionicons name="chevron-forward" size={18} color="#64748B" />
       </View>
     </Pressable>

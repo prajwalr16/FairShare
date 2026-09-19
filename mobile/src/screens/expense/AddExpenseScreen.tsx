@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { supabase } from '../../config/supabase';
+import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
 import {
   getGroupMembers,
   GroupMember,
@@ -57,6 +58,7 @@ export default function AddExpenseScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [payerId, setPayerId] = useState<string | null>(null);
   const [payerPickerVisible, setPayerPickerVisible] = useState(false);
+  const [currency, setCurrency] = useState('INR');
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [saving, setSaving] = useState(false);
   const [valuesCustomized, setValuesCustomized] = useState(false);
@@ -74,20 +76,25 @@ export default function AddExpenseScreen() {
           setSplitInputs([]);
           setCurrentUserId(null);
           setPayerId(null);
+          setCurrency('INR');
           setLoadingMembers(false);
         }
         return;
       }
 
-      const [userResult, memberResult] = await Promise.all([
+      const [userResult, memberResult, groupResult] = await Promise.all([
         supabase.auth.getUser(),
         getGroupMembers(groupId),
+        supabase.from('groups').select('currency').eq('id', groupId).maybeSingle(),
       ]);
 
       if (cancelled) return;
 
       const userId = userResult.data.user?.id || null;
       setCurrentUserId(userId);
+      if (groupResult?.data?.currency) {
+        setCurrency(groupResult.data.currency);
+      }
       setPayerId(userId);
 
       if (memberResult.error) {
@@ -366,7 +373,7 @@ export default function AddExpenseScreen() {
     if (splitType === 'Equal') {
       return (
         <Text style={styles.shareAmount}>
-          ₹{amountValue.toFixed(2)}
+          {formatCurrency(amountValue, currency)}
         </Text>
       );
     }
@@ -375,7 +382,7 @@ export default function AddExpenseScreen() {
       <View style={styles.valueEditorContainer}>
         <View style={styles.valueInputRow}>
           {splitType === 'Exact' ? (
-            <Text style={styles.valuePrefix}>₹</Text>
+            <Text style={styles.valuePrefix}>{getCurrencySymbol(currency)}</Text>
           ) : null}
 
           <TextInput
@@ -398,7 +405,7 @@ export default function AddExpenseScreen() {
         </View>
 
         <Text style={styles.calculatedAmount}>
-          ₹{amountValue.toFixed(2)}
+          {formatCurrency(amountValue, currency)}
         </Text>
       </View>
     );
@@ -451,7 +458,7 @@ export default function AddExpenseScreen() {
             <View style={styles.section}>
               <Text style={styles.label}>Amount</Text>
               <View style={styles.amountInputWrapper}>
-                <Text style={styles.currency}>₹</Text>
+                <Text style={styles.currency}>{getCurrencySymbol(currency)}</Text>
                 <TextInput
                   value={amountText}
                   onChangeText={setAmountText}
@@ -462,7 +469,7 @@ export default function AddExpenseScreen() {
                   inputMode="decimal"
                 />
               </View>
-              <Text style={styles.helperText}>Group currency: INR</Text>
+              <Text style={styles.helperText}>Group currency: {currency}</Text>
             </View>
 
             <View style={styles.section}>
@@ -650,12 +657,12 @@ export default function AddExpenseScreen() {
                     splitError ? styles.summaryStatusError : null,
                   ]}
                 >
-                  {splitError || `Total: ₹${selectedTotal.toFixed(2)}`}
+                  {splitError || `Total: ${formatCurrency(selectedTotal, currency)}`}
                 </Text>
               </View>
 
               <Text style={styles.summaryAmount}>
-                ₹{amount.toFixed(2)}
+                {formatCurrency(amount, currency)}
               </Text>
             </View>
 
