@@ -1,29 +1,28 @@
-
-# React Native
-node_modules/
-.expo/
-dist/
-web-build/
-
-# Expo
+# React Native / Expo
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
 expo-env.d.ts
 
 # Python
 backend/.venv/
 backend/__pycache__/
 backend/.pytest_cache/
+__pycache__/
 *.pyc
 
-# Environment
+# Environment secrets
 .env
 .env.local
-.env.*
+.env.*.local
+!.env.example
 
-# VS Code
+# Build / test artifacts
+coverage/
+.pytest_cache/
+
+# Editors / OS
 .vscode/
-
-# macOS
 .DS_Store
-
-# Windows
 Thumbs.db

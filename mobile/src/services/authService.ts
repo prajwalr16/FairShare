@@ -39,3 +39,11 @@ export async function forgotPassword(
     { redirectTo }
   );
 }
+
+export async function getCurrentUser() {
+  return await supabase.auth.getUser();
+}
+
+export async function getCurrentSession() {
+  return await supabase.auth.getSession();
+}

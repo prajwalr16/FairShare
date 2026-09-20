@@ -8,6 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { formatCurrency } from '../utils/currency';
+import { EXPENSE_CATEGORY_ICONS, ExpenseCategory } from '../constants/expenseCategories';
 
 type Expense = {
   id: string;
@@ -15,6 +16,7 @@ type Expense = {
   title?: string | null;
   amount?: number | string | null;
   split_type?: string | null;
+  category?: ExpenseCategory | null;
   paid_by?: string | null;
   created_at?: string | null;
 };
@@ -56,7 +58,7 @@ export default function ExpenseCard({ expense, currency = 'INR' }: Props) {
       }
     >
       <View style={styles.iconContainer}>
-        <Ionicons name="receipt-outline" size={19} color="#0EA5A4" />
+        <Ionicons name={expense.category ? EXPENSE_CATEGORY_ICONS[expense.category] : 'receipt-outline'} size={19} color="#0EA5A4" />
       </View>
 
       <View style={styles.info}>
@@ -65,7 +67,7 @@ export default function ExpenseCard({ expense, currency = 'INR' }: Props) {
         </Text>
 
         <Text style={styles.meta} numberOfLines={1}>
-          {splitLabel(expense.split_type)}
+          {expense.category || 'Other'}  •  {splitLabel(expense.split_type)}
           {dateLabel ? `  •  ${dateLabel}` : ''}
         </Text>
       </View>

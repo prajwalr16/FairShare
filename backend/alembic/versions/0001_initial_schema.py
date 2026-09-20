@@ -242,6 +242,40 @@ def upgrade() -> None:
         if not has_fk(bind, table, col, target):
             op.create_foreign_key(name, table, target, [col], [target_col], source_schema="public", referent_schema="public", ondelete=ondelete)
 
+    # Temporarily disable legacy viewer-write triggers while adopting existing data.
+    # The migration runs outside a Supabase auth session, so auth.uid() is NULL and
+    # these triggers would incorrectly reject privileged migration updates.
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM pg_trigger t
+                JOIN pg_class c ON c.oid = t.tgrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public'
+                  AND c.relname = 'expenses'
+                  AND t.tgname = 'prevent_viewer_expense_write'
+                  AND NOT t.tgisinternal
+            ) THEN
+                ALTER TABLE public.expenses DISABLE TRIGGER prevent_viewer_expense_write;
+            END IF;
+
+            IF EXISTS (
+                SELECT 1
+                FROM pg_trigger t
+                JOIN pg_class c ON c.oid = t.tgrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public'
+                  AND c.relname = 'settlements'
+                  AND t.tgname = 'prevent_viewer_settlement_write'
+                  AND NOT t.tgisinternal
+            ) THEN
+                ALTER TABLE public.settlements DISABLE TRIGGER prevent_viewer_settlement_write;
+            END IF;
+        END $$;
+    """)
+
     # Normalize legacy data to the supported application values.
     op.execute("UPDATE public.group_members SET email = lower(trim(email)) WHERE email IS NOT NULL")
     op.execute("""
@@ -325,6 +359,40 @@ def upgrade() -> None:
     for name, table, columns in index_specs:
         if not index_exists(bind, table, name):
             op.create_index(name, table, columns, schema="public")
+
+    # Re-enable any legacy viewer-write triggers that existed before adoption.
+    # The trigger definitions remain unchanged; they are only bypassed during the
+    # privileged migration data-normalization step above.
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM pg_trigger t
+                JOIN pg_class c ON c.oid = t.tgrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public'
+                  AND c.relname = 'expenses'
+                  AND t.tgname = 'prevent_viewer_expense_write'
+                  AND NOT t.tgisinternal
+            ) THEN
+                ALTER TABLE public.expenses ENABLE TRIGGER prevent_viewer_expense_write;
+            END IF;
+
+            IF EXISTS (
+                SELECT 1
+                FROM pg_trigger t
+                JOIN pg_class c ON c.oid = t.tgrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public'
+                  AND c.relname = 'settlements'
+                  AND t.tgname = 'prevent_viewer_settlement_write'
+                  AND NOT t.tgisinternal
+            ) THEN
+                ALTER TABLE public.settlements ENABLE TRIGGER prevent_viewer_settlement_write;
+            END IF;
+        END $$;
+    """)
 
     # Prevent the Supabase PostgREST roles from being the application's data API.
     # The backend connects with a DB credential and remains the application data boundary.

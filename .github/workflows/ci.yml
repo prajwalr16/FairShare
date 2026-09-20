@@ -1,0 +1,79 @@
+name: FairShare CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-postgres: 
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fairshare
+          POSTGRES_PASSWORD: fairshare
+          POSTGRES_DB: fairshare
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd=pg_isready
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql+psycopg://fairshare:fairshare@localhost:5432/fairshare
+      FAIRSHARE_TEST_DATABASE_URL: postgresql+psycopg://fairshare:fairshare@localhost:5432/fairshare
+      FAIRSHARE_REUSE_SCHEMA: '1'
+      SUPABASE_URL: https://test.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: test-publishable-key
+      SUPABASE_SECRET_KEY: test-secret-key
+      ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - run: python -m compileall app alembic
+      - run: alembic upgrade head
+      - run: alembic upgrade head
+      - name: Verify migrated schema
+        run: >-
+          python -c "from sqlalchemy import create_engine, inspect; e=create_engine(__import__('os').environ['DATABASE_URL']); i=inspect(e); required={'users','groups','group_members','expenses','expense_splits','settlements'}; assert required.issubset(set(i.get_table_names(schema='public'))); print('PostgreSQL migration schema OK')"
+      - run: pytest -q
+
+  backend-sqlite: 
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+
+  mobile-static:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit

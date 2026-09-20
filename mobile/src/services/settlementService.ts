@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase';
+import { apiRequest } from './apiClient';
 
 export type GroupSettlement = {
   id: string;
@@ -27,44 +27,62 @@ export type UpdateSettlementInput = {
 };
 
 export async function recordSettlement(input: RecordSettlementInput) {
-  const cleanNote = input.note?.trim() || null;
-
-  return await supabase.rpc('record_group_settlement', {
-    p_group_id: input.groupId,
-    p_from_user_id: input.fromUserId,
-    p_to_user_id: input.toUserId,
-    p_amount: Number(input.amount.toFixed(2)),
-    p_note: cleanNote,
-  });
+  try {
+    const data = await apiRequest<GroupSettlement>(
+      `/groups/${input.groupId}/settlements`,
+      {
+        method: 'POST',
+        body: {
+          from_user_id: input.fromUserId,
+          to_user_id: input.toUserId,
+          amount: Number(input.amount.toFixed(2)),
+          note: input.note?.trim() || null,
+        },
+      },
+    );
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error };
+  }
 }
 
 export async function updateSettlement(input: UpdateSettlementInput) {
-  const cleanNote = input.note?.trim() || null;
-
-  return await supabase.rpc('update_group_settlement', {
-    p_group_id: input.groupId,
-    p_settlement_id: input.settlementId,
-    p_amount: Number(input.amount.toFixed(2)),
-    p_note: cleanNote,
-  });
+  try {
+    const data = await apiRequest<GroupSettlement>(
+      `/groups/${input.groupId}/settlements/${input.settlementId}`,
+      {
+        method: 'PUT',
+        body: {
+          amount: Number(input.amount.toFixed(2)),
+          note: input.note?.trim() || null,
+        },
+      },
+    );
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error };
+  }
 }
 
-export async function deleteSettlement(
-  groupId: string,
-  settlementId: string
-) {
-  return await supabase.rpc('delete_group_settlement', {
-    p_group_id: groupId,
-    p_settlement_id: settlementId,
-  });
+export async function deleteSettlement(groupId: string, settlementId: string) {
+  try {
+    await apiRequest<void>(
+      `/groups/${groupId}/settlements/${settlementId}`,
+      { method: 'DELETE' },
+    );
+    return { error: null };
+  } catch (error: any) {
+    return { error };
+  }
 }
 
 export async function getGroupSettlements(groupId: string) {
-  return await supabase
-    .from('settlements')
-    .select(
-      'id,group_id,from_user_id,to_user_id,amount,note,created_by,created_at'
-    )
-    .eq('group_id', groupId)
-    .order('created_at', { ascending: false });
+  try {
+    const data = await apiRequest<GroupSettlement[]>(
+      `/groups/${groupId}/settlements`,
+    );
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error };
+  }
 }

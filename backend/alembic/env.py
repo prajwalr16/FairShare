@@ -3,6 +3,9 @@ from __future__ import annotations
 from logging.config import fileConfig
 import os
 import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -11,6 +14,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from app.models import Base  # noqa: E402
 from app.core.config import normalize_database_url  # noqa: E402
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(BACKEND_DIR / ".env")
 
 config = context.config
 if config.config_file_name:

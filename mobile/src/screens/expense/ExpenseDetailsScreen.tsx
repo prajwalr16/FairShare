@@ -15,6 +15,8 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 
 import { GroupMember, getGroupMembers } from '../../services/memberService';
 import { formatCurrency } from '../../utils/currency';
+import { EXPENSE_CATEGORY_ICONS, ExpenseCategory } from '../../constants/expenseCategories';
+import { getGroupSettings } from '../../services/groupService';
 import {
   deleteExpense,
   ExpenseDetailsRecord,
@@ -90,13 +92,7 @@ export default function ExpenseDetailsScreen() {
     if (groupId) {
       const [membersResult, groupResult] = await Promise.all([
         getGroupMembers(groupId),
-        import('../../config/supabase').then(({ supabase }) =>
-          supabase
-            .from('groups')
-            .select('name,currency')
-            .eq('id', groupId)
-            .maybeSingle()
-        ),
+        getGroupSettings(groupId),
       ]);
 
       if (!membersResult.error) {
@@ -248,6 +244,13 @@ export default function ExpenseDetailsScreen() {
               <Text style={styles.infoValue} numberOfLines={1}>
                 {displayName(payer)}
               </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <View style={styles.infoLabelContainer}>
+                <Ionicons name={expense.category ? EXPENSE_CATEGORY_ICONS[expense.category as ExpenseCategory] : 'ellipsis-horizontal-circle-outline'} size={18} color="#0EA5A4" />
+                <Text style={styles.infoLabel}>Category</Text>
+              </View>
+              <Text style={styles.infoValue} numberOfLines={1}>{expense.category || 'Other'}</Text>
             </View>
           </View>
 

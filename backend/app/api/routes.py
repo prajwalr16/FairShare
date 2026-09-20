@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
-from ..core.security import CurrentUser, ensure_user, get_current_user
+from ..core.security import CurrentUser, ensure_user, get_current_user, set_database_user_context
 from ..models import GroupMember
 from ..schemas.balance import BalanceResponse
 from ..schemas.expense import ExpenseCreate, ExpenseDetails, ExpenseSplitResponse, ExpenseSummary
@@ -25,7 +25,9 @@ router = APIRouter(prefix="/api/v1")
 
 
 def db_user(current_user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
-    return ensure_user(session, current_user)
+    user = ensure_user(session, current_user)
+    set_database_user_context(session, user.id)
+    return user
 
 
 @router.get("/health")
@@ -116,13 +118,20 @@ def patch_member_role(group_id: UUID, user_id: UUID, payload: RoleUpdate, user=D
 
 
 @router.get("/groups/{group_id}/expenses", response_model=list[ExpenseSummary])
-def expenses(group_id: UUID, limit: int | None = Query(default=None, ge=1, le=200), user=Depends(db_user), session: Session = Depends(get_db)):
-    return list_group_expenses(session, group_id, user, limit)
+def expenses(
+    group_id: UUID,
+    limit: int | None = Query(default=None, ge=1, le=200),
+    category: str | None = Query(default=None),
+    scope: str = Query(default="all"),
+    user=Depends(db_user),
+    session: Session = Depends(get_db),
+):
+    return list_group_expenses(session, group_id, user, limit, category, scope)
 
 
 @router.post("/groups/{group_id}/expenses", response_model=ExpenseSummary, status_code=status.HTTP_201_CREATED)
 def create_expense_route(group_id: UUID, payload: ExpenseCreate, user=Depends(db_user), session: Session = Depends(get_db)):
-    return create_expense(session, group_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.splits, user)
+    return create_expense(session, group_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user)
 
 
 @router.get("/expenses/{expense_id}", response_model=ExpenseDetails)
@@ -133,7 +142,7 @@ def expense_detail(expense_id: UUID, user=Depends(db_user), session: Session = D
 
 @router.put("/expenses/{expense_id}", response_model=ExpenseSummary)
 def update_expense_route(expense_id: UUID, payload: ExpenseCreate, user=Depends(db_user), session: Session = Depends(get_db)):
-    return update_expense(session, expense_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.splits, user)
+    return update_expense(session, expense_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user)
 
 
 @router.delete("/expenses/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -174,8 +183,15 @@ def delete_settlement_route(group_id: UUID, settlement_id: UUID, user=Depends(db
 
 
 @router.get("/groups/{group_id}/history")
-def history(group_id: UUID, limit: int = Query(default=100, ge=1, le=300), user=Depends(db_user), session: Session = Depends(get_db)):
+def history(
+    group_id: UUID,
+    limit: int = Query(default=100, ge=1, le=200),
+    category: str | None = Query(default=None),
+    scope: str = Query(default="all"),
+    user=Depends(db_user),
+    session: Session = Depends(get_db),
+):
     return {
-        "expenses": list_group_expenses(session, group_id, user, limit),
+        "expenses": list_group_expenses(session, group_id, user, limit, category, scope),
         "settlements": list_group_settlements(session, group_id, user, limit),
     }

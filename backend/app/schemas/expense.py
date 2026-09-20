@@ -6,6 +6,10 @@ from pydantic import BaseModel, Field, field_validator
 
 from .common import APIModel
 
+SUPPORTED_EXPENSE_CATEGORIES = {
+    "Food", "Fuel", "Stay", "Transport", "Activities", "Shopping", "Bills", "Other"
+}
+
 
 class SplitEntry(BaseModel):
     user_id: UUID
@@ -17,6 +21,7 @@ class ExpenseCreate(BaseModel):
     amount: Decimal = Field(gt=0)
     paid_by: UUID
     split_type: str = "Equal"
+    category: str = "Other"
     splits: list[SplitEntry] = Field(min_length=1)
 
     @field_validator("title")
@@ -43,12 +48,22 @@ class ExpenseCreate(BaseModel):
         return normalized
 
 
+    @field_validator("category")
+    @classmethod
+    def normalize_category(cls, value: str) -> str:
+        normalized = value.strip().title()
+        if normalized not in SUPPORTED_EXPENSE_CATEGORIES:
+            raise ValueError("Unsupported expense category.")
+        return normalized
+
+
 class ExpenseSummary(APIModel):
     id: UUID
     group_id: UUID
     title: str
     amount: Decimal
     split_type: str
+    category: str
     paid_by: UUID
     created_at: datetime
 

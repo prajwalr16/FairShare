@@ -1,142 +1,94 @@
 import * as Linking from 'expo-linking';
-import { supabase } from '../config/supabase';
+import { apiRequest } from './apiClient';
 
 export type GroupMember = {
   id: string;
   group_id: string;
   user_id: string | null;
   email: string;
-  role: 'owner' | 'member' | string;
+  role: 'owner' | 'admin' | 'member' | 'viewer' | string;
   status: 'pending' | 'active' | string;
   full_name?: string | null;
   created_at?: string;
 };
 
-export async function getGroupMembers(
-  groupId: string
-) {
-  const { data: members, error } = await supabase
-    .from('group_members')
-    .select('*')
-    .eq('group_id', groupId)
-    .order('role', { ascending: true })
-    .order('created_at', { ascending: true });
-
-  if (error) {
+export async function getGroupMembers(groupId: string) {
+  try {
+    const data = await apiRequest<GroupMember[]>(`/groups/${groupId}/members`);
+    return { data, error: null };
+  } catch (error: any) {
     return { data: null, error };
   }
-
-  const userIds = (members || [])
-    .map((member: any) => member.user_id)
-    .filter(Boolean);
-
-  let profileMap: Record<string, string | null> = {};
-
-  if (userIds.length) {
-    const { data: profiles, error: profileError } =
-      await supabase
-        .from('profiles')
-        .select('id,full_name')
-        .in('id', userIds);
-
-    if (profileError) {
-      return {
-        data: null,
-        error: profileError,
-      };
-    }
-
-    profileMap = Object.fromEntries(
-      (profiles || []).map((profile: any) => [
-        profile.id,
-        profile.full_name,
-      ])
-    );
-  }
-
-  const enriched = (members || []).map(
-    (member: any) => ({
-      ...member,
-      full_name: member.user_id
-        ? profileMap[member.user_id] || null
-        : null,
-    })
-  );
-
-  return {
-    data: enriched as GroupMember[],
-    error: null,
-  };
 }
 
-export async function addGroupMember(
-  groupId: string,
-  email: string
-) {
-  const redirectTo = Linking.createURL(
-    'accept-invite'
-  );
+export async function addGroupMember(groupId: string, email: string) {
+  try {
+    const redirectTo = Linking.createURL('accept-invite');
+    const data = await apiRequest<any>(`/groups/${groupId}/members/invite`, {
+      method: 'POST',
+      body: {
+        email: email.trim().toLowerCase(),
+        redirect_to: redirectTo,
+      },
+    });
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error };
+  }
+}
 
-  const { data, error } =
-    await supabase.functions.invoke(
-      'invite-group-member',
-      {
-        body: {
-          groupId,
-          email: email.trim().toLowerCase(),
-          redirectTo,
-        },
-      }
+
+export type PendingInvitation = {
+  group_id: string;
+  group_name: string;
+  email: string;
+  member_id: string;
+  status: string;
+};
+
+export async function getPendingInvitation(groupId: string) {
+  try {
+    const data = await apiRequest<PendingInvitation>(
+      `/groups/${groupId}/invitation`,
     );
-
-  if (error) {
-    let message = error.message;
-
-    try {
-      const context = (error as any).context;
-
-      if (context?.text) {
-        const raw = await context.text();
-
-        if (raw) {
-          try {
-            const body = JSON.parse(raw);
-            message = body?.error || body?.message || raw;
-          } catch {
-            message = raw;
-          }
-        }
-      }
-    } catch {
-      // Keep the SDK error when the response body cannot be read.
-    }
-
-    return {
-      data: null,
-      error: new Error(message),
-    };
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error };
   }
+}
 
-  if (!data?.ok) {
-    return {
-      data: null,
-      error: new Error(
-        data?.error || 'Unable to add member.'
-      ),
-    };
+export async function acceptGroupInvitation(groupId: string, fullName?: string) {
+  try {
+    const data = await apiRequest<any>(`/groups/${groupId}/members/accept`, {
+      method: 'POST',
+      body: {
+        group_id: groupId,
+        full_name: fullName?.trim() || null,
+      },
+    });
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error };
   }
-
-  return {
-    data,
-    error: null,
-  };
 }
 
 export async function removeGroupMember(
-  memberId: string
+  groupId: string,
+  memberId: string,
 ) {
-  return await supabase
-    .from('group_members')
-    .delete()
-    .eq('id', memberId);
+  return removeGroupMemberFromGroup(groupId, memberId);
+}
+
+export async function removeGroupMemberFromGroup(
+  groupId: string,
+  memberId: string,
+) {
+  try {
+    await apiRequest<void>(`/groups/${groupId}/members/${memberId}`, {
+      method: 'DELETE',
+    });
+    return { error: null };
+  } catch (error: any) {
+    return { error };
+  }
 }

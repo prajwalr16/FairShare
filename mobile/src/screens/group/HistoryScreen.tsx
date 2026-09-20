@@ -1,423 +1,294 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
-  RefreshControl,
+  ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   View,
-  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  useFocusEffect,
-  useNavigation,
-  useRoute,
-} from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
-import { supabase } from '../../config/supabase';
-import {
-  getGroupMembers,
-  GroupMember,
-} from '../../services/memberService';
+import ExpenseCard from '../../components/ExpenseCard';
+import { getGroupExpenses } from '../../services/expenseService';
+import { getGroupMembers, GroupMember } from '../../services/memberService';
 import { getGroupSettlements, GroupSettlement } from '../../services/settlementService';
+import { getGroupSettings } from '../../services/groupService';
+import { formatCurrency } from '../../utils/currency';
+import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_ICONS, ExpenseCategory } from '../../constants/expenseCategories';
 
-type Expense = {
-  id: string;
-  group_id: string;
-  title?: string | null;
-  amount?: number | string | null;
-  split_type?: string | null;
-  paid_by?: string | null;
-  created_at?: string | null;
-};
+type Filter = 'All' | 'Expenses' | 'Settlements';
+type Range = 'All time' | 'Today' | '7 days' | '30 days';
 
-type ActivityItem =
-  | { type: 'expense'; id: string; createdAt: string; expense: Expense }
-  | { type: 'settlement'; id: string; createdAt: string; settlement: GroupSettlement };
-
-type ActivityFilter = 'all' | 'expenses' | 'settlements';
-type DateFilter = 'all' | 'today' | '7days' | '30days';
-
-function money(value: number | string | null | undefined, currency = 'INR') {
-  const amount = Number(value ?? 0);
-  const symbolMap: Record<string, string> = {
-    INR: '₹',
-    USD: '$',
-    EUR: '€',
-    GBP: '£',
-    JPY: '¥',
-    AUD: 'A$',
-    CAD: 'C$',
-  };
-  const prefix = symbolMap[currency] || `${currency} `;
-  return `${prefix}${Number.isFinite(amount) ? amount.toFixed(2) : '0.00'}`;
-}
-
-function dateTimeLabel(value?: string | null) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString([], {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function normalize(value?: string | null) {
-  return value?.trim().toLowerCase() || '';
-}
-
-function memberName(member: GroupMember | undefined) {
-  if (!member) return 'Member';
-  const candidate = (member as GroupMember & { full_name?: string | null }).full_name;
-  return candidate?.trim() || member.email?.trim() || 'Member';
-}
-
-function buildNameMap(members: GroupMember[]) {
-  const map = new Map<string, string>();
-  members.forEach((member) => {
-    if (member.user_id) {
-      map.set(member.user_id, memberName(member));
-    }
-  });
-  return map;
-}
-
-function startOfToday() {
+function withinRange(dateValue: string, range: Range) {
+  if (range === 'All time') return true;
+  const date = new Date(dateValue);
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-}
-
-function dateFilterStart(filter: DateFilter) {
-  const now = Date.now();
-  if (filter === 'today') return startOfToday();
-  if (filter === '7days') return now - 7 * 24 * 60 * 60 * 1000;
-  if (filter === '30days') return now - 30 * 24 * 60 * 60 * 1000;
-  return 0;
+  const diffMs = now.getTime() - date.getTime();
+  if (range === 'Today') {
+    return date.toDateString() === now.toDateString();
+  }
+  const days = range === '7 days' ? 7 : 30;
+  return diffMs >= 0 && diffMs <= days * 24 * 60 * 60 * 1000;
 }
 
 export default function HistoryScreen() {
-  const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const navigation = useNavigation<any>();
   const groupId = route.params?.groupId as string | undefined;
-  const groupName = route.params?.groupName as string | undefined;
 
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [filter, setFilter] = useState<Filter>('All');
+  const [range, setRange] = useState<Range>('All time');
+  const [query, setQuery] = useState('');
+  const [currency, setCurrency] = useState('INR');
+  const [expenses, setExpenses] = useState<any[]>([]);
   const [settlements, setSettlements] = useState<GroupSettlement[]>([]);
   const [members, setMembers] = useState<GroupMember[]>([]);
-  const [currency, setCurrency] = useState('INR');
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
-  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
-  const [search, setSearch] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | 'All'>('All');
+  const [expenseScope, setExpenseScope] = useState<'all' | 'mine'>('all');
 
-  const loadHistory = useCallback(async () => {
-    if (!groupId) {
-      setExpenses([]);
-      setSettlements([]);
-      setMembers([]);
-      setLoading(false);
-      return;
-    }
-
-    const [expenseResult, settlementResult, memberResult, groupResult] = await Promise.all([
-      supabase
-        .from('expenses')
-        .select('id,group_id,title,amount,split_type,paid_by,created_at')
-        .eq('group_id', groupId)
-        .order('created_at', { ascending: false }),
+  const load = useCallback(async () => {
+    if (!groupId) return;
+    setLoading(true);
+    const [settings, expenseResult, settlementResult, memberResult] = await Promise.all([
+      getGroupSettings(groupId),
+      getGroupExpenses(groupId, 200, expenseCategory, expenseScope),
       getGroupSettlements(groupId),
       getGroupMembers(groupId),
-      supabase.from('groups').select('currency').eq('id', groupId).single(),
     ]);
 
-    if (!expenseResult.error) setExpenses((expenseResult.data || []) as Expense[]);
-    else console.log('Failed to load history expenses:', expenseResult.error.message);
-
-    if (!settlementResult.error) setSettlements((settlementResult.data || []) as GroupSettlement[]);
-    else console.log('Failed to load history settlements:', settlementResult.error.message);
-
-    if (!memberResult.error) setMembers(memberResult.data || []);
-    else console.log('Failed to load history members:', memberResult.error.message);
-
-    if (!groupResult.error && groupResult.data?.currency) {
-      setCurrency(groupResult.data.currency);
-    }
-
+    if (settings.data?.currency) setCurrency(settings.data.currency);
+    setExpenses(expenseResult.data || []);
+    setSettlements(settlementResult.data || []);
+    setMembers(memberResult.data || []);
     setLoading(false);
-  }, [groupId]);
+  }, [groupId, expenseCategory, expenseScope]);
 
   useFocusEffect(
     useCallback(() => {
-      loadHistory();
-    }, [loadHistory])
+      load();
+    }, [load]),
   );
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadHistory();
-    setRefreshing(false);
-  };
-
-  const names = useMemo(() => buildNameMap(members), [members]);
-
-  const items = useMemo<ActivityItem[]>(() => {
-    const activity: ActivityItem[] = [];
-
-    if (activityFilter !== 'settlements') {
-      expenses.forEach((expense) => {
-        activity.push({
-          type: 'expense',
-          id: `expense-${expense.id}`,
-          createdAt: expense.created_at || '',
-          expense,
-        });
-      });
-    }
-
-    if (activityFilter !== 'expenses') {
-      settlements.forEach((settlement) => {
-        activity.push({
-          type: 'settlement',
-          id: `settlement-${settlement.id}`,
-          createdAt: settlement.created_at || '',
-          settlement,
-        });
-      });
-    }
-
-    const query = normalize(search);
-    const start = dateFilterStart(dateFilter);
-
-    return activity
-      .filter((item) => {
-        const timestamp = new Date(item.createdAt).getTime();
-        if (dateFilter !== 'all' && (Number.isNaN(timestamp) || timestamp < start)) {
-          return false;
-        }
-
-        if (!query) return true;
-
-        if (item.type === 'expense') {
-          const payer = item.expense.paid_by ? names.get(item.expense.paid_by) || '' : '';
-          return [
-            item.expense.title,
-            item.expense.split_type,
-            payer,
-          ].some((value) => normalize(value).includes(query));
-        }
-
-        const from = names.get(item.settlement.from_user_id) || '';
-        const to = names.get(item.settlement.to_user_id) || '';
-        return [from, to, item.settlement.note].some((value) =>
-          normalize(value).includes(query)
+  const names = useMemo(() => {
+    const map = new Map<string, string>();
+    members.forEach((member) => {
+      if (member.user_id) {
+        map.set(
+          member.user_id,
+          member.full_name?.trim() || member.email || 'Member',
         );
-      })
-      .sort((a, b) => {
-        const aTime = new Date(a.createdAt).getTime();
-        const bTime = new Date(b.createdAt).getTime();
-        return bTime - aTime;
-      });
-  }, [activityFilter, dateFilter, expenses, names, search, settlements]);
-
-  const openExpense = (expense: Expense) => {
-    navigation.navigate('ExpenseDetails', {
-      expenseId: expense.id,
-      groupId: expense.group_id,
+      }
     });
-  };
+    return map;
+  }, [members]);
 
-  const renderItem = ({ item }: { item: ActivityItem }) => {
-    if (item.type === 'expense') {
-      const payer = item.expense.paid_by
-        ? names.get(item.expense.paid_by) || 'Member'
-        : 'Member';
+  const normalizedQuery = query.trim().toLowerCase();
 
-      return (
-        <Pressable
-          style={({ pressed }) => [styles.activityCard, pressed && styles.pressed]}
-          onPress={() => openExpense(item.expense)}
-        >
-          <View style={styles.activityIcon}>
-            <Ionicons name="receipt-outline" size={19} color="#0EA5A4" />
-          </View>
+  const visibleExpenses = useMemo(
+    () =>
+      expenses.filter((expense) => {
+        if (!withinRange(expense.created_at, range)) return false;
+        if (!normalizedQuery) return true;
+        const payer = names.get(expense.paid_by) || '';
+        return `${expense.title} ${payer} ${expense.split_type}`
+          .toLowerCase()
+          .includes(normalizedQuery);
+      }),
+    [expenses, names, normalizedQuery, range],
+  );
 
-          <View style={styles.activityInfo}>
-            <Text style={styles.activityTitle} numberOfLines={1}>
-              {item.expense.title?.trim() || 'Expense'}
-            </Text>
-            <Text style={styles.activityMeta} numberOfLines={2}>
-              Paid by {payer}
-              {'  •  '}
-              {(item.expense.split_type || 'Equal').trim()}
-              {'\n'}
-              {dateTimeLabel(item.createdAt)}
-            </Text>
-          </View>
-
-          <View style={styles.activityAmountWrap}>
-            <Text style={styles.activityAmount}>
-              {money(item.expense.amount, currency)}
-            </Text>
-            <Ionicons name="chevron-forward" size={17} color="#64748B" />
-          </View>
-        </Pressable>
-      );
-    }
-
-    const from = names.get(item.settlement.from_user_id) || 'Member';
-    const to = names.get(item.settlement.to_user_id) || 'Member';
-
-    return (
-      <View style={styles.activityCard}>
-        <View style={[styles.activityIcon, styles.settlementIcon]}>
-          <Ionicons name="checkmark-done-outline" size={19} color="#22C55E" />
-        </View>
-
-        <View style={styles.activityInfo}>
-          <Text style={styles.activityTitle} numberOfLines={1}>
-            {from} paid {to}
-          </Text>
-          <Text style={styles.activityMeta} numberOfLines={2}>
-            {dateTimeLabel(item.createdAt)}
-            {item.settlement.note?.trim()
-              ? `\n${item.settlement.note.trim()}`
-              : ''}
-          </Text>
-        </View>
-
-        <Text style={styles.activityAmount}>
-          {money(item.settlement.amount, currency)}
-        </Text>
-      </View>
-    );
-  };
-
-  const activityFilters: Array<{ key: ActivityFilter; label: string }> = [
-    { key: 'all', label: 'All' },
-    { key: 'expenses', label: 'Expenses' },
-    { key: 'settlements', label: 'Settlements' },
-  ];
-
-  const dateFilters: Array<{ key: DateFilter; label: string }> = [
-    { key: 'all', label: 'All time' },
-    { key: 'today', label: 'Today' },
-    { key: '7days', label: '7 days' },
-    { key: '30days', label: '30 days' },
-  ];
+  const visibleSettlements = useMemo(
+    () =>
+      settlements.filter((settlement) => {
+        if (!withinRange(settlement.created_at, range)) return false;
+        if (!normalizedQuery) return true;
+        const from = names.get(settlement.from_user_id) || '';
+        const to = names.get(settlement.to_user_id) || '';
+        return `${from} ${to} ${settlement.note || ''}`
+          .toLowerCase()
+          .includes(normalizedQuery);
+      }),
+    [settlements, names, normalizedQuery, range],
+  );
 
   return (
-    <>
+    <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
-        <View style={styles.container}>
-          <View style={styles.header}>
-            <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={10}>
-              <Ionicons name="arrow-back" size={23} color="#FFFFFF" />
-            </Pressable>
-            <View style={styles.headerText}>
-              <Text style={styles.title} numberOfLines={1}>History</Text>
-              <Text style={styles.subtitle} numberOfLines={1}>{groupName || 'Group'}</Text>
-            </View>
-          </View>
 
-          <View style={styles.searchBox}>
-            <Ionicons name="search-outline" size={19} color="#64748B" />
-            <TextInput
-              style={styles.searchInput}
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search expenses, people or notes"
-              placeholderTextColor="#64748B"
-              returnKeyType="search"
-              clearButtonMode="never"
-            />
-            {search ? (
-              <Pressable onPress={() => setSearch('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={19} color="#64748B" />
-              </Pressable>
-            ) : null}
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Pressable style={styles.headerButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={23} color="#FFFFFF" />
+          </Pressable>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>History</Text>
+            <Text style={styles.headerSubtitle}>Expenses and settlements</Text>
           </View>
-
-          <View style={styles.filterRow}>
-            {activityFilters.map((filter) => (
-              <Pressable
-                key={filter.key}
-                style={[styles.filterChip, activityFilter === filter.key && styles.filterChipActive]}
-                onPress={() => setActivityFilter(filter.key)}
-              >
-                <Text style={[styles.filterText, activityFilter === filter.key && styles.filterTextActive]}>
-                  {filter.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <View style={styles.dateFilterRow}>
-            {dateFilters.map((filter) => (
-              <Pressable
-                key={filter.key}
-                style={[styles.dateChip, dateFilter === filter.key && styles.dateChipActive]}
-                onPress={() => setDateFilter(filter.key)}
-              >
-                <Text style={[styles.dateText, dateFilter === filter.key && styles.dateTextActive]}>
-                  {filter.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <FlatList
-            data={items}
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={items.length ? styles.listContent : styles.emptyListContent}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                tintColor="#0EA5A4"
-              />
-            }
-            ListHeaderComponent={
-              <View style={styles.resultsHeader}>
-                <Text style={styles.resultsTitle}>Activity</Text>
-                <Text style={styles.resultsCount}>
-                  {items.length} {items.length === 1 ? 'item' : 'items'}
-                </Text>
-              </View>
-            }
-            ListEmptyComponent={
-              loading ? (
-                <View style={styles.emptyCard}>
-                  <ActivityIndicator size="small" color="#0EA5A4" />
-                  <Text style={styles.emptyText}>Loading history…</Text>
-                </View>
-              ) : (
-                <View style={styles.emptyCard}>
-                  <View style={styles.emptyIcon}>
-                    <Ionicons name="time-outline" size={26} color="#0EA5A4" />
-                  </View>
-                  <Text style={styles.emptyTitle}>No activity found</Text>
-                  <Text style={styles.emptyText}>
-                    Try another search or filter, or add an expense to start building history.
-                  </Text>
-                </View>
-              )
-            }
-          />
         </View>
-      </SafeAreaView>
-    </>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.row}
+        >
+          {(['All', 'Expenses', 'Settlements'] as Filter[]).map((item) => (
+            <Pressable
+              key={item}
+              style={[styles.chip, filter === item && styles.chipActive]}
+              onPress={() => setFilter(item)}
+            >
+              <Text style={[styles.chipText, filter === item && styles.chipTextActive]}>
+                {item}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.row, { paddingTop: 0 }]}
+        >
+          {(['All time', 'Today', '7 days', '30 days'] as Range[]).map((item) => (
+            <Pressable
+              key={item}
+              style={[styles.filterChip, range === item && styles.filterChipActive]}
+              onPress={() => setRange(item)}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  range === item && styles.filterChipTextActive,
+                ]}
+              >
+                {item}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        {(filter === 'All' || filter === 'Expenses') && (
+          <>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.row, { paddingTop: 0 }]}>
+              {(['all', 'mine'] as const).map((scope) => (
+                <Pressable key={scope} style={[styles.filterChip, expenseScope === scope && styles.filterChipActive]} onPress={() => setExpenseScope(scope)}>
+                  <Text style={[styles.filterChipText, expenseScope === scope && styles.filterChipTextActive]}>
+                    {scope === 'all' ? 'All group' : 'Mine'}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.row, { paddingTop: 0 }]}>
+              <Pressable style={[styles.filterChip, expenseCategory === 'All' && styles.filterChipActive]} onPress={() => setExpenseCategory('All')}>
+                <Text style={[styles.filterChipText, expenseCategory === 'All' && styles.filterChipTextActive]}>All</Text>
+              </Pressable>
+              {EXPENSE_CATEGORIES.map((item) => (
+                <Pressable key={item} style={[styles.filterChip, expenseCategory === item && styles.filterChipActive]} onPress={() => setExpenseCategory(item)}>
+                  <Ionicons name={EXPENSE_CATEGORY_ICONS[item]} size={13} color={expenseCategory === item ? '#FFFFFF' : '#94A3B8'} />
+                  <Text style={[styles.filterChipText, expenseCategory === item && styles.filterChipTextActive]}> {item}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        <View style={styles.searchBox}>
+          <Ionicons name="search-outline" size={19} color="#64748B" />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search expenses, people or notes"
+            placeholderTextColor="#64748B"
+            style={styles.searchInput}
+          />
+          {query ? (
+            <Pressable onPress={() => setQuery('')}>
+              <Ionicons name="close-circle" size={19} color="#64748B" />
+            </Pressable>
+          ) : null}
+        </View>
+
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color="#0EA5A4" />
+          </View>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+          >
+            {(filter === 'All' || filter === 'Expenses') && (
+              <>
+                <Text style={styles.sectionTitle}>Expenses</Text>
+                {visibleExpenses.length === 0 ? (
+                  <View style={styles.emptyCard}>
+                    <Text style={styles.emptyText}>No matching expenses.</Text>
+                  </View>
+                ) : (
+                  visibleExpenses.map((expense) => (
+                    <ExpenseCard key={expense.id} expense={expense} currency={currency} />
+                  ))
+                )}
+              </>
+            )}
+
+            {(filter === 'All' || filter === 'Settlements') && (
+              <>
+                <Text style={[styles.sectionTitle, { marginTop: 18 }]}>
+                  Settlements
+                </Text>
+                {visibleSettlements.length === 0 ? (
+                  <View style={styles.emptyCard}>
+                    <Text style={styles.emptyText}>No matching settlements.</Text>
+                  </View>
+                ) : (
+                  visibleSettlements.map((settlement) => (
+                    <Pressable
+                      key={settlement.id}
+                      style={styles.settlementCard}
+                      onPress={() =>
+                        navigation.navigate('SettlementDetails', {
+                          groupId,
+                          settlementId: settlement.id,
+                        })
+                      }
+                    >
+                      <View style={styles.settlementIcon}>
+                        <Ionicons
+                          name="swap-horizontal-outline"
+                          size={19}
+                          color="#0EA5A4"
+                        />
+                      </View>
+                      <View style={styles.flexOne}>
+                        <Text style={styles.settlementTitle}>
+                          {names.get(settlement.from_user_id) || 'Member'} paid{' '}
+                          {names.get(settlement.to_user_id) || 'Member'}
+                        </Text>
+                        <Text style={styles.settlementMeta}>
+                          {settlement.note || 'Settlement'}
+                        </Text>
+                      </View>
+                      <Text style={styles.settlementAmount}>
+                        {formatCurrency(settlement.amount, currency)}
+                      </Text>
+                    </Pressable>
+                  ))
+                )}
+              </>
+            )}
+
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -425,84 +296,49 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#0F172A' },
   container: { flex: 1, backgroundColor: '#0F172A' },
   header: {
+    minHeight: 68,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+  headerButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     backgroundColor: '#1E293B',
-    alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    alignItems: 'center',
   },
-  headerText: { flex: 1 },
-  title: { color: '#FFFFFF', fontSize: 25, fontWeight: '700' },
-  subtitle: { color: '#94A3B8', fontSize: 13, marginTop: 4 },
+  headerCenter: { flex: 1, paddingHorizontal: 12 },
+  headerTitle: { color: '#FFFFFF', fontSize: 21, fontWeight: '900' },
+  headerSubtitle: { color: '#64748B', fontSize: 12, marginTop: 2 },
+  row: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  chip: { backgroundColor: '#1E293B', paddingHorizontal: 15, paddingVertical: 9, borderRadius: 999 },
+  chipActive: { backgroundColor: '#0EA5A4' },
+  chipText: { color: '#CBD5E1', fontWeight: '800', fontSize: 13 },
+  chipTextActive: { color: '#FFFFFF' },
+  filterChip: { backgroundColor: '#172236', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 999 },
+  filterChipActive: { backgroundColor: '#334155' },
+  filterChipText: { color: '#94A3B8', fontSize: 12, fontWeight: '700' },
+  filterChipTextActive: { color: '#FFFFFF' },
   searchBox: {
-    marginHorizontal: 20,
+    marginHorizontal: 16,
+    marginBottom: 10,
     minHeight: 48,
-    borderRadius: 15,
     backgroundColor: '#1E293B',
+    borderRadius: 14,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  searchInput: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontSize: 14,
-    marginLeft: 10,
-    paddingVertical: 0,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 8,
-    gap: 8,
-  },
-  filterChip: {
-    borderRadius: 11,
-    paddingHorizontal: 13,
-    paddingVertical: 9,
-    backgroundColor: '#1E293B',
-  },
-  filterChipActive: { backgroundColor: '#0F766E' },
-  filterText: { color: '#94A3B8', fontSize: 12, fontWeight: '700' },
-  filterTextActive: { color: '#FFFFFF' },
-  dateFilterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 6,
-    gap: 7,
-  },
-  dateChip: {
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  dateChipActive: { borderColor: '#0EA5A4', backgroundColor: '#0F172A' },
-  dateText: { color: '#64748B', fontSize: 11, fontWeight: '600' },
-  dateTextActive: { color: '#94A3B8' },
-  listContent: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
-  emptyListContent: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40, flexGrow: 1 },
-  resultsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    marginBottom: 12,
-  },
-  resultsTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
-  resultsCount: { color: '#64748B', fontSize: 12 },
-  activityCard: {
+  searchInput: { flex: 1, color: '#FFFFFF', marginLeft: 9, fontSize: 13 },
+  content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 40 },
+  sectionTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '900', marginBottom: 10 },
+  emptyCard: { backgroundColor: '#1E293B', borderRadius: 16, padding: 20, marginBottom: 8 },
+  emptyText: { color: '#94A3B8', textAlign: 'center' },
+  settlementCard: {
     backgroundColor: '#1E293B',
     borderRadius: 16,
     padding: 14,
@@ -510,38 +346,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  pressed: { opacity: 0.78 },
-  activityIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: '#0F172A',
+  settlementIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#0F3333',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 11,
   },
-  settlementIcon: {},
-  activityInfo: { flex: 1, minWidth: 0 },
-  activityTitle: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
-  activityMeta: { color: '#64748B', fontSize: 11, lineHeight: 16, marginTop: 4 },
-  activityAmountWrap: { flexDirection: 'row', alignItems: 'center', marginLeft: 8, gap: 5 },
-  activityAmount: { color: '#FFFFFF', fontSize: 14, fontWeight: '800', marginLeft: 8 },
-  emptyCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 18,
-    padding: 28,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  emptyIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    backgroundColor: '#0F172A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  emptyTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  emptyText: { color: '#64748B', fontSize: 12, textAlign: 'center', lineHeight: 18, marginTop: 7 },
+  flexOne: { flex: 1, minWidth: 0 },
+  settlementTitle: { color: '#FFFFFF', fontWeight: '800' },
+  settlementMeta: { color: '#64748B', marginTop: 3, fontSize: 12 },
+  settlementAmount: { color: '#FFFFFF', fontWeight: '900', marginLeft: 8 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

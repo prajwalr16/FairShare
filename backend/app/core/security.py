@@ -5,7 +5,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import Header, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from ..models import User
@@ -23,11 +23,17 @@ def get_current_user(authorization: str | None = Header(default=None)) -> Curren
     """Validate a Supabase access token without exposing database access to mobile."""
 
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+        )
 
     token = authorization.split(" ", 1)[1].strip()
     if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+        )
 
     settings = get_settings()
     url = f"{settings.supabase_url.rstrip('/')}/auth/v1/user"
@@ -37,7 +43,11 @@ def get_current_user(authorization: str | None = Header(default=None)) -> Curren
     }
 
     try:
-        response = httpx.get(url, headers=headers, timeout=settings.auth_timeout_seconds)
+        response = httpx.get(
+            url,
+            headers=headers,
+            timeout=settings.auth_timeout_seconds,
+        )
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -61,7 +71,11 @@ def get_current_user(authorization: str | None = Header(default=None)) -> Curren
 
     metadata = payload.get("user_metadata") or {}
     raw_name = metadata.get("full_name")
-    full_name = raw_name.strip() if isinstance(raw_name, str) and raw_name.strip() else None
+    full_name = (
+        raw_name.strip()
+        if isinstance(raw_name, str) and raw_name.strip()
+        else None
+    )
     email = payload.get("email")
     return CurrentUser(id=user_id, email=email, full_name=full_name)
 
@@ -71,7 +85,11 @@ def ensure_user(session: Session, current_user: CurrentUser) -> User:
     normalized_email = (current_user.email or "").strip().lower() or None
 
     if user is None:
-        user = User(id=current_user.id, email=normalized_email, full_name=current_user.full_name)
+        user = User(
+            id=current_user.id,
+            email=normalized_email,
+            full_name=current_user.full_name,
+        )
         session.add(user)
     else:
         if normalized_email:
@@ -82,3 +100,19 @@ def ensure_user(session: Session, current_user: CurrentUser) -> User:
     session.commit()
     session.refresh(user)
     return user
+
+
+def set_database_user_context(session: Session, user_id: UUID) -> None:
+    """Set the verified application user for the current PostgreSQL transaction.
+
+    Supabase's auth.uid() reads request.jwt.claim.sub. The FastAPI application
+    verifies the JWT with Supabase first, then sets this transaction-local
+    PostgreSQL setting so existing database protections that call auth.uid()
+    can distinguish the authenticated FairShare user from an anonymous direct
+    database connection.
+    """
+
+    session.execute(
+        text("select set_config('request.jwt.claim.sub', :user_id, true)"),
+        {"user_id": str(user_id)},
+    )

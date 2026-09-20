@@ -17,6 +17,7 @@ class Expense(Base):
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_expenses_amount_positive"),
         CheckConstraint("split_type IN ('Equal', 'Exact', 'Percentage', 'Shares')", name="ck_expenses_split_type"),
+        CheckConstraint("category IN ('Food', 'Fuel', 'Stay', 'Transport', 'Activities', 'Shopping', 'Bills', 'Other')", name="ck_expenses_category"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=uuid.uuid4)
@@ -24,6 +25,7 @@ class Expense(Base):
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     split_type: Mapped[str] = mapped_column(String(20), nullable=False, default="Equal")
+    category: Mapped[str] = mapped_column(String(30), nullable=False, default="Other", index=True)
     paid_by: Mapped[uuid.UUID] = mapped_column(Uuid(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 

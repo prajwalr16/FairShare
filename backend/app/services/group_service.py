@@ -43,13 +43,27 @@ def create_group(
     )
     session.add(group)
     session.flush()
-    session.add(GroupMember(
-        group_id=group.id,
-        user_id=caller.id,
-        email=(caller.email or "").lower(),
-        role="owner",
-        status="active",
-    ))
+
+    # The legacy Supabase database may already have an AFTER INSERT trigger
+    # that creates the owner membership. Query first so the FastAPI path is
+    # compatible with both the existing database and a clean migrated DB.
+    owner_membership = session.scalar(
+        select(GroupMember).where(
+            GroupMember.group_id == group.id,
+            GroupMember.user_id == caller.id,
+        )
+    )
+    if owner_membership is None:
+        session.add(
+            GroupMember(
+                group_id=group.id,
+                user_id=caller.id,
+                email=(caller.email or "").strip().lower(),
+                role="owner",
+                status="active",
+            )
+        )
+
     session.commit()
     session.refresh(group)
     return group

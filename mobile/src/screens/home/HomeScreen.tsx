@@ -1,12 +1,13 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
   StatusBar,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import {
   SafeAreaView,
@@ -17,51 +18,55 @@ import { Ionicons } from '@expo/vector-icons';
 
 import GroupCard from '../../components/GroupCard';
 import CreateGroupModal from '../../components/CreateGroupModal';
-import { supabase } from '../../config/supabase';
+import {
+  createGroup,
+  getGroups,
+  GroupSummary,
+} from '../../services/groupService';
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
 
-  const [groups, setGroups] = useState<any[]>([]);
+  const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
 
   const loadGroups = useCallback(async () => {
-    const { data } = await supabase
-      .from('groups')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    setGroups(data || []);
+    const result = await getGroups();
+    if (result.error) {
+      Alert.alert('Unable to load groups', result.error.message);
+      return;
+    }
+    setGroups(result.data || []);
   }, []);
 
   useEffect(() => {
-    loadGroups();
-  }, [loadGroups]);
+    let active = true;
+    (async () => {
+      setLoading(true);
+      const result = await getGroups();
+      if (!active) return;
+      if (result.error) {
+        Alert.alert('Unable to load groups', result.error.message);
+      } else {
+        setGroups(result.data || []);
+      }
+      setLoading(false);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  const createGroup = async (group: any) => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) return;
-
-    const { error } = await supabase
-      .from('groups')
-      .insert([
-        {
-          owner_id: user.id,
-          name: group.name,
-          type: group.type,
-          currency: group.currency,
-          description: group.description,
-        },
-      ]);
-
-    if (!error) {
-      await loadGroups();
+  const handleCreateGroup = async (group: any) => {
+    const result = await createGroup(group);
+    if (result.error) {
+      Alert.alert('Unable to create group', result.error.message);
+      return;
     }
+    await loadGroups();
   };
 
   const handleRefresh = async () => {
@@ -72,20 +77,13 @@ export default function HomeScreen() {
 
   return (
     <>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#0F172A"
-      />
-
+      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
       <SafeAreaView
         style={styles.safeArea}
         edges={['top', 'bottom', 'left', 'right']}
       >
         <View style={styles.container}>
-
-          <Text style={styles.title}>
-            Your Groups
-          </Text>
+          <Text style={styles.title}>Your Groups</Text>
 
           <FlatList
             data={groups}
@@ -93,9 +91,7 @@ export default function HomeScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[
               styles.listContent,
-              {
-                paddingBottom: 110,
-              },
+              { paddingBottom: 150 },
             ]}
             refreshControl={
               <RefreshControl
@@ -105,22 +101,23 @@ export default function HomeScreen() {
               />
             }
             ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Ionicons
-                  name="people-outline"
-                  size={72}
-                  color="#475569"
-                />
-
-                <Text style={styles.emptyTitle}>
-                  No groups yet
-                </Text>
-
-                <Text style={styles.emptySubtitle}>
-                  Create your first trip or shared
-                  expense group.
-                </Text>
-              </View>
+              loading ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptySubtitle}>Loading groups…</Text>
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons
+                    name="people-outline"
+                    size={72}
+                    color="#475569"
+                  />
+                  <Text style={styles.emptyTitle}>No groups yet</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Create your first trip or shared expense group.
+                  </Text>
+                </View>
+              )
             }
             renderItem={({ item }) => (
               <Pressable
@@ -139,25 +136,18 @@ export default function HomeScreen() {
           <Pressable
             style={[
               styles.fab,
-              {
-                bottom: Math.max(insets.bottom + 18, 24),
-              },
+              { bottom: Math.max(insets.bottom + 24, 28) },
             ]}
             onPress={() => setShowCreate(true)}
           >
-            <Ionicons
-              name="add"
-              size={30}
-              color="#FFFFFF"
-            />
+            <Ionicons name="add" size={30} color="#FFFFFF" />
           </Pressable>
 
           <CreateGroupModal
             visible={showCreate}
             onClose={() => setShowCreate(false)}
-            onCreate={createGroup}
+            onCreate={handleCreateGroup}
           />
-
         </View>
       </SafeAreaView>
     </>
@@ -165,17 +155,12 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-  },
-
+  safeArea: { flex: 1, backgroundColor: '#0F172A' },
   container: {
     flex: 1,
     backgroundColor: '#0F172A',
     paddingHorizontal: 20,
   },
-
   title: {
     color: '#FFFFFF',
     fontSize: 30,
@@ -183,31 +168,24 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     marginBottom: 20,
   },
-
-  listContent: {
-    paddingTop: 2,
-  },
-
+  listContent: { paddingTop: 2 },
   emptyState: {
     alignItems: 'center',
     marginTop: 80,
     paddingHorizontal: 20,
   },
-
   emptyTitle: {
     color: '#FFFFFF',
     fontSize: 22,
     fontWeight: '700',
     marginTop: 16,
   },
-
   emptySubtitle: {
     color: '#94A3B8',
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 21,
   },
-
   fab: {
     position: 'absolute',
     right: 22,
@@ -221,9 +199,6 @@ const styles = StyleSheet.create({
     shadowColor: '#000000',
     shadowOpacity: 0.25,
     shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
+    shadowOffset: { width: 0, height: 4 },
   },
 });

@@ -1,5 +1,6 @@
 import React,{useState} from 'react';
-import {SafeAreaView,ScrollView,Text,TextInput,StyleSheet,Pressable,ActivityIndicator,Alert} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {ScrollView,Text,TextInput,StyleSheet,Pressable,ActivityIndicator,Alert} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {supabase} from '../../config/supabase';
 

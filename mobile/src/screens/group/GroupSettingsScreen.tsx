@@ -82,7 +82,7 @@ export default function GroupSettingsScreen() {
   const [rolePickerVisible, setRolePickerVisible] = useState(false);
 
   const ROLE_OPTIONS: Array<{
-    role: GroupRole;
+    role: Exclude<GroupRole, 'owner'>;
     title: string;
     description: string;
   }> = [
@@ -275,7 +275,7 @@ export default function GroupSettingsScreen() {
     setRolePickerVisible(true);
   };
 
-  const handleRoleChange = async (role: GroupRole) => {
+  const handleRoleChange = async (role: Exclude<GroupRole, 'owner'>) => {
     if (!groupId || !selectedRoleMember?.user_id || !isOwner) return;
 
     setRoleUpdatingUserId(selectedRoleMember.user_id);
@@ -756,7 +756,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    paddingBottom: 50,
+    paddingBottom: 80,
   },
   section: {
     marginBottom: 14,
