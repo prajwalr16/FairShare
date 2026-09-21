@@ -20,7 +20,7 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import ExpenseCard from '../../components/ExpenseCard';
 import MemberCard from '../../components/MemberCard';
 import AddMemberModal from '../../components/AddMemberModal';
-import { addGroupMember, getGroupMembers, GroupMember, removeGroupMemberFromGroup } from '../../services/memberService';
+import { addGroupMember, GroupMember, removeGroupMemberFromGroup } from '../../services/memberService';
 import {
   getCachedGroupOverview,
   getGroupHistory,
@@ -189,10 +189,6 @@ export default function GroupDetailsScreen() {
       } else {
         loadOverview(false);
       }
-
-      // Members are needed by Expense Details/Edit. Warm this cache without
-      // blocking Group Overview or the first paint.
-      void getGroupMembers(groupId);
 
       return () => {
         overviewControllerRef.current?.abort();

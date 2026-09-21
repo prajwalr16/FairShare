@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..models import Group, GroupMember, User
@@ -13,14 +13,21 @@ def get_group(session: Session, group_id: UUID) -> Group | None:
 
 
 def list_groups_for_user(session: Session, user_id: UUID) -> list[Group]:
+    # Avoid the old outer-join + DISTINCT plan. A membership subquery lets
+    # PostgreSQL use the existing group_members(group_id/user_id) indexes and
+    # returns each group once without materializing duplicate joined rows.
+    member_group_ids = select(GroupMember.group_id).where(
+        GroupMember.user_id == user_id,
+        GroupMember.status == "active",
+    )
     statement = (
         select(Group)
-        .outerjoin(GroupMember, GroupMember.group_id == Group.id)
         .where(
-            (Group.owner_id == user_id)
-            | ((GroupMember.user_id == user_id) & (GroupMember.status == "active"))
+            or_(
+                Group.owner_id == user_id,
+                Group.id.in_(member_group_ids),
+            )
         )
-        .distinct()
         .order_by(Group.created_at.desc())
     )
     return list(session.scalars(statement).all())

@@ -5,9 +5,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from ..core.database import get_db
+from ..core.database import get_db, get_read_db
 from ..core.security import CurrentUser, ensure_user, get_current_user, set_database_user_context
-from ..repositories.expense_repository import list_expenses
 from ..repositories.settlement_repository import list_settlements
 from ..schemas.balance import BalanceResponse
 from ..schemas.expense import ExpenseCreate, ExpenseDetails, ExpenseSummary, SUPPORTED_EXPENSE_CATEGORIES
@@ -25,10 +24,10 @@ from ..schemas.group import (
     RoleUpdate,
 )
 from ..schemas.settlement import SettlementCreate, SettlementResponse, SettlementUpdate
-from ..services.balance_service import compute_balances, compute_financial_snapshot, compute_group_overview_financial
+from ..services.balance_service import compute_balances, compute_financial_snapshot
 from ..services.debt_service import get_group_debts
 from ..services.expense_service import create_expense, delete_expense, get_details, list_group_expenses, update_expense
-from ..services.group_service import create_group, delete_group, get_settings, leave_group, list_groups, list_members, remove_member, update_role, update_settings
+from ..services.group_service import create_group, delete_group, get_overview, get_settings, leave_group, list_groups, list_members, remove_member, update_role, update_settings
 from ..services.permissions import get_group_and_role
 from ..services.invite_service import accept_invitation, get_pending_invitation, invite_member
 from ..services.settlement_service import create_settlement, delete_settlement, list_group_settlements, update_settlement
@@ -59,7 +58,7 @@ def me(user: CurrentUser = Depends(get_current_user)):
 
 
 @router.get("/groups", response_model=list[GroupSummary])
-def groups(user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+def groups(user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
     return list_groups(session, user.id)
 
 
@@ -69,42 +68,23 @@ def create_group_route(payload: GroupCreate, user=Depends(db_user), session: Ses
 
 
 @router.get("/groups/{group_id}", response_model=GroupSummary)
-def get_group_route(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+def get_group_route(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
     group, _ = get_group_and_role(session, group_id, user.id)
     return group
 
 
 @router.get("/groups/{group_id}/overview", response_model=GroupOverview)
-def group_overview(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
-    group, role = get_group_and_role(session, group_id, user.id)
-    overview_financial = compute_group_overview_financial(session, group_id, user.id)
-    # Authorization was already established above; do not run the same
-    # membership query again just to read the five preview expenses.
-    recent_expenses = list_expenses(session, group_id, limit=5)
-    current_balance = next((balance for balance in overview_financial["balances"] if balance["user_id"] == user.id), None)
-    return {
-        "id": group.id,
-        "owner_id": group.owner_id,
-        "name": group.name,
-        "type": group.type,
-        "currency": group.currency,
-        "description": group.description,
-        "created_at": group.created_at,
-        "is_owner": group.owner_id == user.id,
-        "role": role,
-        "current_user_balance": current_balance,
-        "top_debts": overview_financial["simplified"][:3],
-        "recent_expenses": recent_expenses,
-    }
+def group_overview(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
+    return get_overview(session, group_id, user.id)
 
 
 @router.get("/groups/{group_id}/financial", response_model=GroupFinancialResponse)
-def group_financial(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+def group_financial(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
     return compute_financial_snapshot(session, group_id, current_user_id=user.id, check_access=True)
 
 
 @router.get("/groups/{group_id}/settings", response_model=GroupSettings)
-def group_settings(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+def group_settings(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
     return get_settings(session, group_id, user.id)
 
 
@@ -127,17 +107,17 @@ def delete_group_route(group_id: UUID, user: CurrentUser = Depends(write_context
 
 
 @router.get("/groups/{group_id}/members", response_model=list[MemberResponse])
-def members(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+def members(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
     return list_members(session, group_id, user.id)
 
 
 @router.get("/groups/{group_id}/members/roles", response_model=list[MemberResponse])
-def member_roles(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+def member_roles(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
     return list_members(session, group_id, user.id)
 
 
 @router.get("/groups/{group_id}/invitation", response_model=PendingInvitation)
-def pending_invitation(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+def pending_invitation(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
     return get_pending_invitation(session, group_id, user)  # service only uses caller.id
 
 
@@ -171,7 +151,7 @@ def expenses(
     category: str | None = Query(default=None),
     scope: str = Query(default="all"),
     user: CurrentUser = Depends(get_current_user),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_read_db),
 ):
     return list_group_expenses(session, group_id, user.id, limit, category, scope)
 
@@ -182,7 +162,7 @@ def create_expense_route(group_id: UUID, payload: ExpenseCreate, user: CurrentUs
 
 
 @router.get("/expenses/{expense_id}", response_model=ExpenseDetails)
-def expense_detail(expense_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+def expense_detail(expense_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
     expense, splits = get_details(session, expense_id, user.id)
     return {"expense": expense, "splits": splits}
 
@@ -199,17 +179,17 @@ def delete_expense_route(expense_id: UUID, user: CurrentUser = Depends(write_con
 
 
 @router.get("/groups/{group_id}/balances", response_model=list[BalanceResponse])
-def balances(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+def balances(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
     return compute_balances(session, group_id, user.id)
 
 
 @router.get("/groups/{group_id}/debts")
-def debts(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+def debts(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
     return get_group_debts(session, group_id, user.id)
 
 
 @router.get("/groups/{group_id}/settlements", response_model=list[SettlementResponse])
-def settlements(group_id: UUID, limit: int | None = Query(default=None, ge=1, le=200), user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+def settlements(group_id: UUID, limit: int | None = Query(default=None, ge=1, le=200), user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
     return list_group_settlements(session, group_id, user.id, limit)
 
 
@@ -236,7 +216,7 @@ def history(
     category: str | None = Query(default=None),
     scope: str = Query(default="all"),
     user: CurrentUser = Depends(get_current_user),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_read_db),
 ):
     get_group_and_role(session, group_id, user.id)
     if scope not in {"all", "mine"}:
@@ -244,6 +224,6 @@ def history(
     if category and category != "All" and category not in SUPPORTED_EXPENSE_CATEGORIES:
         raise HTTPException(status_code=400, detail="Unsupported expense category.")
     return {
-        "expenses": list_expenses(session, group_id, limit, category if category != "All" else None, scope, user.id),
+        "expenses": list_group_expenses(session, group_id, user.id, limit, category if category != "All" else None, scope),
         "settlements": list_settlements(session, group_id, limit),
     }
