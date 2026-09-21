@@ -4,6 +4,7 @@ from .group import Group
 from .group_member import GroupMember
 from .expense import Expense, ExpenseSplit
 from .settlement import Settlement
+from .trip import Trip, TripStop
 
 __all__ = [
     "Base",
@@ -13,4 +14,6 @@ __all__ = [
     "Expense",
     "ExpenseSplit",
     "Settlement",
+    "Trip",
+    "TripStop",
 ]

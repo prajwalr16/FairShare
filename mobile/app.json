@@ -2,6 +2,9 @@
   "expo": {
     "name": "FairShare",
     "slug": "fairshare",
-    "scheme": "fairshare"
+    "scheme": "fairshare",
+    "plugins": [
+      "@react-native-community/datetimepicker"
+    ]
   }
 }

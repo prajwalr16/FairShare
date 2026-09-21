@@ -11,18 +11,10 @@ from ..repositories.settlement_repository import list_settlements
 from ..schemas.balance import BalanceResponse
 from ..schemas.expense import ExpenseCreate, ExpenseDetails, ExpenseSummary, SUPPORTED_EXPENSE_CATEGORIES
 from ..schemas.group import (
-    AcceptInvitation,
-    GroupCreate,
-    GroupFinancialResponse,
-    GroupOverview,
-    GroupSettings,
-    GroupSummary,
-    GroupUpdate,
-    InviteMember,
-    MemberResponse,
-    PendingInvitation,
-    RoleUpdate,
+    AcceptInvitation, GroupCreate, GroupFinancialResponse, GroupOverview, GroupSettings,
+    GroupSummary, GroupUpdate, InviteMember, MemberResponse, PendingInvitation, RoleUpdate,
 )
+from ..schemas.place import PlaceSearchResponse
 from ..schemas.settlement import SettlementCreate, SettlementResponse, SettlementUpdate
 from ..services.balance_service import compute_balances, compute_financial_snapshot
 from ..services.debt_service import get_group_debts
@@ -30,6 +22,7 @@ from ..services.expense_service import create_expense, delete_expense, get_detai
 from ..services.group_service import create_group, delete_group, get_overview, get_settings, leave_group, list_groups, list_members, remove_member, update_role, update_settings
 from ..services.permissions import get_group_and_role
 from ..services.invite_service import accept_invitation, get_pending_invitation, invite_member
+from ..services.place_service import search_places
 from ..services.settlement_service import create_settlement, delete_settlement, list_group_settlements, update_settlement
 
 router = APIRouter(prefix="/api/v1")
@@ -42,7 +35,6 @@ def db_user(current_user: CurrentUser = Depends(get_current_user), session: Sess
 
 
 def write_context(current_user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)) -> CurrentUser:
-    # Only write paths need the database trigger context. GET requests skip it.
     set_database_user_context(session, current_user.id)
     return current_user
 
@@ -55,6 +47,16 @@ def health() -> dict[str, str]:
 @router.get("/me")
 def me(user: CurrentUser = Depends(get_current_user)):
     return {"id": user.id, "email": user.email, "full_name": user.full_name}
+
+
+@router.get("/places/search", response_model=PlaceSearchResponse)
+def search_places_route(
+    q: str = Query(min_length=2, max_length=160),
+    user: CurrentUser = Depends(get_current_user),
+):
+    del user
+    normalized = " ".join(q.strip().split())
+    return {"query": normalized, "results": search_places(normalized)}
 
 
 @router.get("/groups", response_model=list[GroupSummary])
@@ -118,7 +120,7 @@ def member_roles(group_id: UUID, user: CurrentUser = Depends(get_current_user), 
 
 @router.get("/groups/{group_id}/invitation", response_model=PendingInvitation)
 def pending_invitation(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
-    return get_pending_invitation(session, group_id, user)  # service only uses caller.id
+    return get_pending_invitation(session, group_id, user)
 
 
 @router.post("/groups/{group_id}/members/invite")
@@ -145,14 +147,7 @@ def patch_member_role(group_id: UUID, user_id: UUID, payload: RoleUpdate, user: 
 
 
 @router.get("/groups/{group_id}/expenses", response_model=list[ExpenseSummary])
-def expenses(
-    group_id: UUID,
-    limit: int | None = Query(default=None, ge=1, le=200),
-    category: str | None = Query(default=None),
-    scope: str = Query(default="all"),
-    user: CurrentUser = Depends(get_current_user),
-    session: Session = Depends(get_read_db),
-):
+def expenses(group_id: UUID, limit: int | None = Query(default=None, ge=1, le=200), category: str | None = Query(default=None), scope: str = Query(default="all"), user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
     return list_group_expenses(session, group_id, user.id, limit, category, scope)
 
 
@@ -210,14 +205,7 @@ def delete_settlement_route(group_id: UUID, settlement_id: UUID, user: CurrentUs
 
 
 @router.get("/groups/{group_id}/history")
-def history(
-    group_id: UUID,
-    limit: int = Query(default=100, ge=1, le=200),
-    category: str | None = Query(default=None),
-    scope: str = Query(default="all"),
-    user: CurrentUser = Depends(get_current_user),
-    session: Session = Depends(get_read_db),
-):
+def history(group_id: UUID, limit: int = Query(default=100, ge=1, le=200), category: str | None = Query(default=None), scope: str = Query(default="all"), user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
     get_group_and_role(session, group_id, user.id)
     if scope not in {"all", "mine"}:
         raise HTTPException(status_code=400, detail="Invalid expense scope.")

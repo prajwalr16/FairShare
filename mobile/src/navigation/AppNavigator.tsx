@@ -1,8 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import {
-  NavigationContainer,
-  createNavigationContainerRef,
-} from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
 
@@ -19,6 +16,8 @@ import GroupDetailsScreen from '../screens/group/GroupDetailsScreen';
 import GroupSettingsScreen from '../screens/group/GroupSettingsScreen';
 import HistoryScreen from '../screens/group/HistoryScreen';
 import SettlementDetailsScreen from '../screens/group/SettlementDetailsScreen';
+import TripDetailsScreen from '../screens/group/TripDetailsScreen';
+import TripMapScreen from '../screens/group/TripMapScreen';
 import AddExpenseScreen from '../screens/expense/AddExpenseScreen';
 import ExpenseDetailsScreen from '../screens/expense/ExpenseDetailsScreen';
 import EditExpenseScreen from '../screens/expense/EditExpenseScreen';
@@ -31,7 +30,9 @@ type RootStackParamList = {
   ResetPassword: undefined;
   AcceptInvite: undefined;
   Home: undefined;
-  GroupDetails: { groupId?: string; groupName?: string } | undefined;
+  GroupDetails: { groupId?: string; groupName?: string; initialTab?: string } | undefined;
+  TripDetails: { groupId?: string; groupName?: string } | undefined;
+  TripMap: { groupId?: string; groupName?: string; dayNumber?: number | null } | undefined;
   AddExpense: { groupId?: string; groupName?: string } | undefined;
   ExpenseDetails: { expenseId?: string; groupId?: string } | undefined;
   EditExpense: { expenseId?: string; groupId?: string } | undefined;
@@ -44,10 +45,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 const linking = {
-  prefixes: [
-    Linking.createURL('/'),
-    'fairshare://',
-  ],
+  prefixes: [Linking.createURL('/'), 'fairshare://'],
   config: {
     screens: {
       Welcome: '',
@@ -58,6 +56,8 @@ const linking = {
       AcceptInvite: 'accept-invite',
       Home: 'home',
       GroupDetails: 'group-details',
+      TripDetails: 'trip-details',
+      TripMap: 'trip-map',
       AddExpense: 'add-expense',
       ExpenseDetails: 'expense-details',
       EditExpense: 'edit-expense',
@@ -69,31 +69,23 @@ const linking = {
 };
 
 function getUrlParams(url: string) {
-  const queryPart = url.includes('?')
-    ? url.split('?')[1].split('#')[0]
-    : '';
-
+  const queryPart = url.includes('?') ? url.split('?')[1].split('#')[0] : '';
   const hashPart = url.includes('#') ? url.split('#')[1] : '';
-
   const parse = (value: string) => {
     const params: Record<string, string> = {};
     if (!value) return params;
-
     value.split('&').forEach((pair) => {
       const [rawKey, ...rawValueParts] = pair.split('=');
       const rawValue = rawValueParts.join('=');
       if (!rawKey) return;
-
       try {
         params[decodeURIComponent(rawKey)] = decodeURIComponent(rawValue || '');
       } catch {
         params[rawKey] = rawValue || '';
       }
     });
-
     return params;
   };
-
   return { ...parse(queryPart), ...parse(hashPart) };
 }
 
@@ -105,50 +97,37 @@ export default function AppNavigator() {
       pendingUrl.current = url;
       return;
     }
-
     if (url.includes('reset-password') || url.includes('type=recovery')) {
       navigationRef.navigate('ResetPassword');
       return;
     }
-
     if (url.includes('accept-invite') || url.includes('type=invite')) {
       navigationRef.navigate('AcceptInvite');
     }
   }, []);
 
-  const handleDeepLink = useCallback(
-    async (url: string) => {
-      const params = getUrlParams(url);
-
-      if (params.access_token && params.refresh_token) {
-        await supabase.auth.setSession({
-          access_token: params.access_token,
-          refresh_token: params.refresh_token,
-        });
-      } else if (params.code) {
-        await supabase.auth.exchangeCodeForSession(params.code);
-      }
-
-      routeFromUrl(url);
-    },
-    [routeFromUrl],
-  );
+  const handleDeepLink = useCallback(async (url: string) => {
+    const params = getUrlParams(url);
+    if (params.access_token && params.refresh_token) {
+      await supabase.auth.setSession({ access_token: params.access_token, refresh_token: params.refresh_token });
+    } else if (params.code) {
+      await supabase.auth.exchangeCodeForSession(params.code);
+    }
+    routeFromUrl(url);
+  }, [routeFromUrl]);
 
   useEffect(() => {
     const checkInitialUrl = async () => {
       const url = await Linking.getInitialURL();
       if (url) await handleDeepLink(url);
     };
-
-    checkInitialUrl();
+    void checkInitialUrl();
 
     const linkSub = Linking.addEventListener('url', ({ url }) => {
-      handleDeepLink(url);
+      void handleDeepLink(url);
     });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY' && navigationRef.isReady()) {
         navigationRef.navigate('ResetPassword');
       }
@@ -169,11 +148,7 @@ export default function AppNavigator() {
   };
 
   return (
-    <NavigationContainer
-      ref={navigationRef}
-      linking={linking}
-      onReady={handleNavigationReady}
-    >
+    <NavigationContainer ref={navigationRef} linking={linking} onReady={handleNavigationReady}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Welcome" component={WelcomeScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
@@ -183,15 +158,14 @@ export default function AppNavigator() {
         <Stack.Screen name="AcceptInvite" component={AcceptInviteScreen} />
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="GroupDetails" component={GroupDetailsScreen} />
+        <Stack.Screen name="TripDetails" component={TripDetailsScreen} />
+        <Stack.Screen name="TripMap" component={TripMapScreen} />
         <Stack.Screen name="AddExpense" component={AddExpenseScreen} />
         <Stack.Screen name="ExpenseDetails" component={ExpenseDetailsScreen} />
         <Stack.Screen name="EditExpense" component={EditExpenseScreen} />
         <Stack.Screen name="GroupHistory" component={HistoryScreen} />
         <Stack.Screen name="GroupSettings" component={GroupSettingsScreen} />
-        <Stack.Screen
-          name="SettlementDetails"
-          component={SettlementDetailsScreen}
-        />
+        <Stack.Screen name="SettlementDetails" component={SettlementDetailsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

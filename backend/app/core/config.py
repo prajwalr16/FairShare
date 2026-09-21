@@ -7,21 +7,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application configuration."""
-
     app_name: str = "FairShare API"
     app_version: str = "3.0.0"
     environment: str = "development"
-
     database_url: str = Field(description="SQLAlchemy database URL")
-
     supabase_url: str = Field(description="Supabase project URL for Auth")
     supabase_publishable_key: str = Field(description="Supabase publishable key")
     supabase_secret_key: str | None = None
     supabase_service_role_key: str | None = None
-
     cors_origins: str = "*"
     api_prefix: str = "/api/v1"
+    routing_base_url: str = "https://router.project-osrm.org"
+    geocoding_base_url: str = "https://nominatim.openstreetmap.org"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -47,8 +44,6 @@ class Settings(BaseSettings):
 
 
 def normalize_database_url(value: str) -> str:
-    """Normalize common URLs for SQLAlchemy."""
-
     value = value.strip()
     if value.startswith("postgres://"):
         return value.replace("postgres://", "postgresql+psycopg://", 1)

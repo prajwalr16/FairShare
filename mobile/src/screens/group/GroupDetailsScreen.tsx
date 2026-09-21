@@ -20,7 +20,7 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import ExpenseCard from '../../components/ExpenseCard';
 import MemberCard from '../../components/MemberCard';
 import AddMemberModal from '../../components/AddMemberModal';
-import { addGroupMember, GroupMember, removeGroupMemberFromGroup } from '../../services/memberService';
+import { addGroupMember, getGroupMembers, GroupMember, removeGroupMemberFromGroup } from '../../services/memberService';
 import {
   getCachedGroupOverview,
   getGroupHistory,
@@ -35,8 +35,9 @@ import { getGroupFinancialSummary } from '../../services/financialService';
 import { recordSettlement, GroupSettlement } from '../../services/settlementService';
 import { formatCurrency } from '../../utils/currency';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_ICONS, ExpenseCategory } from '../../constants/expenseCategories';
+import { getCachedTrip, getTrip, Trip } from '../../services/tripService';
 
-type Tab = 'Overview' | 'Expenses' | 'Balances' | 'Members' | 'Activity';
+type Tab = 'Overview' | 'Journey' | 'Expenses' | 'Balances' | 'Members' | 'Activity';
 
 type Debt = {
   from_user_id: string;
@@ -60,6 +61,27 @@ function displayBalance(balance?: GroupBalance | null) {
   return value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
 }
 
+function getTripDayCount(trip: Trip | null) {
+  if (!trip?.start_date || !trip.end_date) return null;
+  const start = new Date(`${trip.start_date}T12:00:00`);
+  const end = new Date(`${trip.end_date}T12:00:00`);
+  return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+}
+
+function addDaysIso(value: string, days: number) {
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function formatTripDate(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return value;
+  return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(
+    new Date(year, month - 1, day),
+  );
+}
+
 function isAbortError(error: any) {
   return error?.name === 'AbortError';
 }
@@ -69,7 +91,10 @@ export default function GroupDetailsScreen() {
   const route = useRoute<any>();
   const groupId = route.params?.groupId as string | undefined;
 
-  const [tab, setTab] = useState<Tab>('Overview');
+  const requestedInitialTab = route.params?.initialTab as Tab | undefined;
+  const [tab, setTab] = useState<Tab>(requestedInitialTab || 'Overview');
+  const [trip, setTrip] = useState<Trip | null>(getCachedTrip(groupId || '') || null);
+  const [tripLoading, setTripLoading] = useState(false);
   const [overview, setOverview] = useState<GroupOverview | null>(null);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [balances, setBalances] = useState<GroupBalance[]>([]);
@@ -158,11 +183,33 @@ export default function GroupDetailsScreen() {
     const controller = new AbortController();
     tabControllerRef.current = controller;
 
-    const result = await getGroupMembers(groupId, controller.signal);
+    const result = await getGroupMembers(groupId, controller.signal, force);
     if (isAbortError(result.error) || controller.signal.aborted || result.error) return;
     setMembers(result.data || []);
     loadedTabsRef.current.add('Members');
   }, [groupId]);
+
+  const loadTrip = useCallback(async (force = false) => {
+    if (!groupId || overview?.type !== 'Trip') return;
+
+    const cached = getCachedTrip(groupId);
+    if (cached && !force) {
+      setTrip(cached);
+    }
+
+    setTripLoading(!cached);
+    const result = await getTrip(groupId, force);
+    setTripLoading(false);
+
+    if (result.error) {
+      if (!cached && result.error.status !== 404) {
+        console.log('Failed to load trip:', result.error.message);
+      }
+      return;
+    }
+
+    setTrip(result.data);
+  }, [groupId, overview?.type]);
 
   const loadActivity = useCallback(async (force = false) => {
     if (!groupId || (!force && loadedTabsRef.current.has('Activity'))) return;
@@ -189,16 +236,28 @@ export default function GroupDetailsScreen() {
       } else {
         loadOverview(false);
       }
+      void loadTrip(false);
 
       return () => {
         overviewControllerRef.current?.abort();
         tabControllerRef.current?.abort();
       };
-    }, [groupId, loadOverview]),
+    }, [groupId, loadOverview, loadTrip]),
   );
 
   useEffect(() => {
-    if (tab === 'Expenses') {
+    const initial = route.params?.initialTab as Tab | undefined;
+    if (initial === 'Journey' && overview?.type === 'Trip') {
+      setTab('Journey');
+    } else if (initial && initial !== 'Journey') {
+      setTab(initial);
+    }
+  }, [overview?.type, route.params?.initialTab]);
+
+  useEffect(() => {
+    if (tab === 'Journey') {
+      void loadTrip(false);
+    } else if (tab === 'Expenses') {
       loadExpenses(loadedTabsRef.current.has('Expenses'));
     } else if (tab === 'Balances') {
       loadFinancial(false);
@@ -363,6 +422,7 @@ export default function GroupDetailsScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} bounces={false} style={styles.tabsContainer} contentContainerStyle={styles.tabs}>
             {([
               ['Overview', 'home-outline'],
+              ...(overview?.type === 'Trip' ? [['Journey', 'map-outline']] : []),
               ['Expenses', 'receipt-outline'],
               ['Balances', 'cash-outline'],
               ['Members', 'people-outline'],
@@ -385,6 +445,173 @@ export default function GroupDetailsScreen() {
             showsVerticalScrollIndicator={false}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#0EA5A4" />}
           >
+            {tab === 'Journey' && (
+              <>
+                <View style={styles.journeyHero}>
+                  <View style={styles.journeyHeroIcon}>
+                    <Ionicons name="map-outline" size={24} color="#0EA5A4" />
+                  </View>
+                  <View style={styles.flexOne}>
+                    <Text style={styles.journeyEyebrow}>OPTIONAL TRIP PLANNING</Text>
+                    <Text style={styles.journeyTitle}>Plan the road, keep spending separate</Text>
+                    <Text style={styles.journeySubtitle}>
+                      Journey planning is optional. You can add expenses anytime, even without setting up a journey.
+                    </Text>
+                  </View>
+                </View>
+
+                {tripLoading ? (
+                  <View style={styles.emptyCard}>
+                    <ActivityIndicator size="small" color="#0EA5A4" />
+                    <Text style={styles.emptyCardTitle}>Loading journey…</Text>
+                  </View>
+                ) : !trip ? (
+                  <View style={styles.emptyCard}>
+                    <View style={styles.journeyEmptyIcon}>
+                      <Ionicons name="map-outline" size={27} color="#0EA5A4" />
+                    </View>
+                    <Text style={styles.emptyCardTitle}>Journey is not set up yet</Text>
+                    <Text style={styles.emptyCardText}>
+                      Add dates and stops when you are ready. Your group's Expenses tab remains available independently.
+                    </Text>
+                    <Pressable
+                      style={styles.primaryJourneyButton}
+                      onPress={() => navigation.navigate('TripDetails', { groupId, groupName })}
+                    >
+                      <Ionicons name="sparkles-outline" size={16} color="#FFFFFF" />
+                      <Text style={styles.primaryJourneyButtonText}>Set up Journey</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <>
+                    <View style={styles.journeySummaryCard}>
+                      <View style={styles.journeySummaryTop}>
+                        <View style={styles.flexOne}>
+                          <Text style={styles.journeySummaryTitle}>Journey plan</Text>
+                          <Text style={styles.journeySummaryMeta}>
+                            {trip.start_date && trip.end_date
+                              ? `${formatTripDate(trip.start_date)} → ${formatTripDate(trip.end_date)}`
+                              : trip.start_date
+                                ? `Starts ${formatTripDate(trip.start_date)}`
+                                : 'Dates not set'}
+                          </Text>
+                        </View>
+                        <View style={styles.tripPill}>
+                          <Ionicons name="airplane-outline" size={13} color="#FFFFFF" />
+                          <Text style={styles.tripPillText}>Trip</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.journeyStatsRow}>
+                        <View style={styles.journeyStat}>
+                          <Text style={styles.journeyStatValue}>{getTripDayCount(trip) ?? '—'}</Text>
+                          <Text style={styles.journeyStatLabel}>days</Text>
+                        </View>
+                        <View style={styles.journeyStat}>
+                          <Text style={styles.journeyStatValue}>{trip.stops.length}</Text>
+                          <Text style={styles.journeyStatLabel}>stops</Text>
+                        </View>
+                        <View style={styles.journeyStat}>
+                          <Text style={styles.journeyStatValue}>
+                            {trip.stops.filter((stop) => stop.latitude != null && stop.longitude != null).length}
+                          </Text>
+                          <Text style={styles.journeyStatLabel}>mapped</Text>
+                        </View>
+                      </View>
+
+                      {!!trip.notes?.trim() && (
+                        <View style={styles.tripNoteBox}>
+                          <Ionicons name="document-text-outline" size={16} color="#64748B" />
+                          <Text style={styles.tripNoteText}>{trip.notes.trim()}</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={styles.journeyActionsRow}>
+                      <Pressable
+                        style={styles.primaryJourneyButtonFlex}
+                        onPress={() => navigation.navigate('TripDetails', { groupId, groupName })}
+                      >
+                        <Ionicons name="create-outline" size={17} color="#FFFFFF" />
+                        <Text style={styles.primaryJourneyButtonText}>Plan itinerary</Text>
+                      </Pressable>
+                      <Pressable
+                        style={styles.secondaryJourneyButtonFlex}
+                        onPress={() => navigation.navigate('TripMap', { groupId, groupName })}
+                      >
+                        <Ionicons name="map-outline" size={17} color="#CBD5E1" />
+                        <Text style={styles.secondaryJourneyButtonText}>Open map</Text>
+                      </Pressable>
+                    </View>
+
+                    <View style={styles.sectionHeader}>
+                      <View>
+                        <Text style={styles.sectionTitle}>Upcoming itinerary</Text>
+                        <Text style={styles.sectionSubtitle}>Stops grouped by journey day</Text>
+                      </View>
+                      <Pressable onPress={() => setTab('Expenses')}>
+                        <Text style={styles.linkText}>View expenses</Text>
+                      </Pressable>
+                    </View>
+
+                    {trip.stops.length === 0 ? (
+                      <View style={styles.emptyCard}>
+                        <Ionicons name="location-outline" size={28} color="#64748B" />
+                        <Text style={styles.emptyCardTitle}>No stops yet</Text>
+                        <Text style={styles.emptyCardText}>Add your starting point, stays and destination in the Journey planner.</Text>
+                      </View>
+                    ) : (
+                      <View>
+                        {Array.from(new Set(trip.stops.map((stop) => stop.day_number)))
+                          .sort((a, b) => a - b)
+                          .slice(0, 3)
+                          .map((dayNumber) => {
+                            const dayStops = trip.stops
+                              .filter((stop) => stop.day_number === dayNumber)
+                              .sort((a, b) => a.sequence - b.sequence);
+                            return (
+                              <View key={`day-${dayNumber}`} style={styles.dayPreviewCard}>
+                                <Text style={styles.dayPreviewTitle}>{`Day ${dayNumber}`}</Text>
+                                <Text style={styles.dayPreviewDate}>
+                                  {trip.start_date ? formatTripDate(addDaysIso(trip.start_date, dayNumber - 1)) : 'Date not set'}
+                                </Text>
+                                {dayStops.slice(0, 3).map((stop, stopIndex) => (
+                                  <View key={stop.id} style={styles.dayPreviewStop}>
+                                    <View style={styles.dayPreviewDot}>
+                                      <Text style={styles.dayPreviewDotText}>{stopIndex + 1}</Text>
+                                    </View>
+                                    <View style={styles.flexOne}>
+                                      <Text style={styles.dayPreviewStopName}>{stop.name}</Text>
+                                      <Text style={styles.dayPreviewStopMeta}>
+                                        {stop.label || stop.stop_type}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                ))}
+                              </View>
+                            );
+                          })}
+                        {trip.stops.length > 3 && (
+                          <Text style={styles.journeyMoreText}>Open Journey to see the complete itinerary.</Text>
+                        )}
+                      </View>
+                    )}
+
+                    <Pressable style={styles.expensesShortcutCard} onPress={() => setTab('Expenses')}>
+                      <View style={styles.expensesShortcutIcon}>
+                        <Ionicons name="receipt-outline" size={20} color="#0EA5A4" />
+                      </View>
+                      <View style={styles.flexOne}>
+                        <Text style={styles.expensesShortcutTitle}>Trip expenses live with the group</Text>
+                        <Text style={styles.expensesShortcutSubtitle}>Record costs without requiring a journey plan.</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color="#64748B" />
+                    </Pressable>
+                  </>
+                )}
+              </>
+            )}
+
             {tab === 'Overview' && (
               <>
                 <View style={styles.heroCard}>
@@ -462,7 +689,13 @@ export default function GroupDetailsScreen() {
                     <Ionicons name="receipt-outline" size={28} color="#64748B" />
                     <Text style={styles.emptyCardTitle}>No expenses yet</Text>
                   </View>
-                ) : overview.recent_expenses.map((expense) => <ExpenseCard key={expense.id} expense={expense} currency={currency} />)}
+                ) : overview.recent_expenses.map((expense) => (
+                  <ExpenseCard
+                    key={expense.id}
+                    expense={{ ...expense, category: expense.category as ExpenseCategory }}
+                    currency={currency}
+                  />
+                ))}
               </>
             )}
 
@@ -675,6 +908,44 @@ const styles = StyleSheet.create({
   cancelButton: { alignItems: 'center', paddingVertical: 15 },
   cancelButtonText: { color: '#94A3B8', fontWeight: '700' },
   disabledButton: { opacity: 0.6 },
+  journeyHero: { backgroundColor: '#1E293B', borderRadius: 20, padding: 17, marginBottom: 14, flexDirection: 'row', alignItems: 'flex-start' },
+  journeyHeroIcon: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  journeyEyebrow: { color: '#0EA5A4', fontSize: 9, fontWeight: '900', letterSpacing: 0.9 },
+  journeyTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '900', marginTop: 4 },
+  journeySubtitle: { color: '#94A3B8', fontSize: 11, lineHeight: 17, marginTop: 6 },
+  journeySummaryCard: { backgroundColor: '#1E293B', borderRadius: 20, padding: 17, marginBottom: 14 },
+  journeySummaryTop: { flexDirection: 'row', alignItems: 'flex-start' },
+  journeySummaryTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '900' },
+  journeySummaryMeta: { color: '#94A3B8', fontSize: 11, marginTop: 5 },
+  tripPill: { backgroundColor: '#0EA5A4', borderRadius: 10, paddingHorizontal: 9, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  tripPillText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+  journeyStatsRow: { flexDirection: 'row', marginTop: 16, borderTopWidth: 1, borderTopColor: '#263247', paddingTop: 14 },
+  journeyStat: { flex: 1 },
+  journeyStatValue: { color: '#FFFFFF', fontSize: 19, fontWeight: '900' },
+  journeyStatLabel: { color: '#64748B', fontSize: 10, marginTop: 3 },
+  tripNoteBox: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#0F172A', borderRadius: 13, padding: 11, marginTop: 14, gap: 8 },
+  tripNoteText: { color: '#94A3B8', fontSize: 11, lineHeight: 16, flex: 1 },
+  journeyActionsRow: { flexDirection: 'row', gap: 10, marginBottom: 22 },
+  primaryJourneyButton: { marginTop: 14, minHeight: 46, paddingHorizontal: 15, borderRadius: 13, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 },
+  primaryJourneyButtonFlex: { flex: 1, minHeight: 46, borderRadius: 13, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 },
+  primaryJourneyButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  secondaryJourneyButtonFlex: { flex: 1, minHeight: 46, borderRadius: 13, backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 },
+  secondaryJourneyButtonText: { color: '#CBD5E1', fontSize: 12, fontWeight: '800' },
+  journeyEmptyIcon: { width: 52, height: 52, borderRadius: 17, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center' },
+  emptyCardText: { color: '#94A3B8', fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 6 },
+  dayPreviewCard: { backgroundColor: '#1E293B', borderRadius: 17, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: '#263247' },
+  dayPreviewTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  dayPreviewDate: { color: '#0EA5A4', fontSize: 10, fontWeight: '800', marginTop: 3 },
+  dayPreviewStop: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  dayPreviewDot: { width: 28, height: 28, borderRadius: 10, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  dayPreviewDotText: { color: '#0EA5A4', fontSize: 10, fontWeight: '900' },
+  dayPreviewStopName: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  dayPreviewStopMeta: { color: '#64748B', fontSize: 10, marginTop: 3, textTransform: 'capitalize' },
+  journeyMoreText: { color: '#64748B', fontSize: 10, textAlign: 'center', marginVertical: 4 },
+  expensesShortcutCard: { backgroundColor: '#1E293B', borderRadius: 18, padding: 14, flexDirection: 'row', alignItems: 'center', marginTop: 8, borderWidth: 1, borderColor: '#263247' },
+  expensesShortcutIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', marginRight: 11 },
+  expensesShortcutTitle: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  expensesShortcutSubtitle: { color: '#64748B', fontSize: 10, lineHeight: 15, marginTop: 3 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   loadingText: { color: '#94A3B8', marginTop: 12 },
   emptyTitle: { color: '#FFFFFF', fontWeight: '900', fontSize: 20 },

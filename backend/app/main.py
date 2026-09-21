@@ -3,7 +3,9 @@ from time import perf_counter
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from .api.route_routes import route_router
 from .api.routes import router
+from .api.trip_routes import trip_router
 from .core.config import get_settings
 from .core.security import warm_jwks_cache
 
@@ -14,6 +16,7 @@ app = FastAPI(
     docs_url="/docs" if settings.environment != "production" else None,
     redoc_url="/redoc" if settings.environment != "production" else None,
 )
+
 
 @app.on_event("startup")
 def warm_auth_keys() -> None:
@@ -39,6 +42,8 @@ async def add_response_timing(request: Request, call_next):
 
 
 app.include_router(router)
+app.include_router(trip_router)
+app.include_router(route_router)
 
 
 @app.get("/")

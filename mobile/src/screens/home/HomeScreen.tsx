@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -15,40 +15,88 @@ import { Ionicons } from '@expo/vector-icons';
 
 import GroupCard from '../../components/GroupCard';
 import CreateGroupModal from '../../components/CreateGroupModal';
-import { createGroup, getCachedGroups, getGroups, prefetchGroupOverview, GroupSummary } from '../../services/groupService';
+import {
+  createGroup,
+  getCachedGroups,
+  getGroups,
+  prefetchGroupOverview,
+  GroupSummary,
+} from '../../services/groupService';
+
+type Filter = 'All' | 'Trip' | 'Home' | 'Friends' | 'Office' | 'Other';
+
+const filters: Array<{ key: Filter; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
+  { key: 'All', label: 'All', icon: 'apps-outline' },
+  { key: 'Trip', label: 'Trips', icon: 'airplane-outline' },
+  { key: 'Home', label: 'Home', icon: 'home-outline' },
+  { key: 'Friends', label: 'Friends', icon: 'people-outline' },
+  { key: 'Office', label: 'Office', icon: 'briefcase-outline' },
+  { key: 'Other', label: 'Other', icon: 'grid-outline' },
+];
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [filter, setFilter] = useState<Filter>('All');
 
   const loadGroups = useCallback(async (background = false) => {
     const result = await getGroups();
     if (result.error) {
-      if (!background) Alert.alert('Unable to load groups', result.error.message);
+      if (!background) {
+        Alert.alert('Unable to load groups', result.error.message);
+      }
       return;
     }
+
     setGroups(result.data || []);
     setLoading(false);
   }, []);
 
   useEffect(() => {
     let active = true;
+
     (async () => {
       const cached = await getCachedGroups();
       if (active && cached) {
         setGroups(cached);
         setLoading(false);
       }
-      await loadGroups(!!cached);
+      await loadGroups(Boolean(cached));
     })();
+
     return () => {
       active = false;
     };
   }, [loadGroups]);
+
+  const filteredGroups = useMemo(
+    () =>
+      filter === 'All'
+        ? groups
+        : groups.filter((group) => group.type === filter),
+    [filter, groups],
+  );
+
+  const filterCounts = useMemo(() => {
+    const counts: Record<Filter, number> = {
+      All: groups.length,
+      Trip: 0,
+      Home: 0,
+      Friends: 0,
+      Office: 0,
+      Other: 0,
+    };
+    groups.forEach((group) => {
+      const type = group.type as Exclude<Filter, 'All'>;
+      if (type in counts) counts[type] += 1;
+    });
+    return counts;
+  }, [groups]);
 
   const handleCreateGroup = async (group: any) => {
     const result = await createGroup(group);
@@ -56,6 +104,8 @@ export default function HomeScreen() {
       Alert.alert('Unable to create group', result.error.message);
       return;
     }
+    setShowCreate(false);
+    setFilter(group.type === 'Trip' ? 'Trip' : 'All');
     await loadGroups();
   };
 
@@ -71,54 +121,249 @@ export default function HomeScreen() {
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
+      <SafeAreaView
+        style={styles.safeArea}
+        edges={['top', 'bottom', 'left', 'right']}
+      >
         <View style={styles.container}>
-          <Text style={styles.title}>Your Groups</Text>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.eyebrow}>FairShare</Text>
+              <Text style={styles.title}>Your Groups</Text>
+              <Text style={styles.subtitle}>Split expenses. Share memories.</Text>
+            </View>
+            <Pressable
+              style={styles.headerIcon}
+              onPress={() => void handleRefresh()}
+              hitSlop={8}
+            >
+              <Ionicons name="refresh-outline" size={20} color="#CBD5E1" />
+            </Pressable>
+          </View>
+
           <FlatList
-            data={groups}
+            data={filters}
+            horizontal
+            keyExtractor={(item) => item.key}
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterList}
+            contentContainerStyle={styles.filterContent}
+            renderItem={({ item }) => {
+              const active = filter === item.key;
+              return (
+                <Pressable
+                  style={[styles.filterChip, active && styles.filterChipActive]}
+                  onPress={() => setFilter(item.key)}
+                >
+                  <Ionicons
+                    name={item.icon}
+                    size={14}
+                    color={active ? '#FFFFFF' : '#94A3B8'}
+                  />
+                  <Text style={[styles.filterText, active && styles.filterTextActive]}>
+                    {item.label}
+                  </Text>
+                  <View style={[styles.countBadge, active && styles.countBadgeActive]}>
+                    <Text style={[styles.countText, active && styles.countTextActive]}>
+                      {filterCounts[item.key]}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            }}
+          />
+
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>
+                {filter === 'All' ? 'All groups' : `${filters.find((item) => item.key === filter)?.label || filter}`}
+              </Text>
+              <Text style={styles.sectionSubtitle}>
+                {filteredGroups.length} {filteredGroups.length === 1 ? 'group' : 'groups'}
+              </Text>
+            </View>
+          </View>
+
+          <FlatList
+            data={filteredGroups}
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[styles.listContent, { paddingBottom: 150 }]}
-            refreshControl={<RefreshControl refreshing={refreshing} tintColor="#0EA5A4" onRefresh={handleRefresh} />}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                tintColor="#0EA5A4"
+                onRefresh={handleRefresh}
+              />
+            }
             ListEmptyComponent={
               loading ? (
-                <View style={styles.emptyState}><Text style={styles.emptySubtitle}>Loading groups…</Text></View>
+                <View style={styles.emptyState}>
+                  <ActivityDots />
+                  <Text style={styles.emptyTitle}>Loading groups…</Text>
+                </View>
               ) : (
                 <View style={styles.emptyState}>
-                  <Ionicons name="people-outline" size={72} color="#475569" />
-                  <Text style={styles.emptyTitle}>No groups yet</Text>
-                  <Text style={styles.emptySubtitle}>Create your first trip or shared expense group.</Text>
+                  <View style={styles.emptyIcon}>
+                    <Ionicons
+                      name={filter === 'Trip' ? 'airplane-outline' : 'people-outline'}
+                      size={30}
+                      color="#0EA5A4"
+                    />
+                  </View>
+                  <Text style={styles.emptyTitle}>
+                    {filter === 'All' ? 'No groups yet' : `No ${filter.toLowerCase()} groups`}
+                  </Text>
+                  <Text style={styles.emptySubtitle}>
+                    {filter === 'Trip'
+                      ? 'Create a Trip group. Journey planning is optional and lives inside that group.'
+                      : 'Create a group to start splitting expenses with your people.'}
+                  </Text>
                 </View>
               )
             }
             renderItem={({ item }) => (
-              <Pressable
+              <GroupCard
+                group={item}
                 onPress={() => {
                   void prefetchGroupOverview(item.id);
-                  navigation.navigate('GroupDetails', { groupId: item.id, groupName: item.name });
+                  navigation.navigate('GroupDetails', {
+                    groupId: item.id,
+                    groupName: item.name,
+                  });
                 }}
-              >
-                <GroupCard group={item} />
-              </Pressable>
+              />
             )}
           />
-          <Pressable style={[styles.fab, { bottom: Math.max(insets.bottom + 24, 28) }]} onPress={() => setShowCreate(true)}>
+
+          <Pressable
+            style={[styles.fab, { bottom: Math.max(insets.bottom + 20, 26) }]}
+            onPress={() => setShowCreate(true)}
+          >
             <Ionicons name="add" size={30} color="#FFFFFF" />
           </Pressable>
-          <CreateGroupModal visible={showCreate} onClose={() => setShowCreate(false)} onCreate={handleCreateGroup} />
+
+          <CreateGroupModal
+            visible={showCreate}
+            onClose={() => setShowCreate(false)}
+            onCreate={handleCreateGroup}
+          />
         </View>
       </SafeAreaView>
     </>
   );
 }
 
+function ActivityDots() {
+  return (
+    <View style={styles.activityDots}>
+      <View style={[styles.dot, styles.dotOne]} />
+      <View style={[styles.dot, styles.dotTwo]} />
+      <View style={[styles.dot, styles.dotThree]} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#0F172A' },
-  container: { flex: 1, backgroundColor: '#0F172A', paddingHorizontal: 20 },
-  title: { color: '#FFFFFF', fontSize: 30, fontWeight: '700', paddingTop: 10, marginBottom: 20 },
-  listContent: { paddingTop: 2 },
-  emptyState: { alignItems: 'center', marginTop: 80, paddingHorizontal: 20 },
-  emptyTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '700', marginTop: 16 },
-  emptySubtitle: { color: '#94A3B8', textAlign: 'center', marginTop: 8, lineHeight: 21 },
-  fab: { position: 'absolute', right: 22, width: 62, height: 62, borderRadius: 31, backgroundColor: '#0EA5A4', justifyContent: 'center', alignItems: 'center', elevation: 10, shadowColor: '#000000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  container: { flex: 1, backgroundColor: '#0F172A', paddingHorizontal: 18 },
+  header: {
+    paddingTop: 8,
+    paddingBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  eyebrow: {
+    color: '#0EA5A4',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  title: { color: '#FFFFFF', fontSize: 28, fontWeight: '900', marginTop: 4 },
+  subtitle: { color: '#64748B', fontSize: 12, marginTop: 5 },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    backgroundColor: '#1E293B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#263247',
+  },
+  filterList: { flexGrow: 0, height: 48, marginBottom: 8 },
+  filterContent: { alignItems: 'center', paddingRight: 4 },
+  filterChip: {
+    minHeight: 38,
+    paddingLeft: 11,
+    paddingRight: 8,
+    borderRadius: 12,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#263247',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+    gap: 6,
+  },
+  filterChipActive: { backgroundColor: '#0EA5A4', borderColor: '#0EA5A4' },
+  filterText: { color: '#94A3B8', fontSize: 11, fontWeight: '800' },
+  filterTextActive: { color: '#FFFFFF' },
+  countBadge: {
+    minWidth: 21,
+    height: 21,
+    borderRadius: 10,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  countBadgeActive: { backgroundColor: 'rgba(255,255,255,0.18)' },
+  countText: { color: '#64748B', fontSize: 9, fontWeight: '900' },
+  countTextActive: { color: '#FFFFFF' },
+  sectionHeader: {
+    paddingTop: 4,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '900' },
+  sectionSubtitle: { color: '#64748B', fontSize: 11, marginTop: 3 },
+  listContent: { paddingTop: 1 },
+  emptyState: { alignItems: 'center', marginTop: 90, paddingHorizontal: 24 },
+  emptyIcon: {
+    width: 66,
+    height: 66,
+    borderRadius: 21,
+    backgroundColor: '#1E293B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#263247',
+  },
+  emptyTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginTop: 14 },
+  emptySubtitle: { color: '#94A3B8', textAlign: 'center', marginTop: 7, lineHeight: 20, fontSize: 12 },
+  activityDots: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#0EA5A4' },
+  dotOne: { opacity: 0.4 },
+  dotTwo: { opacity: 0.7 },
+  dotThree: { opacity: 1 },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#0EA5A4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 12,
+    shadowColor: '#000000',
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+  },
 });
