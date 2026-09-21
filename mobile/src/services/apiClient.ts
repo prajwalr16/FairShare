@@ -13,18 +13,40 @@ export class ApiError extends Error {
   }
 }
 
-async function getAccessToken(): Promise<string> {
-  const { data, error } = await supabase.auth.getSession();
+let sessionLookup: Promise<string | null> | null = null;
+let accessToken: string | null = null;
+let accessTokenInitialized = false;
 
-  if (error) {
-    throw new ApiError(error.message, 401);
+// Supabase keeps the session persisted locally. Keep the access token in memory
+// so ordinary FairShare API requests do not hit storage for every request.
+supabase.auth.onAuthStateChange((_event, session) => {
+  accessToken = session?.access_token || null;
+  accessTokenInitialized = true;
+});
+
+async function getAccessToken(): Promise<string> {
+  if (accessTokenInitialized && accessToken) {
+    return accessToken;
   }
 
-  const token = data.session?.access_token;
+  if (!sessionLookup) {
+    sessionLookup = supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (error) throw new ApiError(error.message, 401);
+        accessToken = data.session?.access_token || null;
+        accessTokenInitialized = true;
+        return accessToken;
+      })
+      .finally(() => {
+        sessionLookup = null;
+      });
+  }
+
+  const token = await sessionLookup;
   if (!token) {
     throw new ApiError('Your session has expired. Please sign in again.', 401);
   }
-
   return token;
 }
 
@@ -39,6 +61,7 @@ export async function apiRequest<T>(
   const baseUrl = assertApiConfigured();
   const token = await getAccessToken();
   const method = options.method || 'GET';
+  const started = globalThis.performance?.now?.() ?? Date.now();
 
   let response: Response;
   try {
@@ -71,6 +94,14 @@ export async function apiRequest<T>(
     } catch {
       payload = raw;
     }
+  }
+
+  if (__DEV__) {
+    const ended = globalThis.performance?.now?.() ?? Date.now();
+    const serverMs = response.headers.get('x-response-time-ms');
+    console.debug(
+      `[FairShare] ${method} ${path} ${Math.round(ended - started)}ms client / ${serverMs || '?'}ms server (${response.status})`,
+    );
   }
 
   if (!response.ok) {

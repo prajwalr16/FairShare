@@ -5,8 +5,9 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
-from ..models import GroupMember, Settlement, User
+from ..models import GroupMember, Settlement
 from ..repositories.settlement_repository import get_settlement, list_settlements
 from .balance_service import EPSILON, compute_balances, money
 from .permissions import get_group_and_role, require_permission
@@ -15,12 +16,12 @@ from .permissions import get_group_and_role, require_permission
 def _validate_participants(session: Session, group_id: UUID, from_user_id: UUID, to_user_id: UUID) -> None:
     if from_user_id == to_user_id:
         raise HTTPException(status_code=400, detail="Settlement participants must be different.")
-    members = session.query(GroupMember).filter(
+    rows = session.scalars(select(GroupMember.user_id).where(
         GroupMember.group_id == group_id,
         GroupMember.status == "active",
         GroupMember.user_id.in_([from_user_id, to_user_id]),
-    ).all()
-    if {m.user_id for m in members if m.user_id} != {from_user_id, to_user_id}:
+    )).all()
+    if set(rows) != {from_user_id, to_user_id}:
         raise HTTPException(status_code=400, detail="Settlement participants must be active group members.")
 
 
@@ -37,28 +38,27 @@ def _validate_amount(session: Session, group_id: UUID, from_user_id: UUID, to_us
         raise HTTPException(status_code=409, detail=f"Settlement amount exceeds the outstanding debt of {maximum:.2f}.")
 
 
-def create_settlement(session: Session, group_id: UUID, from_user_id: UUID, to_user_id: UUID, amount: Decimal, note: str | None, caller: User) -> Settlement:
-    _, role = get_group_and_role(session, group_id, caller.id)
+def create_settlement(session: Session, group_id: UUID, from_user_id: UUID, to_user_id: UUID, amount: Decimal, note: str | None, caller_id: UUID) -> Settlement:
+    _, role = get_group_and_role(session, group_id, caller_id)
     require_permission(role, "money", "Viewers cannot record settlements.")
     _validate_participants(session, group_id, from_user_id, to_user_id)
     amount = money(amount)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Settlement amount must be greater than 0.")
     _validate_amount(session, group_id, from_user_id, to_user_id, amount)
-    settlement = Settlement(group_id=group_id, from_user_id=from_user_id, to_user_id=to_user_id, amount=amount, note=note.strip() if note else None, created_by=caller.id)
+    settlement = Settlement(group_id=group_id, from_user_id=from_user_id, to_user_id=to_user_id, amount=amount, note=note.strip() if note else None, created_by=caller_id)
     session.add(settlement)
     session.commit()
-    session.refresh(settlement)
     return settlement
 
 
-def update_settlement(session: Session, group_id: UUID, settlement_id: UUID, amount: Decimal, note: str | None, caller: User) -> Settlement:
+def update_settlement(session: Session, group_id: UUID, settlement_id: UUID, amount: Decimal, note: str | None, caller_id: UUID) -> Settlement:
     settlement = get_settlement(session, group_id, settlement_id)
     if settlement is None:
         raise HTTPException(status_code=404, detail="Settlement not found.")
-    group, role = get_group_and_role(session, group_id, caller.id)
+    group, role = get_group_and_role(session, group_id, caller_id)
     require_permission(role, "money", "You do not have permission to edit settlements.")
-    if caller.id not in {settlement.created_by, group.owner_id}:
+    if caller_id not in {settlement.created_by, group.owner_id}:
         raise HTTPException(status_code=403, detail="Only the settlement creator or group owner can edit this settlement.")
     amount = money(amount)
     if amount <= 0:
@@ -67,22 +67,21 @@ def update_settlement(session: Session, group_id: UUID, settlement_id: UUID, amo
     settlement.amount = amount
     settlement.note = note.strip() if note else None
     session.commit()
-    session.refresh(settlement)
     return settlement
 
 
-def delete_settlement(session: Session, group_id: UUID, settlement_id: UUID, caller: User) -> None:
+def delete_settlement(session: Session, group_id: UUID, settlement_id: UUID, caller_id: UUID) -> None:
     settlement = get_settlement(session, group_id, settlement_id)
     if settlement is None:
         raise HTTPException(status_code=404, detail="Settlement not found.")
-    group, role = get_group_and_role(session, group_id, caller.id)
+    group, role = get_group_and_role(session, group_id, caller_id)
     require_permission(role, "money", "You do not have permission to delete settlements.")
-    if caller.id not in {settlement.created_by, group.owner_id}:
+    if caller_id not in {settlement.created_by, group.owner_id}:
         raise HTTPException(status_code=403, detail="Only the settlement creator or group owner can delete this settlement.")
     session.delete(settlement)
     session.commit()
 
 
-def list_group_settlements(session: Session, group_id: UUID, caller: User, limit: int | None = None) -> list[Settlement]:
-    get_group_and_role(session, group_id, caller.id)
+def list_group_settlements(session: Session, group_id: UUID, user_id: UUID, limit: int | None = None) -> list[Settlement]:
+    get_group_and_role(session, group_id, user_id)
     return list_settlements(session, group_id, limit)

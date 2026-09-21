@@ -1,4 +1,5 @@
 import { apiRequest } from './apiClient';
+import { invalidateGroupOverview } from './groupService';
 
 export type GroupSettlement = {
   id: string;
@@ -40,6 +41,7 @@ export async function recordSettlement(input: RecordSettlementInput) {
         },
       },
     );
+    invalidateGroupOverview(input.groupId);
     return { data, error: null };
   } catch (error: any) {
     return { data: null, error };
@@ -58,6 +60,7 @@ export async function updateSettlement(input: UpdateSettlementInput) {
         },
       },
     );
+    invalidateGroupOverview(input.groupId);
     return { data, error: null };
   } catch (error: any) {
     return { data: null, error };
@@ -66,10 +69,8 @@ export async function updateSettlement(input: UpdateSettlementInput) {
 
 export async function deleteSettlement(groupId: string, settlementId: string) {
   try {
-    await apiRequest<void>(
-      `/groups/${groupId}/settlements/${settlementId}`,
-      { method: 'DELETE' },
-    );
+    await apiRequest<void>(`/groups/${groupId}/settlements/${settlementId}`, { method: 'DELETE' });
+    invalidateGroupOverview(groupId);
     return { error: null };
   } catch (error: any) {
     return { error };
@@ -78,9 +79,7 @@ export async function deleteSettlement(groupId: string, settlementId: string) {
 
 export async function getGroupSettlements(groupId: string) {
   try {
-    const data = await apiRequest<GroupSettlement[]>(
-      `/groups/${groupId}/settlements`,
-    );
+    const data = await apiRequest<GroupSettlement[]>(`/groups/${groupId}/settlements`);
     return { data, error: null };
   } catch (error: any) {
     return { data: null, error };

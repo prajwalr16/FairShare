@@ -7,13 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application configuration.
-
-    DATABASE_URL is the only database-specific setting used by the application.
-    The same code can therefore point at any compatible PostgreSQL provider.
-    Supabase remains the current PostgreSQL/auth provider, but is not embedded
-    in the business/data access layer.
-    """
+    """Application configuration."""
 
     app_name: str = "FairShare API"
     app_version: str = "3.0.0"
@@ -27,7 +21,6 @@ class Settings(BaseSettings):
     supabase_service_role_key: str | None = None
 
     cors_origins: str = "*"
-    auth_timeout_seconds: float = Field(default=10.0, ge=1.0, le=60.0)
     api_prefix: str = "/api/v1"
 
     model_config = SettingsConfigDict(
@@ -54,11 +47,7 @@ class Settings(BaseSettings):
 
 
 def normalize_database_url(value: str) -> str:
-    """Normalize common URLs for SQLAlchemy.
-
-    PostgreSQL URLs are accepted in either psycopg dialect form or the usual
-    provider URL form. SQLite is allowed for automated tests.
-    """
+    """Normalize common URLs for SQLAlchemy."""
 
     value = value.strip()
     if value.startswith("postgres://"):

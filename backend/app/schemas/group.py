@@ -3,7 +3,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from .balance import BalanceResponse, DebtRelationship
 from .common import APIModel
+from .expense import ExpenseSummary
 
 SUPPORTED_GROUP_TYPES = {"Trip", "Home", "Friends", "Office", "Other"}
 SUPPORTED_ROLES = {"admin", "member", "viewer"}
@@ -118,3 +120,24 @@ class PendingInvitation(APIModel):
     email: str
     member_id: UUID
     status: str
+
+
+class GroupOverview(APIModel):
+    id: UUID
+    owner_id: UUID
+    name: str
+    type: str
+    currency: str
+    description: str | None
+    created_at: datetime
+    is_owner: bool
+    role: str
+    current_user_balance: BalanceResponse | None
+    top_debts: list[DebtRelationship]
+    recent_expenses: list[ExpenseSummary]
+
+
+class GroupFinancialResponse(APIModel):
+    balances: list[BalanceResponse]
+    direct: list[DebtRelationship]
+    simplified: list[DebtRelationship]

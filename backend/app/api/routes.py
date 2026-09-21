@@ -3,17 +3,29 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
 from ..core.security import CurrentUser, ensure_user, get_current_user, set_database_user_context
-from ..models import GroupMember
+from ..repositories.expense_repository import list_expenses
+from ..repositories.settlement_repository import list_settlements
 from ..schemas.balance import BalanceResponse
-from ..schemas.expense import ExpenseCreate, ExpenseDetails, ExpenseSplitResponse, ExpenseSummary
-from ..schemas.group import AcceptInvitation, GroupCreate, GroupSettings, GroupSummary, GroupUpdate, InviteMember, MemberResponse, PendingInvitation, RoleUpdate
+from ..schemas.expense import ExpenseCreate, ExpenseDetails, ExpenseSummary, SUPPORTED_EXPENSE_CATEGORIES
+from ..schemas.group import (
+    AcceptInvitation,
+    GroupCreate,
+    GroupFinancialResponse,
+    GroupOverview,
+    GroupSettings,
+    GroupSummary,
+    GroupUpdate,
+    InviteMember,
+    MemberResponse,
+    PendingInvitation,
+    RoleUpdate,
+)
 from ..schemas.settlement import SettlementCreate, SettlementResponse, SettlementUpdate
-from ..services.balance_service import compute_balances
+from ..services.balance_service import compute_balances, compute_financial_snapshot, compute_group_overview_financial
 from ..services.debt_service import get_group_debts
 from ..services.expense_service import create_expense, delete_expense, get_details, list_group_expenses, update_expense
 from ..services.group_service import create_group, delete_group, get_settings, leave_group, list_groups, list_members, remove_member, update_role, update_settings
@@ -30,19 +42,25 @@ def db_user(current_user: CurrentUser = Depends(get_current_user), session: Sess
     return user
 
 
+def write_context(current_user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)) -> CurrentUser:
+    # Only write paths need the database trigger context. GET requests skip it.
+    set_database_user_context(session, current_user.id)
+    return current_user
+
+
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "healthy", "app": "FairShare API"}
 
 
 @router.get("/me")
-def me(user=Depends(db_user)):
+def me(user: CurrentUser = Depends(get_current_user)):
     return {"id": user.id, "email": user.email, "full_name": user.full_name}
 
 
 @router.get("/groups", response_model=list[GroupSummary])
-def groups(user=Depends(db_user), session: Session = Depends(get_db)):
-    return list_groups(session, user)
+def groups(user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+    return list_groups(session, user.id)
 
 
 @router.post("/groups", response_model=GroupSummary, status_code=status.HTTP_201_CREATED)
@@ -51,47 +69,76 @@ def create_group_route(payload: GroupCreate, user=Depends(db_user), session: Ses
 
 
 @router.get("/groups/{group_id}", response_model=GroupSummary)
-def get_group_route(group_id: UUID, user=Depends(db_user), session: Session = Depends(get_db)):
+def get_group_route(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
     group, _ = get_group_and_role(session, group_id, user.id)
     return group
 
 
+@router.get("/groups/{group_id}/overview", response_model=GroupOverview)
+def group_overview(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+    group, role = get_group_and_role(session, group_id, user.id)
+    overview_financial = compute_group_overview_financial(session, group_id, user.id)
+    # Authorization was already established above; do not run the same
+    # membership query again just to read the five preview expenses.
+    recent_expenses = list_expenses(session, group_id, limit=5)
+    current_balance = next((balance for balance in overview_financial["balances"] if balance["user_id"] == user.id), None)
+    return {
+        "id": group.id,
+        "owner_id": group.owner_id,
+        "name": group.name,
+        "type": group.type,
+        "currency": group.currency,
+        "description": group.description,
+        "created_at": group.created_at,
+        "is_owner": group.owner_id == user.id,
+        "role": role,
+        "current_user_balance": current_balance,
+        "top_debts": overview_financial["simplified"][:3],
+        "recent_expenses": recent_expenses,
+    }
+
+
+@router.get("/groups/{group_id}/financial", response_model=GroupFinancialResponse)
+def group_financial(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+    return compute_financial_snapshot(session, group_id, current_user_id=user.id, check_access=True)
+
+
 @router.get("/groups/{group_id}/settings", response_model=GroupSettings)
-def group_settings(group_id: UUID, user=Depends(db_user), session: Session = Depends(get_db)):
-    return get_settings(session, group_id, user)
+def group_settings(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+    return get_settings(session, group_id, user.id)
 
 
 @router.patch("/groups/{group_id}", response_model=GroupSettings)
-def patch_group(group_id: UUID, payload: GroupUpdate, user=Depends(db_user), session: Session = Depends(get_db)):
-    update_settings(session, group_id, user, payload.name, payload.type, payload.currency, payload.description)
-    return get_settings(session, group_id, user)
+def patch_group(group_id: UUID, payload: GroupUpdate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
+    update_settings(session, group_id, user.id, payload.name, payload.type, payload.currency, payload.description)
+    return get_settings(session, group_id, user.id)
 
 
 @router.post("/groups/{group_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
-def leave_group_route(group_id: UUID, user=Depends(db_user), session: Session = Depends(get_db)):
-    leave_group(session, group_id, user)
+def leave_group_route(group_id: UUID, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
+    leave_group(session, group_id, user.id)
     return None
 
 
 @router.delete("/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_group_route(group_id: UUID, user=Depends(db_user), session: Session = Depends(get_db)):
-    delete_group(session, group_id, user)
+def delete_group_route(group_id: UUID, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
+    delete_group(session, group_id, user.id)
     return None
 
 
 @router.get("/groups/{group_id}/members", response_model=list[MemberResponse])
-def members(group_id: UUID, user=Depends(db_user), session: Session = Depends(get_db)):
-    return list_members(session, group_id, user)
+def members(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+    return list_members(session, group_id, user.id)
 
 
 @router.get("/groups/{group_id}/members/roles", response_model=list[MemberResponse])
-def member_roles(group_id: UUID, user=Depends(db_user), session: Session = Depends(get_db)):
-    return list_members(session, group_id, user)
+def member_roles(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+    return list_members(session, group_id, user.id)
 
 
 @router.get("/groups/{group_id}/invitation", response_model=PendingInvitation)
-def pending_invitation(group_id: UUID, user=Depends(db_user), session: Session = Depends(get_db)):
-    return get_pending_invitation(session, group_id, user)
+def pending_invitation(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+    return get_pending_invitation(session, group_id, user)  # service only uses caller.id
 
 
 @router.post("/groups/{group_id}/members/invite")
@@ -107,14 +154,14 @@ def accept(group_id: UUID, payload: AcceptInvitation, user=Depends(db_user), ses
 
 
 @router.delete("/groups/{group_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_member_route(group_id: UUID, member_id: UUID, user=Depends(db_user), session: Session = Depends(get_db)):
-    remove_member(session, group_id, member_id, user)
+def remove_member_route(group_id: UUID, member_id: UUID, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
+    remove_member(session, group_id, member_id, user.id)
     return None
 
 
 @router.patch("/groups/{group_id}/members/{user_id}/role", response_model=MemberResponse)
-def patch_member_role(group_id: UUID, user_id: UUID, payload: RoleUpdate, user=Depends(db_user), session: Session = Depends(get_db)):
-    return update_role(session, group_id, user_id, payload.role, user)
+def patch_member_role(group_id: UUID, user_id: UUID, payload: RoleUpdate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
+    return update_role(session, group_id, user_id, payload.role, user.id)
 
 
 @router.get("/groups/{group_id}/expenses", response_model=list[ExpenseSummary])
@@ -123,62 +170,62 @@ def expenses(
     limit: int | None = Query(default=None, ge=1, le=200),
     category: str | None = Query(default=None),
     scope: str = Query(default="all"),
-    user=Depends(db_user),
+    user: CurrentUser = Depends(get_current_user),
     session: Session = Depends(get_db),
 ):
-    return list_group_expenses(session, group_id, user, limit, category, scope)
+    return list_group_expenses(session, group_id, user.id, limit, category, scope)
 
 
 @router.post("/groups/{group_id}/expenses", response_model=ExpenseSummary, status_code=status.HTTP_201_CREATED)
-def create_expense_route(group_id: UUID, payload: ExpenseCreate, user=Depends(db_user), session: Session = Depends(get_db)):
+def create_expense_route(group_id: UUID, payload: ExpenseCreate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
     return create_expense(session, group_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user)
 
 
 @router.get("/expenses/{expense_id}", response_model=ExpenseDetails)
-def expense_detail(expense_id: UUID, user=Depends(db_user), session: Session = Depends(get_db)):
-    expense, splits = get_details(session, expense_id, user)
+def expense_detail(expense_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+    expense, splits = get_details(session, expense_id, user.id)
     return {"expense": expense, "splits": splits}
 
 
 @router.put("/expenses/{expense_id}", response_model=ExpenseSummary)
-def update_expense_route(expense_id: UUID, payload: ExpenseCreate, user=Depends(db_user), session: Session = Depends(get_db)):
-    return update_expense(session, expense_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user)
+def update_expense_route(expense_id: UUID, payload: ExpenseCreate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
+    return update_expense(session, expense_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user.id)
 
 
 @router.delete("/expenses/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_expense_route(expense_id: UUID, user=Depends(db_user), session: Session = Depends(get_db)):
-    delete_expense(session, expense_id, user)
+def delete_expense_route(expense_id: UUID, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
+    delete_expense(session, expense_id, user.id)
     return None
 
 
 @router.get("/groups/{group_id}/balances", response_model=list[BalanceResponse])
-def balances(group_id: UUID, user=Depends(db_user), session: Session = Depends(get_db)):
+def balances(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
     return compute_balances(session, group_id, user.id)
 
 
 @router.get("/groups/{group_id}/debts")
-def debts(group_id: UUID, user=Depends(db_user), session: Session = Depends(get_db)):
+def debts(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
     return get_group_debts(session, group_id, user.id)
 
 
 @router.get("/groups/{group_id}/settlements", response_model=list[SettlementResponse])
-def settlements(group_id: UUID, limit: int | None = Query(default=None, ge=1, le=200), user=Depends(db_user), session: Session = Depends(get_db)):
-    return list_group_settlements(session, group_id, user, limit)
+def settlements(group_id: UUID, limit: int | None = Query(default=None, ge=1, le=200), user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+    return list_group_settlements(session, group_id, user.id, limit)
 
 
 @router.post("/groups/{group_id}/settlements", response_model=SettlementResponse, status_code=status.HTTP_201_CREATED)
-def record_settlement_route(group_id: UUID, payload: SettlementCreate, user=Depends(db_user), session: Session = Depends(get_db)):
-    return create_settlement(session, group_id, payload.from_user_id, payload.to_user_id, payload.amount, payload.note, user)
+def record_settlement_route(group_id: UUID, payload: SettlementCreate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
+    return create_settlement(session, group_id, payload.from_user_id, payload.to_user_id, payload.amount, payload.note, user.id)
 
 
 @router.put("/groups/{group_id}/settlements/{settlement_id}", response_model=SettlementResponse)
-def update_settlement_route(group_id: UUID, settlement_id: UUID, payload: SettlementUpdate, user=Depends(db_user), session: Session = Depends(get_db)):
-    return update_settlement(session, group_id, settlement_id, payload.amount, payload.note, user)
+def update_settlement_route(group_id: UUID, settlement_id: UUID, payload: SettlementUpdate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
+    return update_settlement(session, group_id, settlement_id, payload.amount, payload.note, user.id)
 
 
 @router.delete("/groups/{group_id}/settlements/{settlement_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_settlement_route(group_id: UUID, settlement_id: UUID, user=Depends(db_user), session: Session = Depends(get_db)):
-    delete_settlement(session, group_id, settlement_id, user)
+def delete_settlement_route(group_id: UUID, settlement_id: UUID, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
+    delete_settlement(session, group_id, settlement_id, user.id)
     return None
 
 
@@ -188,10 +235,15 @@ def history(
     limit: int = Query(default=100, ge=1, le=200),
     category: str | None = Query(default=None),
     scope: str = Query(default="all"),
-    user=Depends(db_user),
+    user: CurrentUser = Depends(get_current_user),
     session: Session = Depends(get_db),
 ):
+    get_group_and_role(session, group_id, user.id)
+    if scope not in {"all", "mine"}:
+        raise HTTPException(status_code=400, detail="Invalid expense scope.")
+    if category and category != "All" and category not in SUPPORTED_EXPENSE_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Unsupported expense category.")
     return {
-        "expenses": list_group_expenses(session, group_id, user, limit, category, scope),
-        "settlements": list_group_settlements(session, group_id, user, limit),
+        "expenses": list_expenses(session, group_id, limit, category if category != "All" else None, scope, user.id),
+        "settlements": list_settlements(session, group_id, limit),
     }

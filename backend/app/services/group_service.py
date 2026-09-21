@@ -3,11 +3,11 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import Group, GroupMember, User
-from ..repositories.group_repository import get_group, list_groups_for_user, list_members as list_group_members
+from ..repositories.group_repository import get_member_by_email, list_groups_for_user, list_members as list_group_members
 from .balance_service import compute_balances
 from .permissions import get_group_and_role, require_permission
 
@@ -44,9 +44,6 @@ def create_group(
     session.add(group)
     session.flush()
 
-    # The legacy Supabase database may already have an AFTER INSERT trigger
-    # that creates the owner membership. Query first so the FastAPI path is
-    # compatible with both the existing database and a clean migrated DB.
     owner_membership = session.scalar(
         select(GroupMember).where(
             GroupMember.group_id == group.id,
@@ -65,16 +62,15 @@ def create_group(
         )
 
     session.commit()
-    session.refresh(group)
     return group
 
 
-def list_groups(session: Session, caller: User) -> list[Group]:
-    return list_groups_for_user(session, caller.id)
+def list_groups(session: Session, user_id: UUID) -> list[Group]:
+    return list_groups_for_user(session, user_id)
 
 
-def get_settings(session: Session, group_id: UUID, caller: User) -> dict:
-    group, role = get_group_and_role(session, group_id, caller.id)
+def get_settings(session: Session, group_id: UUID, user_id: UUID) -> dict:
+    group, role = get_group_and_role(session, group_id, user_id)
     return {
         "id": group.id,
         "owner_id": group.owner_id,
@@ -83,7 +79,7 @@ def get_settings(session: Session, group_id: UUID, caller: User) -> dict:
         "currency": group.currency,
         "description": group.description,
         "created_at": group.created_at,
-        "is_owner": group.owner_id == caller.id,
+        "is_owner": group.owner_id == user_id,
         "role": role,
     }
 
@@ -91,13 +87,13 @@ def get_settings(session: Session, group_id: UUID, caller: User) -> dict:
 def update_settings(
     session: Session,
     group_id: UUID,
-    caller: User,
+    user_id: UUID,
     name: str,
     group_type: str,
     currency: str,
     description: str | None,
 ) -> Group:
-    group, role = get_group_and_role(session, group_id, caller.id)
+    group, role = get_group_and_role(session, group_id, user_id)
     require_permission(role, "settings", "Only the group owner can edit group settings.")
 
     clean_name = name.strip()
@@ -117,8 +113,12 @@ def update_settings(
 
     if clean_currency != (group.currency or "INR").upper():
         from ..models import Expense, Settlement
-        has_financial = session.scalar(select(Expense.id).where(Expense.group_id == group_id).limit(1)) is not None
-        has_financial = has_financial or session.scalar(select(Settlement.id).where(Settlement.group_id == group_id).limit(1)) is not None
+        has_financial = session.scalar(
+            select(Expense.id).where(Expense.group_id == group_id).limit(1)
+        ) is not None
+        has_financial = has_financial or session.scalar(
+            select(Settlement.id).where(Settlement.group_id == group_id).limit(1)
+        ) is not None
         if has_financial:
             raise HTTPException(
                 status_code=409,
@@ -130,19 +130,19 @@ def update_settings(
     group.currency = clean_currency
     group.description = clean_description or None
     session.commit()
-    session.refresh(group)
     return group
 
 
-def list_members(session: Session, group_id: UUID, caller: User) -> list[dict]:
-    get_group_and_role(session, group_id, caller.id)
-    members = list_group_members(session, group_id)
-    user_ids = {m.user_id for m in members if m.user_id}
-    users = {u.id: u for u in session.scalars(select(User).where(User.id.in_(user_ids))).all()} if user_ids else {}
-    response: list[dict] = []
-    for member in members:
-        user = users.get(member.user_id)
-        response.append({
+def list_members(session: Session, group_id: UUID, user_id: UUID) -> list[dict]:
+    get_group_and_role(session, group_id, user_id)
+    rows = session.execute(
+        select(GroupMember, User)
+        .outerjoin(User, User.id == GroupMember.user_id)
+        .where(GroupMember.group_id == group_id)
+        .order_by(GroupMember.created_at.asc())
+    ).all()
+    response = [
+        {
             "id": member.id,
             "group_id": member.group_id,
             "user_id": member.user_id,
@@ -151,13 +151,20 @@ def list_members(session: Session, group_id: UUID, caller: User) -> list[dict]:
             "role": member.role,
             "status": member.status,
             "created_at": member.created_at,
-        })
-    response.sort(key=lambda item: (0 if item["role"] == "owner" else 1 if item["role"] == "admin" else 2 if item["role"] == "member" else 3, item["created_at"]))
+        }
+        for member, user in rows
+    ]
+    response.sort(
+        key=lambda item: (
+            0 if item["role"] == "owner" else 1 if item["role"] == "admin" else 2 if item["role"] == "member" else 3,
+            item["created_at"],
+        )
+    )
     return response
 
 
-def update_role(session: Session, group_id: UUID, target_user_id: UUID, role: str, caller: User) -> dict:
-    group, caller_role = get_group_and_role(session, group_id, caller.id)
+def update_role(session: Session, group_id: UUID, target_user_id: UUID, role: str, user_id: UUID) -> dict:
+    group, caller_role = get_group_and_role(session, group_id, user_id)
     require_permission(caller_role, "roles", "Only the group owner can change member roles.")
     normalized = role.strip().lower()
     if normalized not in SUPPORTED_ROLES:
@@ -173,7 +180,6 @@ def update_role(session: Session, group_id: UUID, target_user_id: UUID, role: st
         raise HTTPException(status_code=404, detail="The target user is not an active group member.")
     member.role = normalized
     session.commit()
-    session.refresh(member)
     user = session.get(User, member.user_id)
     return {
         "id": member.id,
@@ -187,8 +193,8 @@ def update_role(session: Session, group_id: UUID, target_user_id: UUID, role: st
     }
 
 
-def remove_member(session: Session, group_id: UUID, member_id: UUID, caller: User) -> None:
-    group, caller_role = get_group_and_role(session, group_id, caller.id)
+def remove_member(session: Session, group_id: UUID, member_id: UUID, user_id: UUID) -> None:
+    group, caller_role = get_group_and_role(session, group_id, user_id)
     require_permission(caller_role, "members", "You do not have permission to remove members.")
     member = session.scalar(select(GroupMember).where(GroupMember.id == member_id, GroupMember.group_id == group_id))
     if member is None:
@@ -206,23 +212,27 @@ def remove_member(session: Session, group_id: UUID, member_id: UUID, caller: Use
     session.commit()
 
 
-def leave_group(session: Session, group_id: UUID, caller: User) -> None:
-    group, role = get_group_and_role(session, group_id, caller.id)
-    if group.owner_id == caller.id:
+def leave_group(session: Session, group_id: UUID, user_id: UUID) -> None:
+    group, _ = get_group_and_role(session, group_id, user_id)
+    if group.owner_id == user_id:
         raise HTTPException(status_code=400, detail="The group owner cannot leave the group. Delete the group or transfer ownership first.")
-    balances = compute_balances(session, group_id, caller.id)
-    current = next((b for b in balances if b["user_id"] == caller.id), None)
+    balances = compute_balances(session, group_id, user_id)
+    current = next((b for b in balances if b["user_id"] == user_id), None)
     if current and abs(current["net_balance"]) > 0.005:
         raise HTTPException(status_code=409, detail="Settle your balance before leaving the group.")
-    member = session.scalar(select(GroupMember).where(GroupMember.group_id == group_id, GroupMember.user_id == caller.id, GroupMember.status == "active"))
+    member = session.scalar(select(GroupMember).where(
+        GroupMember.group_id == group_id,
+        GroupMember.user_id == user_id,
+        GroupMember.status == "active",
+    ))
     if member is None:
         raise HTTPException(status_code=404, detail="Membership not found.")
     session.delete(member)
     session.commit()
 
 
-def delete_group(session: Session, group_id: UUID, caller: User) -> None:
-    group, role = get_group_and_role(session, group_id, caller.id)
+def delete_group(session: Session, group_id: UUID, user_id: UUID) -> None:
+    group, role = get_group_and_role(session, group_id, user_id)
     require_permission(role, "delete_group", "Only the group owner can delete the group.")
     session.delete(group)
     session.commit()

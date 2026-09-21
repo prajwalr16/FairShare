@@ -40,8 +40,16 @@ export async function forgotPassword(
   );
 }
 
+/**
+ * UI-side current user lookup should use the locally persisted Supabase session.
+ * The FastAPI bearer-token boundary remains the authoritative security check.
+ */
 export async function getCurrentUser() {
-  return await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getSession();
+  return {
+    data: { user: data.session?.user ?? null },
+    error,
+  };
 }
 
 export async function getCurrentSession() {

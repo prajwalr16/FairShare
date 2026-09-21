@@ -47,7 +47,6 @@ class ExpenseCreate(BaseModel):
             raise ValueError("Unsupported split type.")
         return normalized
 
-
     @field_validator("category")
     @classmethod
     def normalize_category(cls, value: str) -> str:
@@ -79,3 +78,4 @@ class ExpenseSplitResponse(APIModel):
 class ExpenseDetails(APIModel):
     expense: ExpenseSummary
     splits: list[ExpenseSplitResponse]
+

@@ -16,7 +16,7 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import { GroupMember, getGroupMembers } from '../../services/memberService';
 import { formatCurrency } from '../../utils/currency';
 import { EXPENSE_CATEGORY_ICONS, ExpenseCategory } from '../../constants/expenseCategories';
-import { getGroupSettings } from '../../services/groupService';
+import { getCachedGroupOverview, getGroupSettings } from '../../services/groupService';
 import {
   deleteExpense,
   ExpenseDetailsRecord,
@@ -70,7 +70,22 @@ export default function ExpenseDetailsScreen() {
 
     setLoading(true);
 
-    const detailsResult = await getExpenseDetails(expenseId);
+    const cachedOverview = routeGroupId ? getCachedGroupOverview(routeGroupId) : null;
+
+    // After opening Group Details, members/settings are normally cached. Only
+    // make network requests for data that is genuinely missing.
+    const membersPromise = routeGroupId
+      ? getGroupMembers(routeGroupId)
+      : Promise.resolve({ data: [] as GroupMember[], error: null });
+    const groupPromise = routeGroupId && !cachedOverview
+      ? getGroupSettings(routeGroupId)
+      : Promise.resolve({ data: cachedOverview, error: null });
+
+    const [detailsResult, membersResult, groupResult] = await Promise.all([
+      getExpenseDetails(expenseId),
+      membersPromise,
+      groupPromise,
+    ]);
 
     if (detailsResult.error || !detailsResult.data) {
       setExpense(null);
@@ -89,16 +104,24 @@ export default function ExpenseDetailsScreen() {
 
     const groupId = loadedExpense.group_id || routeGroupId;
 
-    if (groupId) {
-      const [membersResult, groupResult] = await Promise.all([
+    // Deep-linked/standalone entry may not provide groupId in navigation params.
+    // Fall back to a single parallel group lookup only in that case.
+    if (!routeGroupId && groupId) {
+      const [fallbackMembersResult, fallbackGroupResult] = await Promise.all([
         getGroupMembers(groupId),
         getGroupSettings(groupId),
       ]);
-
+      if (!fallbackMembersResult.error) {
+        setMembers(fallbackMembersResult.data || []);
+      }
+      if (!fallbackGroupResult.error && fallbackGroupResult.data) {
+        if (fallbackGroupResult.data.name) setGroupName(fallbackGroupResult.data.name);
+        if (fallbackGroupResult.data.currency) setCurrency(fallbackGroupResult.data.currency);
+      }
+    } else {
       if (!membersResult.error) {
         setMembers(membersResult.data || []);
       }
-
       if (!groupResult.error && groupResult.data) {
         if (groupResult.data.name) setGroupName(groupResult.data.name);
         if (groupResult.data.currency) setCurrency(groupResult.data.currency);
@@ -164,6 +187,7 @@ export default function ExpenseDetailsScreen() {
       expenseId: expense.id,
       groupId: expense.group_id,
       groupName,
+      currency,
     });
   };
 
