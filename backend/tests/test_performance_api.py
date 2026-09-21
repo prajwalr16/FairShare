@@ -1,12 +1,15 @@
+from uuid import UUID
+
 from tests.conftest import USER_B, USER_C, TestingSessionLocal
 from app.models import GroupMember
 
 
 def _add_members(group_id: str):
     session = TestingSessionLocal()
+    group_uuid = UUID(str(group_id))
     session.add_all([
-        GroupMember(group_id=group_id, user_id=USER_B, email="b@example.com", role="member", status="active"),
-        GroupMember(group_id=group_id, user_id=USER_C, email="c@example.com", role="member", status="active"),
+        GroupMember(group_id=group_uuid, user_id=USER_B, email="b@example.com", role="member", status="active"),
+        GroupMember(group_id=group_uuid, user_id=USER_C, email="c@example.com", role="member", status="active"),
     ])
     session.commit()
     session.close()

@@ -1,11 +1,7 @@
 from decimal import Decimal
 from uuid import UUID
 
-import pytest
-
 from app.models import GroupMember
-from app.services.invite_service import _delete_auth_user, _send_invitation, _find_auth_user_by_email
-
 from tests.conftest import TestingSessionLocal, USER_A, USER_B, USER_C
 
 
@@ -55,6 +51,38 @@ def test_group_crud_and_members(client, seed_users):
     assert detail.json()['name'] == 'Test Group'
 
 
+def test_group_overview_bootstrap_contains_expected_summary(client, seed_users):
+    group = create_group(client)
+    gid = group['id']
+    add_members(gid)
+
+    response = client.post(f'/api/v1/groups/{gid}/expenses', json={
+        'title': 'Dinner',
+        'amount': '900',
+        'paid_by': str(USER_A),
+        'split_type': 'Exact',
+        'splits': [
+            {'user_id': str(USER_A), 'value': '300'},
+            {'user_id': str(USER_B), 'value': '300'},
+            {'user_id': str(USER_C), 'value': '300'},
+        ],
+    })
+    assert response.status_code == 201, response.text
+
+    overview = client.get(f'/api/v1/groups/{gid}/overview')
+    assert overview.status_code == 200, overview.text
+    payload = overview.json()
+
+    assert payload['id'] == gid
+    assert payload['name'] == 'Test Group'
+    assert payload['currency'] == 'INR'
+    assert payload['role'] == 'owner'
+    assert payload['current_user_balance']['user_id'] == str(USER_A)
+    assert Decimal(str(payload['current_user_balance']['net_balance'])) == Decimal('600.00')
+    assert len(payload['recent_expenses']) == 1
+    assert payload['recent_expenses'][0]['title'] == 'Dinner'
+
+
 def test_all_split_modes_and_edit_delete(client, seed_users):
     group = create_group(client)
     gid = group['id']
@@ -79,7 +107,6 @@ def test_all_split_modes_and_edit_delete(client, seed_users):
         split_sum = sum(Decimal(str(row['amount'])) for row in details.json()['splits'])
         assert split_sum == Decimal('1000.00')
 
-    # Edit the first expense from Equal -> Exact and switch payer to B.
     updated = client.put(f'/api/v1/expenses/{expense_ids[0]}', json={
         'title': 'Edited Expense', 'amount': '900', 'paid_by': str(USER_B), 'split_type': 'Exact',
         'splits': [
@@ -91,6 +118,18 @@ def test_all_split_modes_and_edit_delete(client, seed_users):
     assert updated.status_code == 200, updated.text
     assert updated.json()['title'] == 'Edited Expense'
     assert updated.json()['paid_by'] == str(USER_B)
+
+    updated_details = client.get(f'/api/v1/expenses/{expense_ids[0]}')
+    assert updated_details.status_code == 200, updated_details.text
+    updated_splits = {
+        row['user_id']: Decimal(str(row['amount']))
+        for row in updated_details.json()['splits']
+    }
+    assert updated_splits == {
+        str(USER_A): Decimal('400.00'),
+        str(USER_B): Decimal('300.00'),
+        str(USER_C): Decimal('200.00'),
+    }
 
     deleted = client.delete(f'/api/v1/expenses/{expense_ids[-1]}')
     assert deleted.status_code == 204
@@ -133,11 +172,9 @@ def test_balances_debts_and_settlement_lifecycle(client, seed_users):
     assert settlement.status_code == 201, settlement.text
     sid = settlement.json()['id']
 
-    # Partial settlement keeps the remaining obligation on the next balance check.
     current = client.get(f'/api/v1/groups/{gid}/balances')
     assert current.status_code == 200
 
-    # Edit the settlement to half its amount and then delete it.
     old_amount = Decimal(str(settlement.json()['amount']))
     new_amount = old_amount / 2
     edited = client.put(f'/api/v1/groups/{gid}/settlements/{sid}', json={'amount': str(new_amount), 'note': 'Updated'})
@@ -158,7 +195,6 @@ def test_roles_currency_and_viewer_permissions(client, seed_users):
     assert role.status_code == 200
     assert role.json()['role'] == 'viewer'
 
-    # Viewer cannot create money records. Change the auth dependency for this request.
     from app.core.security import CurrentUser, get_current_user
     from app.main import app
     app.dependency_overrides[get_current_user] = lambda: CurrentUser(id=USER_B, email='b@example.com', full_name='B')
@@ -169,7 +205,6 @@ def test_roles_currency_and_viewer_permissions(client, seed_users):
     assert blocked.status_code == 403
     app.dependency_overrides[get_current_user] = lambda: CurrentUser(id=USER_A, email='a@example.com', full_name='A')
 
-    # Owner can change the currency only before financial records exist.
     updated = client.patch(f'/api/v1/groups/{gid}', json={
         'name': 'USD Group', 'type': 'Friends', 'currency': 'USD', 'description': None,
     })

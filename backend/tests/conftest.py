@@ -14,7 +14,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.database import get_db
+from app.core.database import get_db, get_read_db
 from app.core.security import CurrentUser, get_current_user
 from app.main import app
 from app.models import Base, User
@@ -28,6 +28,7 @@ TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=Fals
 USER_A = UUID('11111111-1111-1111-1111-111111111111')
 USER_B = UUID('22222222-2222-2222-2222-222222222222')
 USER_C = UUID('33333333-3333-3333-3333-333333333333')
+
 
 @pytest.fixture(autouse=True)
 def clean_db():
@@ -44,9 +45,17 @@ def clean_db():
         yield
         Base.metadata.drop_all(bind=engine)
 
+
 @pytest.fixture
-def client():
+def client(monkeypatch):
     def override_db():
+        session = TestingSessionLocal()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    def override_read_db():
         session = TestingSessionLocal()
         try:
             yield session
@@ -55,10 +64,20 @@ def client():
 
     current = CurrentUser(id=USER_A, email='a@example.com', full_name='A')
     app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_read_db] = override_read_db
     app.dependency_overrides[get_current_user] = lambda: current
+
+    # The production write dependency sets the PostgreSQL JWT claim context.
+    # SQLite does not provide set_config(), so disable only that DB-specific
+    # context call in the local test environment. Authorization itself is still
+    # exercised through the real dependency/service logic.
+    if TEST_DATABASE_URL.startswith('sqlite:///'):
+        monkeypatch.setattr('app.api.routes.set_database_user_context', lambda session, user_id: None)
+
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
 
 @pytest.fixture
 def seed_users():
