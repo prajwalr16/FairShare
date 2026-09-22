@@ -65,6 +65,16 @@ def test_trip_route_returns_distance_duration_geometry_and_day(client, seed_user
                 {'latitude': 13.0827, 'longitude': 80.2707},
                 {'latitude': 11.0168, 'longitude': 76.9558},
             ],
+            'legs': [
+                {'points': [
+                    {'latitude': 12.9716, 'longitude': 77.5946},
+                    {'latitude': 13.0827, 'longitude': 80.2707},
+                ]},
+                {'points': [
+                    {'latitude': 13.0827, 'longitude': 80.2707},
+                    {'latitude': 11.0168, 'longitude': 76.9558},
+                ]},
+            ],
         },
     )
 
@@ -77,6 +87,16 @@ def test_trip_route_returns_distance_duration_geometry_and_day(client, seed_user
     assert len(payload['stops']) == 3
     assert all(stop['day_number'] == 1 for stop in payload['stops'])
     assert len(payload['geometry']) == 3
+    assert len(payload['legs']) == 2
+    assert payload['legs'][0]['from_stop_id'] == payload['stops'][0]['stop_id']
+    assert payload['legs'][0]['to_stop_id'] == payload['stops'][1]['stop_id']
+    assert payload['legs'][1]['from_stop_id'] == payload['stops'][1]['stop_id']
+    assert payload['legs'][1]['to_stop_id'] == payload['stops'][2]['stop_id']
+    assert len(payload['legs']) == 2
+    assert payload['legs'][0]['from_stop_id'] == payload['stops'][0]['stop_id']
+    assert payload['legs'][0]['to_stop_id'] == payload['stops'][1]['stop_id']
+    assert payload['legs'][1]['from_stop_id'] == payload['stops'][1]['stop_id']
+    assert payload['legs'][1]['to_stop_id'] == payload['stops'][2]['stop_id']
 
 
 def test_trip_route_filters_by_day(client, seed_users, monkeypatch):
@@ -107,6 +127,14 @@ def test_trip_route_filters_by_day(client, seed_users, monkeypatch):
                 {'latitude': coordinates[0][0], 'longitude': coordinates[0][1]},
                 {'latitude': coordinates[-1][0], 'longitude': coordinates[-1][1]},
             ],
+            'legs': [
+                {
+                    'points': [
+                        {'latitude': coordinates[0][0], 'longitude': coordinates[0][1]},
+                        {'latitude': coordinates[-1][0], 'longitude': coordinates[-1][1]},
+                    ]
+                }
+            ],
         },
     )
 
@@ -117,6 +145,7 @@ def test_trip_route_filters_by_day(client, seed_users, monkeypatch):
     assert [stop['name'] for stop in payload['stops']] == ['Pangong', 'Hanle']
     assert len(calls) == 1
     assert len(calls[0]) == 2
+    assert len(payload['legs']) == 1
 
 
 def test_trip_route_rejects_missing_coordinates(client, seed_users):
