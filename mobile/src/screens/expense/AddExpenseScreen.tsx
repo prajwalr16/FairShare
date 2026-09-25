@@ -15,13 +15,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
-import { supabase } from '../../config/supabase';
 import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
+import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_ICONS, ExpenseCategory } from '../../constants/expenseCategories';
 import {
   getGroupMembers,
   GroupMember,
 } from '../../services/memberService';
 import { createExpense } from '../../services/expenseService';
+import { getCurrentUser } from '../../services/authService';
+import { getGroupSettings } from '../../services/groupService';
 import {
   buildDefaultInputs,
   calculateSplits,
@@ -58,6 +60,8 @@ export default function AddExpenseScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [payerId, setPayerId] = useState<string | null>(null);
   const [payerPickerVisible, setPayerPickerVisible] = useState(false);
+  const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
+  const [category, setCategory] = useState<ExpenseCategory>('Other');
   const [currency, setCurrency] = useState('INR');
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -83,9 +87,9 @@ export default function AddExpenseScreen() {
       }
 
       const [userResult, memberResult, groupResult] = await Promise.all([
-        supabase.auth.getUser(),
+        getCurrentUser(),
         getGroupMembers(groupId),
-        supabase.from('groups').select('currency').eq('id', groupId).maybeSingle(),
+        getGroupSettings(groupId),
       ]);
 
       if (cancelled) return;
@@ -96,6 +100,7 @@ export default function AddExpenseScreen() {
         setCurrency(groupResult.data.currency);
       }
       setPayerId(userId);
+      setCategory('Other');
 
       if (memberResult.error) {
         setMembers([]);
@@ -346,6 +351,7 @@ export default function AddExpenseScreen() {
       amount: Number(amount.toFixed(2)),
       paidBy: payerId,
       splitType,
+      category,
       splits: effectiveInputs,
     });
 
@@ -497,6 +503,24 @@ export default function AddExpenseScreen() {
               <Text style={styles.helperText}>
                 The payer can be different from the people sharing the expense.
               </Text>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.label}>Category</Text>
+              <Pressable
+                style={styles.categorySelector}
+                onPress={() => setCategoryPickerVisible(true)}
+                disabled={saving}
+              >
+                <View style={styles.categorySelectorIcon}>
+                  <Ionicons name={EXPENSE_CATEGORY_ICONS[category]} size={19} color="#0EA5A4" />
+                </View>
+                <View style={styles.payerSelectorInfo}>
+                  <Text style={styles.payerSelectorName}>{category}</Text>
+                  <Text style={styles.payerSelectorMeta}>Used for filtering and summaries</Text>
+                </View>
+                <Ionicons name="chevron-down" size={20} color="#94A3B8" />
+              </Pressable>
             </View>
 
             <View style={styles.section}>
@@ -693,6 +717,50 @@ export default function AddExpenseScreen() {
       </SafeAreaView>
 
       <Modal
+        visible={categoryPickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCategoryPickerVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.modalDismissArea} onPress={() => setCategoryPickerVisible(false)} />
+          <View style={styles.payerModalCard}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Expense category</Text>
+                <Text style={styles.modalSubtitle}>Choose a category for filtering and reports.</Text>
+              </View>
+              <Pressable style={styles.modalCloseButton} onPress={() => setCategoryPickerVisible(false)}>
+                <Ionicons name="close" size={20} color="#CBD5E1" />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.payerList}>
+              {EXPENSE_CATEGORIES.map((item) => {
+                const selected = item === category;
+                return (
+                  <Pressable
+                    key={item}
+                    style={[styles.payerRow, selected && styles.payerRowSelected]}
+                    onPress={() => { setCategory(item); setCategoryPickerVisible(false); }}
+                    disabled={saving}
+                  >
+                    <View style={styles.categorySelectorIcon}>
+                      <Ionicons name={EXPENSE_CATEGORY_ICONS[item]} size={19} color="#0EA5A4" />
+                    </View>
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.memberName}>{item}</Text>
+                    </View>
+                    {selected ? <View style={styles.payerCheck}><Ionicons name="checkmark" size={17} color="#FFFFFF" /></View> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
         visible={payerPickerVisible}
         transparent
         animationType="slide"
@@ -860,6 +928,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginTop: 7,
+  },
+  categorySelector: {
+    minHeight: 64,
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    paddingHorizontal: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  categorySelectorIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: '#0F3333',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
   },
   payerSelector: {
     minHeight: 72,

@@ -1,595 +1,157 @@
-import React, {
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  ActivityIndicator,
   Alert,
   Pressable,
-  ActivityIndicator,
+  StatusBar,
+  StyleSheet,
+  Text,
   TextInput,
+  View,
 } from 'react-native';
-import {
-  SafeAreaView,
-} from 'react-native-safe-area-context';
-import {
-  useNavigation,
-} from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { supabase } from '../../config/supabase';
-import PasswordInput from '../../components/PasswordInput';
+import { getCurrentSession } from '../../services/authService';
+import { acceptGroupInvitation, getPendingInvitation } from '../../services/memberService';
 
 export default function AcceptInviteScreen() {
   const navigation = useNavigation<any>();
-
-  const [groupId, setGroupId] = useState<string | null>(null);
-  const [groupName, setGroupName] = useState('');
-  const [email, setEmail] = useState('');
-
-  const [sessionReady, setSessionReady] =
-    useState(false);
-  const [loadingInvite, setLoadingInvite] =
-    useState(true);
-  const [saving, setSaving] =
-    useState(false);
-
-  const [fullName, setFullName] =
-    useState('');
-  const [password, setPassword] =
-    useState('');
-  const [confirmPassword, setConfirmPassword] =
-    useState('');
-
-  const loadInvitation = useCallback(
-    async () => {
-      setLoadingInvite(true);
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.user) {
-        setSessionReady(false);
-        setLoadingInvite(false);
-        return;
-      }
-
-      const user = session.user;
-
-      const invitedGroupId =
-        user.user_metadata?.invited_group_id;
-
-      setEmail(user.email || '');
-      setSessionReady(true);
-
-      if (!invitedGroupId) {
-        setLoadingInvite(false);
-        return;
-      }
-
-      const {
-        data: membership,
-        error: membershipError,
-      } = await supabase
-        .from('group_members')
-        .select(
-          'id,group_id,status,email'
-        )
-        .eq(
-          'group_id',
-          invitedGroupId
-        )
-        .eq('user_id', user.id)
-        .eq('status', 'pending')
-        .maybeSingle();
-
-      if (
-        membershipError ||
-        !membership
-      ) {
-        setGroupId(null);
-        setLoadingInvite(false);
-        return;
-      }
-
-      const { data: group } =
-        await supabase
-          .from('groups')
-          .select('id,name')
-          .eq('id', invitedGroupId)
-          .single();
-
-      setGroupId(
-        membership.group_id
-      );
-
-      setGroupName(
-        group?.name || 'Group'
-      );
-
-      setLoadingInvite(false);
-    },
-    []
-  );
+  const route = useRoute<any>();
+  const [groupId, setGroupId] = useState<string | null>(route.params?.groupId || null);
+  const [groupName, setGroupName] = useState('Group invitation');
+  const groupNameRef = useRef('Group invitation');
+  const [fullName, setFullName] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    loadInvitation();
-
-    const {
-      data: { subscription },
-    } =
-      supabase.auth.onAuthStateChange(
-        async () => {
-          await loadInvitation();
-        }
-      );
-
-    return () =>
-      subscription.unsubscribe();
-  }, [loadInvitation]);
-
-  const acceptInvitation =
-    async () => {
-      if (!groupId) {
-        return Alert.alert(
-          'Invitation unavailable',
-          'This invitation is no longer pending for this account.'
-        );
+    let active = true;
+    const load = async () => {
+      const { data: sessionData, error: sessionError } = await getCurrentSession();
+      const session = sessionData?.session;
+      if (sessionError || !session?.user) {
+        if (active) setLoading(false);
+        Alert.alert('Sign in required', 'Please finish the invitation flow after the invited account is signed in.');
+        return;
       }
 
-      if (!fullName.trim()) {
-        return Alert.alert(
-          'Missing name',
-          'Please enter your full name.'
-        );
+      const metadataGroupId = session.user.user_metadata?.invited_group_id;
+      const resolvedGroupId = groupId || metadataGroupId;
+      if (!resolvedGroupId) {
+        if (active) setLoading(false);
+        Alert.alert('Invitation unavailable', 'The invitation does not contain a valid group.');
+        return;
       }
 
-      if (password.length < 8) {
-        return Alert.alert(
-          'Weak password',
-          'Password must be at least 8 characters.'
-        );
+      if (!active) return;
+      setGroupId(resolvedGroupId);
+      const existingName = typeof session.user.user_metadata?.full_name === 'string'
+        ? session.user.user_metadata.full_name
+        : '';
+      setFullName(existingName);
+
+      const result = await getPendingInvitation(resolvedGroupId);
+      if (!active) return;
+      if (result.data?.group_name) {
+        setGroupName(result.data.group_name);
+        groupNameRef.current = result.data.group_name;
+      } else if (result.error) {
+        Alert.alert('Unable to load invitation', result.error.message);
       }
-
-      if (
-        password !==
-        confirmPassword
-      ) {
-        return Alert.alert(
-          'Passwords do not match',
-          'Enter the same password in both fields.'
-        );
-      }
-
-      setSaving(true);
-
-      const {
-        error: userError,
-      } =
-        await supabase.auth.updateUser({
-          password,
-          data: {
-            full_name:
-              fullName.trim(),
-            invited_group_id: null,
-          },
-        });
-
-      if (userError) {
-        setSaving(false);
-
-        return Alert.alert(
-          'Account setup failed',
-          userError.message
-        );
-      }
-
-      const {
-        data: userData,
-      } =
-        await supabase.auth.getUser();
-
-      const userId =
-        userData.user?.id;
-
-      if (!userId) {
-        setSaving(false);
-
-        return Alert.alert(
-          'Authentication error',
-          'Please reopen the invitation and try again.'
-        );
-      }
-
-      const {
-        error: profileError,
-      } =
-        await supabase
-          .from('profiles')
-          .upsert({
-            id: userId,
-            full_name:
-              fullName.trim(),
-          });
-
-      if (profileError) {
-        setSaving(false);
-
-        return Alert.alert(
-          'Profile setup failed',
-          profileError.message
-        );
-      }
-
-      const {
-        error: acceptError,
-      } =
-        await supabase.rpc(
-          'accept_group_invitation',
-          {
-            p_group_id: groupId,
-          }
-        );
-
-      setSaving(false);
-
-      if (acceptError) {
-        return Alert.alert(
-          'Invitation failed',
-          acceptError.message
-        );
-      }
-
-      Alert.alert(
-        'Welcome to the group',
-        `You joined ${
-          groupName || 'the group'
-        }.`,
-        [
-          {
-            text: 'Continue',
-            onPress: () =>
-              navigation.reset({
-                index: 1,
-                routes: [
-                  {
-                    name: 'Home',
-                  },
-                  {
-                    name:
-                      'GroupDetails',
-                    params: {
-                      groupId,
-                      groupName,
-                    },
-                  },
-                ],
-              }),
-          },
-        ]
-      );
+      setLoading(false);
     };
+    load();
+    return () => { active = false; };
+  }, [groupId]);
 
-  if (
-    loadingInvite ||
-    !sessionReady
-  ) {
+  const continueInvitation = async () => {
+    if (!groupId) return;
+    const name = fullName.trim();
+    if (!name) return Alert.alert('Name required', 'Enter your full name.');
+    if (password && password.length < 8) {
+      return Alert.alert('Password too short', 'Password must contain at least 8 characters.');
+    }
+
+    setSaving(true);
+    const { error: authError } = await supabase.auth.updateUser({
+      ...(password ? { password } : {}),
+      data: { full_name: name },
+    });
+    if (authError) {
+      setSaving(false);
+      Alert.alert('Unable to update account', authError.message);
+      return;
+    }
+
+    const result = await acceptGroupInvitation(groupId, name);
+    setSaving(false);
+    if (result.error) {
+      Alert.alert('Unable to accept invitation', result.error.message);
+      return;
+    }
+
+    navigation.reset({
+      index: 1,
+      routes: [
+        { name: 'Home' },
+        { name: 'GroupDetails', params: { groupId, groupName: groupNameRef.current } },
+      ],
+    });
+  };
+
+  if (loading) {
     return (
-      <SafeAreaView
-        style={styles.safeArea}
-        edges={[
-          'top',
-          'bottom',
-          'left',
-          'right',
-        ]}
-      >
-        <View
-          style={
-            styles.centerContent
-          }
-        >
-          <ActivityIndicator
-            size="large"
-            color="#0EA5A4"
-          />
-
-          <Text
-            style={
-              styles.loadingText
-            }
-          >
-            Opening invitation…
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!groupId) {
-    return (
-      <SafeAreaView
-        style={styles.safeArea}
-        edges={[
-          'top',
-          'bottom',
-          'left',
-          'right',
-        ]}
-      >
-        <View
-          style={
-            styles.centerContent
-          }
-        >
-          <Text style={styles.icon}>
-            ✉
-          </Text>
-
-          <Text style={styles.title}>
-            Invitation unavailable
-          </Text>
-
-          <Text
-            style={
-              styles.subtitle
-            }
-          >
-            This invitation could not
-            be linked to your FairShare
-            account. Make sure you are
-            using the email address that
-            received the invitation.
-          </Text>
-
-          <Pressable
-            style={styles.button}
-            onPress={() =>
-              navigation.reset({
-                index: 0,
-                routes: [
-                  {
-                    name: 'Home',
-                  },
-                ],
-              })
-            }
-          >
-            <Text
-              style={
-                styles.buttonText
-              }
-            >
-              Go to FairShare
-            </Text>
-          </Pressable>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#0EA5A4" />
+          <Text style={styles.loadingText}>Preparing invitation…</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-      edges={[
-        'top',
-        'bottom',
-        'left',
-        'right',
-      ]}
-    >
-      <View
-        style={styles.container}
-      >
-        <View style={styles.card}>
-          <Text style={styles.eyebrow}>
-            GROUP INVITATION
-          </Text>
-
-          <Text style={styles.title}>
-            Join{' '}
-            {groupName ||
-              'this group'}
-          </Text>
-
-          <Text
-            style={
-              styles.subtitle
-            }
-          >
-            Finish setting up your
-            FairShare account to join
-            the group.
-          </Text>
-
-          <Text
-            style={
-              styles.emailLabel
-            }
-          >
-            Invited email
-          </Text>
-
-          <View
-            style={
-              styles.emailBox
-            }
-          >
-            <Text
-              style={
-                styles.emailText
-              }
-              numberOfLines={1}
-            >
-              {email}
-            </Text>
-          </View>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Full name"
-            placeholderTextColor="#64748B"
-            value={fullName}
-            onChangeText={setFullName}
-          />
-
-          <PasswordInput
-            placeholder="Create password"
-            value={password}
-            onChangeText={setPassword}
-          />
-
-          <PasswordInput
-            placeholder="Confirm password"
-            value={confirmPassword}
-            onChangeText={
-              setConfirmPassword
-            }
-          />
-
-          <Pressable
-            style={[
-              styles.button,
-              saving &&
-                styles.disabled,
-            ]}
-            onPress={
-              acceptInvitation
-            }
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator
-                color="#FFFFFF"
-              />
-            ) : (
-              <Text
-                style={
-                  styles.buttonText
-                }
-              >
-                Join Group
-              </Text>
-            )}
-          </Pressable>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+      <View style={styles.container}>
+        <View style={styles.icon}>
+          <Ionicons name="people-outline" size={28} color="#0EA5A4" />
         </View>
+        <Text style={styles.title}>Join {groupName}</Text>
+        <Text style={styles.subtitle}>Complete your profile to join this FairShare group.</Text>
+        <Text style={styles.label}>Full name</Text>
+        <TextInput value={fullName} onChangeText={setFullName} placeholder="Your name" placeholderTextColor="#64748B" style={styles.input} autoCapitalize="words" />
+        <Text style={styles.label}>Password</Text>
+        <TextInput value={password} onChangeText={setPassword} placeholder="Set a password (optional if already set)" placeholderTextColor="#64748B" style={styles.input} secureTextEntry />
+        <Pressable style={[styles.button, saving && styles.disabled]} onPress={continueInvitation} disabled={saving}>
+          {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Join Group</Text>}
+        </Pressable>
+        <Pressable style={styles.cancel} onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}>
+          <Text style={styles.cancelText}>Not now</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-  },
-
-  container: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-
-  centerContent: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 28,
-  },
-
-  card: {
-    backgroundColor: '#1E293B',
-    borderRadius: 26,
-    padding: 24,
-  },
-
-  eyebrow: {
-    color: '#0EA5A4',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    marginBottom: 10,
-  },
-
-  icon: {
-    fontSize: 42,
-    color: '#0EA5A4',
-    marginBottom: 16,
-  },
-
-  title: {
-    color: '#FFFFFF',
-    fontSize: 29,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-
-  subtitle: {
-    color: '#94A3B8',
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 9,
-    marginBottom: 22,
-    textAlign: 'center',
-  },
-
-  emailLabel: {
-    color: '#CBD5E1',
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-
-  emailBox: {
-    backgroundColor: '#0F172A',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-    marginBottom: 16,
-  },
-
-  emailText: {
-    color: '#94A3B8',
-    fontSize: 14,
-  },
-
-  input: {
-    backgroundColor: '#0F172A',
-    color: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-
-  button: {
-    backgroundColor: '#0EA5A4',
-    minHeight: 54,
-    borderRadius: 15,
-    marginTop: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  disabled: {
-    opacity: 0.7,
-  },
-
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
-  loadingText: {
-    color: '#94A3B8',
-    marginTop: 14,
-    fontSize: 14,
-  },
+  safeArea: { flex: 1, backgroundColor: '#0F172A' },
+  container: { flex: 1, padding: 24, justifyContent: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: 58, height: 58, borderRadius: 18, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 18 },
+  title: { color: '#FFFFFF', textAlign: 'center', fontSize: 29, fontWeight: '900' },
+  subtitle: { color: '#94A3B8', textAlign: 'center', lineHeight: 21, marginTop: 8, marginBottom: 26 },
+  label: { color: '#CBD5E1', fontWeight: '800', marginBottom: 8 },
+  input: { backgroundColor: '#1E293B', color: '#FFFFFF', borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14, marginBottom: 16 },
+  button: { backgroundColor: '#0EA5A4', borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 4 },
+  buttonText: { color: '#FFFFFF', fontWeight: '900' },
+  disabled: { opacity: 0.6 },
+  cancel: { alignItems: 'center', paddingVertical: 16 },
+  cancelText: { color: '#94A3B8', fontWeight: '700' },
+  loadingText: { color: '#94A3B8', marginTop: 12 },
 });

@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase';
+import { apiRequest } from './apiClient';
 
 export type GroupBalance = {
   user_id: string;
@@ -10,10 +10,11 @@ export type GroupBalance = {
   net_balance: number | string;
 };
 
-export async function getGroupBalances(
-  groupId: string
-) {
-  return await supabase.rpc('get_group_balances', {
-    p_group_id: groupId,
-  });
+export async function getGroupBalances(groupId: string) {
+  try {
+    const data = await apiRequest<GroupBalance[]>(`/groups/${groupId}/balances`);
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error };
+  }
 }

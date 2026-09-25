@@ -1,9 +1,7 @@
-import { supabase } from '../config/supabase';
-import {
-  CalculatedSplit,
-  SplitInput,
-  SplitType,
-} from '../utils/expenseCalculation';
+import { apiRequest } from './apiClient';
+import { invalidateGroupOverview, clearGroupOverviewCache } from './groupService';
+import { ExpenseCategory } from '../constants/expenseCategories';
+import { CalculatedSplit, SplitInput, SplitType } from '../utils/expenseCalculation';
 
 export type CreateExpenseInput = {
   groupId: string;
@@ -11,6 +9,7 @@ export type CreateExpenseInput = {
   amount: number;
   paidBy: string;
   splitType: SplitType;
+  category: ExpenseCategory;
   splits: SplitInput[];
 };
 
@@ -20,11 +19,10 @@ export type CreateEqualExpenseInput = {
   amount: number;
   paidBy: string;
   participantIds: string[];
+  category?: ExpenseCategory;
 };
 
-export type UpdateExpenseInput = CreateExpenseInput & {
-  expenseId: string;
-};
+export type UpdateExpenseInput = CreateExpenseInput & { expenseId: string };
 
 export type ExpenseDetailsRecord = {
   id: string;
@@ -32,6 +30,7 @@ export type ExpenseDetailsRecord = {
   title: string;
   amount: number | string;
   split_type: SplitType;
+  category: ExpenseCategory;
   paid_by: string;
   created_at: string;
 };
@@ -44,115 +43,141 @@ export type ExpenseSplitRecord = {
   created_at: string;
 };
 
-export async function createExpense(input: CreateExpenseInput) {
-  const { data, error } = await supabase.rpc('create_expense_with_splits', {
-    p_group_id: input.groupId,
-    p_title: input.title.trim(),
-    p_amount: Number(input.amount.toFixed(2)),
-    p_paid_by: input.paidBy,
-    p_split_type: input.splitType,
-    p_splits: input.splits.map((split) => ({
-      user_id: split.userId,
-      value: split.value,
-    })),
-  });
+type ExpenseDetailsPayload = {
+  expense: ExpenseDetailsRecord;
+  splits: ExpenseSplitRecord[];
+};
 
-  return { data, error };
+const EXPENSE_DETAILS_CACHE_TTL_MS = 120_000;
+const expenseDetailsCache = new Map<string, { data: ExpenseDetailsPayload; cachedAt: number }>();
+const expenseDetailsRequests = new Map<string, Promise<{ data: ExpenseDetailsPayload | null; error: any }>>();
+
+export function invalidateExpenseDetails(expenseId: string) {
+  expenseDetailsCache.delete(expenseId);
 }
 
-/**
- * Compatibility wrapper for older callers.
- */
-export async function createEqualExpense(
-  input: CreateEqualExpenseInput
-) {
+export function clearExpenseDetailsCache() {
+  expenseDetailsCache.clear();
+  expenseDetailsRequests.clear();
+}
+
+export async function createExpense(input: CreateExpenseInput) {
+  try {
+    const data = await apiRequest<ExpenseDetailsRecord>(`/groups/${input.groupId}/expenses`, {
+      method: 'POST',
+      body: {
+        title: input.title.trim(),
+        amount: Number(input.amount.toFixed(2)),
+        paid_by: input.paidBy,
+        split_type: input.splitType,
+        category: input.category,
+        splits: input.splits.map((split) => ({ user_id: split.userId, value: split.value })),
+      },
+    });
+    invalidateGroupOverview(input.groupId);
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error };
+  }
+}
+
+export async function createEqualExpense(input: CreateEqualExpenseInput) {
   return createExpense({
     groupId: input.groupId,
     title: input.title,
     amount: input.amount,
     paidBy: input.paidBy,
     splitType: 'Equal',
-    splits: input.participantIds.map((userId) => ({
-      userId,
-      value: 1,
-    })),
+    category: input.category || 'Other',
+    splits: input.participantIds.map((userId) => ({ userId, value: 1 })),
   });
 }
 
-export async function getExpenseDetails(expenseId: string) {
+export async function getExpenseDetails(expenseId: string, force = false, signal?: AbortSignal) {
   if (!expenseId) {
-    return {
-      data: null,
-      error: new Error('Expense information is missing.'),
-    };
+    return { data: null, error: new Error('Expense information is missing.') };
   }
 
-  const [expenseResult, splitResult] = await Promise.all([
-    supabase
-      .from('expenses')
-      .select('id,group_id,title,amount,split_type,paid_by,created_at')
-      .eq('id', expenseId)
-      .maybeSingle(),
-    supabase
-      .from('expense_splits')
-      .select('id,expense_id,user_id,amount,created_at')
-      .eq('expense_id', expenseId)
-      .order('created_at', { ascending: true }),
-  ]);
-
-  if (expenseResult.error) {
-    return { data: null, error: expenseResult.error };
+  const cached = expenseDetailsCache.get(expenseId);
+  if (!force && cached && Date.now() - cached.cachedAt < EXPENSE_DETAILS_CACHE_TTL_MS) {
+    return { data: cached.data, error: null };
   }
 
-  if (!expenseResult.data) {
-    return {
-      data: null,
-      error: new Error('Expense not found.'),
-    };
+  if (!force && !signal) {
+    const inFlight = expenseDetailsRequests.get(expenseId);
+    if (inFlight) return inFlight;
   }
 
-  if (splitResult.error) {
-    return { data: null, error: splitResult.error };
-  }
+  const request = (async () => {
+    try {
+      const data = await apiRequest<ExpenseDetailsPayload>(`/expenses/${expenseId}`, { signal });
+      expenseDetailsCache.set(expenseId, { data, cachedAt: Date.now() });
+      return { data, error: null };
+    } catch (error: any) {
+      return { data: null, error };
+    }
+  })();
 
-  return {
-    data: {
-      expense: expenseResult.data as ExpenseDetailsRecord,
-      splits: (splitResult.data || []) as ExpenseSplitRecord[],
-    },
-    error: null,
-  };
+  if (!force && !signal) expenseDetailsRequests.set(expenseId, request);
+  try {
+    return await request;
+  } finally {
+    if (expenseDetailsRequests.get(expenseId) === request) expenseDetailsRequests.delete(expenseId);
+  }
 }
 
 export async function updateExpense(input: UpdateExpenseInput) {
-  const { data, error } = await supabase.rpc('update_expense_with_splits', {
-    p_expense_id: input.expenseId,
-    p_title: input.title.trim(),
-    p_amount: Number(input.amount.toFixed(2)),
-    p_paid_by: input.paidBy,
-    p_split_type: input.splitType,
-    p_splits: input.splits.map((split) => ({
-      user_id: split.userId,
-      value: split.value,
-    })),
-  });
-
-  return { data, error };
+  try {
+    const data = await apiRequest<ExpenseDetailsRecord>(`/expenses/${input.expenseId}`, {
+      method: 'PUT',
+      body: {
+        title: input.title.trim(),
+        amount: Number(input.amount.toFixed(2)),
+        paid_by: input.paidBy,
+        split_type: input.splitType,
+        category: input.category,
+        splits: input.splits.map((split) => ({ user_id: split.userId, value: split.value })),
+      },
+    });
+    invalidateExpenseDetails(input.expenseId);
+    invalidateGroupOverview(input.groupId);
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error };
+  }
 }
 
 export async function deleteExpense(expenseId: string) {
-  const { data, error } = await supabase.rpc('delete_expense', {
-    p_expense_id: expenseId,
-  });
-
-  return { data, error };
+  try {
+    await apiRequest<void>(`/expenses/${expenseId}`, { method: 'DELETE' });
+    invalidateExpenseDetails(expenseId);
+    clearGroupOverviewCache();
+    return { data: expenseId, error: null };
+  } catch (error: any) {
+    return { data: null, error };
+  }
 }
 
-export function mapCalculatedSplitsToInputs(
-  shares: CalculatedSplit[]
-): SplitInput[] {
-  return shares.map((share) => ({
-    userId: share.userId,
-    value: share.value,
-  }));
+export async function getGroupExpenses(
+  groupId: string,
+  limit?: number,
+  category?: ExpenseCategory | 'All',
+  scope: 'all' | 'mine' = 'all',
+  signal?: AbortSignal,
+) {
+  try {
+    const params = new URLSearchParams();
+    if (limit) params.set('limit', String(limit));
+    if (category && category !== 'All') params.set('category', category);
+    if (scope !== 'all') params.set('scope', scope);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const data = await apiRequest<ExpenseDetailsRecord[]>(`/groups/${groupId}/expenses${query}`, { signal });
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error };
+  }
+}
+
+export function mapCalculatedSplitsToInputs(shares: CalculatedSplit[]): SplitInput[] {
+  return shares.map((share) => ({ userId: share.userId, value: share.value }));
 }

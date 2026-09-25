@@ -2,6 +2,20 @@
   "expo": {
     "name": "FairShare",
     "slug": "fairshare",
-    "scheme": "fairshare"
+    "scheme": "fairshare",
+    "plugins": [
+      "@react-native-community/datetimepicker"
+    ],
+    "android": {
+      "package": "com.fairshare.app"
+    },
+    "ios": {
+      "bundleIdentifier": "com.fairshare.app"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "1b109ade-6676-4e46-bf75-58424c6e1b4a"
+      }
+    }
   }
 }

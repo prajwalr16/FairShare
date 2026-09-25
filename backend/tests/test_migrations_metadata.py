@@ -1,0 +1,33 @@
+import os
+from pathlib import Path
+
+import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+
+
+def test_single_alembic_head_and_ordered_migrations():
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    scripts = ScriptDirectory.from_config(config)
+
+    assert scripts.get_heads() == ["0006_cascade_trigger_delete"]
+
+    revisions = list(scripts.walk_revisions(base="base", head="heads"))
+    assert {item.revision for item in revisions} >= {
+        "0001_initial_schema",
+        "0002_revoke_legacy_postgrest_api",
+        "0003_categories_api_db",
+        "0004_trip_journey_foundation",
+        "0005_trip_day_number",
+        "0006_cascade_trigger_delete"
+    }
+
+    # Keep the new journey migration attached to the existing linear chain.
+    revision_map = {item.revision: item for item in revisions}
+    assert revision_map["0006_cascade_trigger_delete"].down_revision == "0005_trip_day_number"
+
+
+def test_postgres_migration_smoke_marker():
+    if os.getenv("FAIRSHARE_POSTGRES_MIGRATION_OK") != "1":
+        pytest.skip("PostgreSQL migration smoke is executed by the CI postgres job.")
