@@ -12,6 +12,7 @@ import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 import AcceptInviteScreen from '../screens/auth/AcceptInviteScreen';
 import HomeScreen from '../screens/home/HomeScreen';
+import ProfileScreen from '../screens/account/ProfileScreen';
 import GroupDetailsScreen from '../screens/group/GroupDetailsScreen';
 import GroupSettingsScreen from '../screens/group/GroupSettingsScreen';
 import HistoryScreen from '../screens/group/HistoryScreen';
@@ -30,6 +31,7 @@ type RootStackParamList = {
   ResetPassword: undefined;
   AcceptInvite: undefined;
   Home: undefined;
+  Profile: undefined;
   GroupDetails: { groupId?: string; groupName?: string; initialTab?: string } | undefined;
   TripDetails: { groupId?: string; groupName?: string } | undefined;
   TripMap: { groupId?: string; groupName?: string; dayNumber?: number | null } | undefined;
@@ -55,6 +57,7 @@ const linking = {
       ResetPassword: 'reset-password',
       AcceptInvite: 'accept-invite',
       Home: 'home',
+      Profile: 'profile',
       GroupDetails: 'group-details',
       TripDetails: 'trip-details',
       TripMap: 'trip-map',
@@ -157,6 +160,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
         <Stack.Screen name="AcceptInvite" component={AcceptInviteScreen} />
         <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="GroupDetails" component={GroupDetailsScreen} />
         <Stack.Screen name="TripDetails" component={TripDetailsScreen} />
         <Stack.Screen name="TripMap" component={TripMapScreen} />

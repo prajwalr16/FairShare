@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
@@ -127,18 +128,27 @@ export default function HomeScreen() {
       >
         <View style={styles.container}>
           <View style={styles.header}>
-            <View>
+            <View style={styles.headerCopy}>
               <Text style={styles.eyebrow}>FairShare</Text>
               <Text style={styles.title}>Your Groups</Text>
               <Text style={styles.subtitle}>Split expenses. Share memories.</Text>
             </View>
-            <Pressable
-              style={styles.headerIcon}
-              onPress={() => void handleRefresh()}
-              hitSlop={8}
-            >
-              <Ionicons name="refresh-outline" size={20} color="#CBD5E1" />
-            </Pressable>
+            <View style={styles.headerActions}>
+              <Pressable
+                style={styles.headerIcon}
+                onPress={() => navigation.navigate('Profile')}
+                hitSlop={8}
+              >
+                <Ionicons name="person-circle-outline" size={22} color="#CBD5E1" />
+              </Pressable>
+              <Pressable
+                style={styles.headerIcon}
+                onPress={() => void handleRefresh()}
+                hitSlop={8}
+              >
+                <Ionicons name="refresh-outline" size={20} color="#CBD5E1" />
+              </Pressable>
+            </View>
           </View>
 
           <FlatList
@@ -274,15 +284,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
-  eyebrow: {
-    color: '#0EA5A4',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
+  headerCopy: { flex: 1, minWidth: 0 },
+  eyebrow: { color: '#0EA5A4', fontSize: 12, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   title: { color: '#FFFFFF', fontSize: 28, fontWeight: '900', marginTop: 4 },
   subtitle: { color: '#64748B', fontSize: 12, marginTop: 5 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 10 },
   headerIcon: {
     width: 40,
     height: 40,
@@ -295,55 +301,20 @@ const styles = StyleSheet.create({
   },
   filterList: { flexGrow: 0, height: 48, marginBottom: 8 },
   filterContent: { alignItems: 'center', paddingRight: 4 },
-  filterChip: {
-    minHeight: 38,
-    paddingLeft: 11,
-    paddingRight: 8,
-    borderRadius: 12,
-    backgroundColor: '#1E293B',
-    borderWidth: 1,
-    borderColor: '#263247',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 8,
-    gap: 6,
-  },
+  filterChip: { minHeight: 38, paddingLeft: 11, paddingRight: 8, borderRadius: 12, backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#263247', flexDirection: 'row', alignItems: 'center', marginRight: 8, gap: 6 },
   filterChipActive: { backgroundColor: '#0EA5A4', borderColor: '#0EA5A4' },
   filterText: { color: '#94A3B8', fontSize: 11, fontWeight: '800' },
   filterTextActive: { color: '#FFFFFF' },
-  countBadge: {
-    minWidth: 21,
-    height: 21,
-    borderRadius: 10,
-    backgroundColor: '#0F172A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
+  countBadge: { minWidth: 21, height: 21, borderRadius: 10, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   countBadgeActive: { backgroundColor: 'rgba(255,255,255,0.18)' },
   countText: { color: '#64748B', fontSize: 9, fontWeight: '900' },
   countTextActive: { color: '#FFFFFF' },
-  sectionHeader: {
-    paddingTop: 4,
-    paddingBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+  sectionHeader: { paddingTop: 4, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '900' },
   sectionSubtitle: { color: '#64748B', fontSize: 11, marginTop: 3 },
   listContent: { paddingTop: 1 },
   emptyState: { alignItems: 'center', marginTop: 90, paddingHorizontal: 24 },
-  emptyIcon: {
-    width: 66,
-    height: 66,
-    borderRadius: 21,
-    backgroundColor: '#1E293B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#263247',
-  },
+  emptyIcon: { width: 66, height: 66, borderRadius: 21, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#263247' },
   emptyTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginTop: 14 },
   emptySubtitle: { color: '#94A3B8', textAlign: 'center', marginTop: 7, lineHeight: 20, fontSize: 12 },
   activityDots: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
@@ -351,19 +322,5 @@ const styles = StyleSheet.create({
   dotOne: { opacity: 0.4 },
   dotTwo: { opacity: 0.7 },
   dotThree: { opacity: 1 },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#0EA5A4',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 12,
-    shadowColor: '#000000',
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-  },
+  fab: { position: 'absolute', right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: '#0EA5A4', justifyContent: 'center', alignItems: 'center', elevation: 12, shadowColor: '#000000', shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
 });
