@@ -3,6 +3,9 @@
     "name": "FairShare",
     "slug": "fairshare",
     "scheme": "fairshare",
+    "web": {
+      "output": "single"
+    },
     "plugins": [
       "@react-native-community/datetimepicker"
     ],

@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -77,6 +78,7 @@ function formatDuration(seconds: number) {
 function buildMapHtml(
   trip: Trip,
   dayNumber: number | null,
+  initialRoute: TripRoute | null = null,
 ) {
   const sourceStops = trip.stops
     .filter(
@@ -107,10 +109,22 @@ function buildMapHtml(
     display_sequence: index + 1,
   }));
 
-  // Only the selected stop scope is part of the HTML. Route responses are
-  // injected into this already-mounted MapLibre instance so the camera does
-  // not jump when asynchronous routing completes.
-  const payload = JSON.stringify({stops}).replace(/</g, '\u003c');
+  // Only the selected stop scope is part of the HTML. On native platforms,
+  // later route responses are injected into this already-mounted MapLibre
+  // instance so the camera does not jump. On web, the current route is
+  // included in the iframe HTML because there is no native WebView injection.
+  const payload = JSON.stringify({stops})
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+
+  const initialRoutePayload = JSON.stringify({
+    legs: initialRoute?.legs || [],
+    snapped_stops: initialRoute?.snapped_stops || [],
+  })
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
 
   return `<!doctype html>
 <html>
@@ -150,8 +164,12 @@ import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-
 
 const payload = ${payload};
 const points = payload.stops || [];
+const initialRoute = ${initialRoutePayload};
 let mapReady = false;
-let pendingRoute = null;
+let pendingRoute =
+  initialRoute && (initialRoute.legs || []).length
+    ? initialRoute
+    : null;
 
 const map = new maplibregl.Map({
   container:'map',
@@ -575,6 +593,7 @@ export default function TripMapScreen() {
     ? buildMapHtml(
         trip,
         selectedDay,
+        Platform.OS === 'web' ? routeData : null,
       )
     : '<html><body style="background:#0F172A"></body></html>';
 
@@ -808,42 +827,56 @@ export default function TripMapScreen() {
               </View>
 
               <View style={styles.mapCard}>
-                <WebView
-                  ref={mapWebViewRef}
-                  key={`${selectedDay ?? 'all'}`}
-                  originWhitelist={['*']}
-                  source={{
-                    html: mapHtml,
-                    baseUrl:'https://fairshare.local',
-                  }}
-                  javaScriptEnabled
-                  domStorageEnabled
-                  nestedScrollEnabled
-                  startInLoadingState
-                  renderLoading={() => (
-                    <View style={styles.webLoading}>
-                      <ActivityIndicator
-                        size="small"
-                        color="#0EA5A4"
-                      />
-                      <Text style={styles.muted}>
-                        Loading map…
-                      </Text>
-                    </View>
-                  )}
-                  onLoadEnd={() => {
-                    const latestCachedRoute = groupId
-                      ? getCachedTripRoute(
-                          groupId,
-                          selectedDay,
-                        )
-                      : null;
-                    pushRouteDataToMap(
-                      latestCachedRoute,
-                    );
-                  }}
-                  style={styles.map}
-                />
+                {Platform.OS === 'web' ? (
+                  React.createElement('iframe', {
+                    key: `${selectedDay ?? 'all'}-${routeData ? 'routed' : 'empty'}`,
+                    title: 'FairShare trip map',
+                    srcDoc: mapHtml,
+                    style: {
+                      width: '100%',
+                      height: '100%',
+                      border: '0',
+                      display: 'block',
+                    },
+                  })
+                ) : (
+                  <WebView
+                    ref={mapWebViewRef}
+                    key={`${selectedDay ?? 'all'}`}
+                    originWhitelist={['*']}
+                    source={{
+                      html: mapHtml,
+                      baseUrl:'https://fairshare.local',
+                    }}
+                    javaScriptEnabled
+                    domStorageEnabled
+                    nestedScrollEnabled
+                    startInLoadingState
+                    renderLoading={() => (
+                      <View style={styles.webLoading}>
+                        <ActivityIndicator
+                          size="small"
+                          color="#0EA5A4"
+                        />
+                        <Text style={styles.muted}>
+                          Loading map…
+                        </Text>
+                      </View>
+                    )}
+                    onLoadEnd={() => {
+                      const latestCachedRoute = groupId
+                        ? getCachedTripRoute(
+                            groupId,
+                            selectedDay,
+                          )
+                        : null;
+                      pushRouteDataToMap(
+                        latestCachedRoute,
+                      );
+                    }}
+                    style={styles.map}
+                  />
+                )}
               </View>
 
               <View style={styles.statsRow}>
