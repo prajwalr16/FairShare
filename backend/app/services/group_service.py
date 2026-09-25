@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import exists, select, text
 from sqlalchemy.orm import Session
 
+from ..core.security import set_database_user_context
 from ..models import Group, GroupMember, User
 from ..repositories.group_repository import list_groups_for_user
 from .balance_service import compute_balances, compute_group_overview_financial, money, simplify_balances
@@ -298,4 +299,13 @@ def leave_group(session: Session, group_id: UUID, user_id: UUID) -> None:
 
 
 def delete_group(session: Session, group_id: UUID, user_id: UUID) -> None:
-    group, role = get_group_and_role(session, group_id, user_id); require_permission(role, "delete_group", "Only the group owner can delete the group."); session.delete(group); session.commit()
+    group, role = get_group_and_role(session, group_id, user_id)
+    require_permission(role, "delete_group", "Only the group owner can delete the group.")
+
+    # Group deletion cascades into expenses and settlements at the database
+    # level. Refresh the authenticated DB context on the actual service session
+    # immediately before the cascade so the viewer-write protection trigger
+    # sees the same owner identity that passed the API permission check.
+    set_database_user_context(session, user_id)
+    session.delete(group)
+    session.commit()

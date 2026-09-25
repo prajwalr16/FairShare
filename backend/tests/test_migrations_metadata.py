@@ -11,7 +11,7 @@ def test_single_alembic_head_and_ordered_migrations():
     config = Config(str(root / "alembic.ini"))
     scripts = ScriptDirectory.from_config(config)
 
-    assert scripts.get_heads() == ["0005_trip_day_number"]
+    assert scripts.get_heads() == ["0006_cascade_trigger_delete"]
 
     revisions = list(scripts.walk_revisions(base="base", head="heads"))
     assert {item.revision for item in revisions} >= {
@@ -20,11 +20,12 @@ def test_single_alembic_head_and_ordered_migrations():
         "0003_categories_api_db",
         "0004_trip_journey_foundation",
         "0005_trip_day_number",
+        "0006_cascade_trigger_delete"
     }
 
     # Keep the new journey migration attached to the existing linear chain.
     revision_map = {item.revision: item for item in revisions}
-    assert revision_map["0005_trip_day_number"].down_revision == "0004_trip_journey_foundation"
+    assert revision_map["0006_cascade_trigger_delete"].down_revision == "0005_trip_day_number"
 
 
 def test_postgres_migration_smoke_marker():
