@@ -50,6 +50,13 @@ function isAbortError(error: any) {
   return error?.name === 'AbortError';
 }
 
+function isTripNotConfiguredError(error: any) {
+  return (
+    error?.status === 404
+    && error?.message === 'Trip is not configured for this group.'
+  );
+}
+
 function parseDate(value: string | null | undefined) {
   if (!value) return new Date();
   const [year, month, day] = value.split('-').map(Number);
@@ -256,8 +263,29 @@ export default function TripDetailsScreen() {
     }
     const result = await getTrip(groupId, Boolean(cached));
     if (isAbortError(result.error)) return;
+
+    // A missing Trip row is a normal state for a Trip group that has not
+    // configured Journey yet. Keep the setup form available instead of
+    // showing an error alert. Other API errors remain visible to the user.
     if (result.error) {
-      if (!cached) Alert.alert('Unable to load journey', result.error.message);
+      // A 404 with this exact API message means the Trip row does not exist
+      // yet. That is the expected first-run Journey setup state, not a
+      // failed request. Only this known state is converted into the setup
+      // form; every other API error remains visible to the user.
+      if (isTripNotConfiguredError(result.error)) {
+        setTrip(null);
+        setStartDate('');
+        setEndDate('');
+        setTimezone(defaultTimezone());
+        setNotes('');
+        setLoading(false);
+        return;
+      }
+
+      setLoading(false);
+      if (!cached) {
+        Alert.alert('Unable to load journey', result.error.message);
+      }
       return;
     }
     if (result.data) {
