@@ -1,6 +1,9 @@
+
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
+from math import atan2, cos, radians, sin, sqrt
 from typing import Any
 from uuid import UUID
 
@@ -13,12 +16,22 @@ from ..core.config import get_settings
 from ..models import TripStop
 from .trip_service import _get_trip, _require_trip_access
 
+
 ROUTE_CACHE_MAX = 128
+PAIR_CACHE_MAX = 256
 ROUTE_TIMEOUT_SECONDS = 8.0
+MAX_PARALLEL_LEGS = 4
+ENDPOINT_VALIDATION_METERS = 2_000.0
+SNAP_CONNECTOR_METERS = 20.0
 
 
-def _cache_key(coordinates: list[tuple[float, float]]) -> tuple[tuple[float, float], ...]:
-    return tuple((round(lat, 6), round(lon, 6)) for lat, lon in coordinates)
+def _cache_key(
+    coordinates: list[tuple[float, float]],
+) -> tuple[tuple[float, float], ...]:
+    return tuple(
+        (round(lat, 6), round(lon, 6))
+        for lat, lon in coordinates
+    )
 
 
 def _same_point(
@@ -47,38 +60,65 @@ def _with_endpoints(
     end: dict[str, float],
 ) -> list[dict[str, float]]:
     result = [dict(point) for point in points]
+
     if not result:
         return [dict(start), dict(end)]
+
     if not _same_point(result[0], start):
         result.insert(0, dict(start))
+
     if not _same_point(result[-1], end):
         result.append(dict(end))
+
     return result
 
 
-def _parse_line_string(geometry: Any) -> list[dict[str, float]]:
-    coordinates = geometry.get("coordinates") if isinstance(geometry, dict) else None
+def _parse_line_string(
+    geometry: Any,
+) -> list[dict[str, float]]:
+    coordinates = (
+        geometry.get("coordinates")
+        if isinstance(geometry, dict)
+        else None
+    )
+
     if not isinstance(coordinates, list):
         return []
 
     parsed: list[dict[str, float]] = []
+
     for pair in coordinates:
-        if not isinstance(pair, list) or len(pair) < 2:
+        if (
+            not isinstance(pair, list)
+            or len(pair) < 2
+        ):
             continue
+
         try:
-            point = {"latitude": float(pair[1]), "longitude": float(pair[0])}
+            point = {
+                "latitude": float(pair[1]),
+                "longitude": float(pair[0]),
+            }
         except (TypeError, ValueError):
             continue
-        _append_points(parsed, [point])
+
+        _append_points(
+            parsed,
+            [point],
+        )
+
     return parsed
 
 
-def _parse_leg_geometries(geometry: Any) -> list[list[dict[str, float]]]:
+def _parse_leg_geometries(
+    geometry: Any,
+) -> list[list[dict[str, float]]]:
     """
-    Parse OSRM overview=by_legs GeoJSON.
+    Backward-compatible parser for older by-legs responses.
 
-    Depending on the server version, the geometry may be a MultiLineString,
-    a collection-like list of LineStrings, or a plain LineString fallback.
+    The new route implementation does not split a multi-stop overview.
+    This helper remains available for the existing regression tests and
+    future provider adapters.
     """
     if not isinstance(geometry, dict):
         return []
@@ -86,144 +126,140 @@ def _parse_leg_geometries(geometry: Any) -> list[list[dict[str, float]]]:
     geometry_type = geometry.get("type")
     coordinates = geometry.get("coordinates")
 
-    if geometry_type == "MultiLineString" and isinstance(coordinates, list):
-        result: list[list[dict[str, float]]] = []
-        for line in coordinates:
-            if not isinstance(line, list):
-                result.append([])
-                continue
-            result.append(_parse_line_string({"coordinates": line}))
-        return result
+    if (
+        geometry_type == "MultiLineString"
+        and isinstance(coordinates, list)
+    ):
+        return [
+            _parse_line_string(
+                {"coordinates": line}
+            )
+            for line in coordinates
+            if isinstance(line, list)
+        ]
 
     if geometry_type == "LineString":
-        points = _parse_line_string(geometry)
+        points = _parse_line_string(
+            geometry
+        )
         return [points] if points else []
 
     if geometry_type == "GeometryCollection":
-        result = []
-        for child in geometry.get("geometries") or []:
-            result.extend(_parse_leg_geometries(child))
+        result: list[list[dict[str, float]]] = []
+
+        for child in (
+            geometry.get("geometries") or []
+        ):
+            result.extend(
+                _parse_leg_geometries(
+                    child
+                )
+            )
+
         return result
 
-    if isinstance(coordinates, list) and coordinates:
-        if all(
+    if (
+        isinstance(coordinates, list)
+        and coordinates
+        and all(
             isinstance(item, list)
             and item
             and isinstance(item[0], list)
             for item in coordinates
-        ):
-            return [
-                _parse_line_string({"coordinates": line})
-                for line in coordinates
-                if isinstance(line, list)
-            ]
+        )
+    ):
+        return [
+            _parse_line_string(
+                {"coordinates": line}
+            )
+            for line in coordinates
+            if isinstance(line, list)
+        ]
 
     return []
 
 
-def _snap_points(payload: dict[str, Any]) -> list[dict[str, float] | None]:
-    points: list[dict[str, float] | None] = []
-    for waypoint in payload.get("waypoints") or []:
-        location = waypoint.get("location") if isinstance(waypoint, dict) else None
-        if not isinstance(location, list) or len(location) < 2:
-            points.append(None)
-            continue
-        try:
-            points.append({"latitude": float(location[1]), "longitude": float(location[0])})
-        except (TypeError, ValueError):
-            points.append(None)
-    return points
+def _snap_points(
+    payload: dict[str, Any],
+) -> list[dict[str, float] | None]:
+    result: list[dict[str, float] | None] = []
 
-
-def _nearest_geometry_index(
-    geometry: list[dict[str, float]],
-    target: dict[str, float],
-    start_index: int,
-) -> int:
-    if not geometry:
-        return start_index
-
-    best_index = min(max(start_index, 0), len(geometry) - 1)
-    best_distance = float("inf")
-
-    for index in range(best_index, len(geometry)):
-        point = geometry[index]
-        distance = (
-            (point["latitude"] - target["latitude"]) ** 2
-            + (point["longitude"] - target["longitude"]) ** 2
+    for waypoint in (
+        payload.get("waypoints") or []
+    ):
+        location = (
+            waypoint.get("location")
+            if isinstance(waypoint, dict)
+            else None
         )
-        if distance < best_distance:
-            best_distance = distance
-            best_index = index
 
-    return best_index
+        if (
+            not isinstance(location, list)
+            or len(location) < 2
+        ):
+            result.append(None)
+            continue
+
+        try:
+            result.append(
+                {
+                    "latitude": float(location[1]),
+                    "longitude": float(location[0]),
+                }
+            )
+        except (TypeError, ValueError):
+            result.append(None)
+
+    return result
 
 
-def _build_leg_geometries(
-    geometry: list[dict[str, float]],
-    waypoint_points: list[dict[str, float]],
-    input_points: list[dict[str, float]],
-) -> list[list[dict[str, float]]]:
-    """
-    Split a continuous ordered route geometry into N-1 consecutive legs.
+def _haversine_meters(
+    left: dict[str, float],
+    right: dict[str, float],
+) -> float:
+    earth_radius = 6_371_000.0
 
-    This helper is intentionally retained because the parser test suite and
-    older provider responses still rely on it.
-    """
-    if len(input_points) < 2 or len(geometry) < 2:
-        return []
+    lat1 = radians(left["latitude"])
+    lon1 = radians(left["longitude"])
+    lat2 = radians(right["latitude"])
+    lon2 = radians(right["longitude"])
 
-    boundaries = (
-        waypoint_points
-        if len(waypoint_points) == len(input_points)
-        else input_points
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+
+    a = (
+        sin(dlat / 2) ** 2
+        + cos(lat1)
+        * cos(lat2)
+        * sin(dlon / 2) ** 2
     )
 
-    indices = [0]
-    search_start = 0
-    for target in boundaries[1:-1]:
-        index = _nearest_geometry_index(geometry, target, search_start)
-        indices.append(index)
-        search_start = index
-    indices.append(len(geometry) - 1)
-
-    legs: list[list[dict[str, float]]] = []
-    for leg_index in range(len(input_points) - 1):
-        start_index = indices[leg_index]
-        end_index = max(start_index, indices[leg_index + 1])
-        segment = [
-            dict(point)
-            for point in geometry[start_index : end_index + 1]
-        ]
-        segment = _with_endpoints(
-            segment,
-            boundaries[leg_index],
-            boundaries[leg_index + 1],
-        )
-
-        deduped: list[dict[str, float]] = []
-        for point in segment:
-            if not deduped or not _same_point(deduped[-1], point):
-                deduped.append(point)
-
-        if len(deduped) < 2:
-            deduped = [
-                dict(boundaries[leg_index]),
-                dict(boundaries[leg_index + 1]),
-            ]
-
-        legs.append(deduped)
-
-    return legs
+    return 2 * earth_radius * atan2(
+        sqrt(a),
+        sqrt(max(0.0, 1.0 - a)),
+    )
 
 
-def _combine_leg_geometries(
-    legs: list[dict[str, Any]],
-) -> list[dict[str, float]]:
-    combined: list[dict[str, float]] = []
-    for leg in legs:
-        _append_points(combined, leg.get("points") or [])
-    return combined
+def _empty_pair(
+    start: dict[str, float] | None = None,
+    end: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    return {
+        "points": (
+            [dict(start), dict(end)]
+            if start is not None
+            and end is not None
+            else []
+        ),
+        "distance_meters": 0.0,
+        "duration_seconds": 0.0,
+        "routed": False,
+        "fallback": False,
+        "snapped_start": None,
+        "snapped_end": None,
+        "snap_distance_start_meters": 0.0,
+        "snap_distance_end_meters": 0.0,
+    }
 
 
 def _request_http(
@@ -232,75 +268,507 @@ def _request_http(
     params: dict[str, Any],
 ) -> dict[str, Any] | None:
     try:
-        response = client.get(url, params=params)
+        response = client.get(
+            url,
+            params=params,
+        )
+
         if response.status_code >= 500:
             return None
+
         payload = response.json()
-        return payload if isinstance(payload, dict) else None
-    except (httpx.HTTPError, ValueError):
+
+        return (
+            payload
+            if isinstance(payload, dict)
+            else None
+        )
+    except (
+        httpx.HTTPError,
+        ValueError,
+    ):
         return None
 
 
-@lru_cache(maxsize=ROUTE_CACHE_MAX)
-def _request_pair_route(
-    start: tuple[float, float],
-    end: tuple[float, float],
+def _route_candidate(
+    payload: dict[str, Any] | None,
+    requested_start: dict[str, float],
+    requested_end: dict[str, float],
+    fallback: bool,
+    snap_distance_start: float = 0.0,
+    snap_distance_end: float = 0.0,
+) -> dict[str, Any]:
+    if not payload:
+        return _empty_pair()
+
+    if payload.get("code") != "Ok":
+        return _empty_pair()
+
+    routes = payload.get("routes") or []
+
+    if (
+        not routes
+        or not isinstance(routes[0], dict)
+    ):
+        return _empty_pair()
+
+    route = routes[0]
+
+    points = _parse_line_string(
+        route.get("geometry")
+    )
+
+    if len(points) < 2:
+        return _empty_pair()
+
+    snapped = _snap_points(payload)
+
+    snapped_start = (
+        snapped[0]
+        if len(snapped) >= 1
+        and snapped[0] is not None
+        else dict(requested_start)
+    )
+
+    snapped_end = (
+        snapped[1]
+        if len(snapped) >= 2
+        and snapped[1] is not None
+        else dict(requested_end)
+    )
+
+    # Route geometry must begin and end near the routing engine's own
+    # snapped waypoints. This prevents accepting a malformed/partial
+    # geometry that starts in the middle of the road leg.
+    if (
+        _haversine_meters(
+            points[0],
+            snapped_start,
+        ) > ENDPOINT_VALIDATION_METERS
+        or _haversine_meters(
+            points[-1],
+            snapped_end,
+        ) > ENDPOINT_VALIDATION_METERS
+    ):
+        return _empty_pair()
+
+    distance = float(
+        route.get("distance") or 0.0
+    )
+
+    duration = float(
+        route.get("duration") or 0.0
+    )
+
+    # A distinct pair should not silently become a zero-distance routed leg.
+    # Same-coordinate stops are handled explicitly by _request_pair_route.
+    if distance <= 0.0:
+        return _empty_pair()
+
+    return {
+        "points": _with_endpoints(
+            points,
+            snapped_start,
+            snapped_end,
+        ),
+        "distance_meters": distance,
+        "duration_seconds": duration,
+        "routed": True,
+        "fallback": fallback,
+        "snapped_start": snapped_start,
+        "snapped_end": snapped_end,
+        "snap_distance_start_meters": (
+            snap_distance_start
+        ),
+        "snap_distance_end_meters": (
+            snap_distance_end
+        ),
+    }
+
+
+def _request_nearest(
+    coordinate: tuple[float, float],
 ) -> dict[str, Any]:
     settings = get_settings()
-    base_url = settings.routing_base_url.rstrip("/")
-    coordinate_path = (
-        f"{start[1]:.6f},{start[0]:.6f};"
-        f"{end[1]:.6f},{end[0]:.6f}"
+    base_url = (
+        settings.routing_base_url
+        .rstrip("/")
     )
-    url = f"{base_url}/route/v1/driving/{coordinate_path}"
+
+    url = (
+        f"{base_url}/nearest/v1/driving/"
+        f"{coordinate[1]:.6f},"
+        f"{coordinate[0]:.6f}"
+    )
 
     try:
         with httpx.Client(
             timeout=ROUTE_TIMEOUT_SECONDS,
             headers={
-                "User-Agent": f"FairShare/{settings.app_version} route-planner"
+                "User-Agent": (
+                    f"FairShare/"
+                    f"{settings.app_version} "
+                    "route-planner"
+                )
             },
             follow_redirects=True,
         ) as client:
             payload = _request_http(
                 client,
                 url,
-                {
-                    "overview": "full",
-                    "geometries": "geojson",
-                    "steps": "false",
-                    "snapping": "any",
-                    "source": "first",
-                    "destination": "last",
-                },
+                {"number": 1},
             )
     except httpx.HTTPError:
         payload = None
 
-    if not payload or payload.get("code") != "Ok" or not payload.get("routes"):
+    if (
+        not payload
+        or payload.get("code") != "Ok"
+    ):
         return {
-            "points": [],
+            "point": None,
             "distance_meters": 0.0,
-            "duration_seconds": 0.0,
-            "routed": False,
         }
 
-    route = payload["routes"][0]
-    points = _parse_line_string(route.get("geometry"))
-    if len(points) < 2:
+    waypoints = (
+        payload.get("waypoints") or []
+    )
+
+    if (
+        not waypoints
+        or not isinstance(
+            waypoints[0],
+            dict,
+        )
+    ):
         return {
-            "points": [],
+            "point": None,
             "distance_meters": 0.0,
-            "duration_seconds": 0.0,
-            "routed": False,
         }
 
-    return {
-        "points": points,
-        "distance_meters": float(route.get("distance") or 0),
-        "duration_seconds": float(route.get("duration") or 0),
-        "routed": True,
+    location = waypoints[0].get(
+        "location"
+    )
+
+    if (
+        not isinstance(location, list)
+        or len(location) < 2
+    ):
+        return {
+            "point": None,
+            "distance_meters": 0.0,
+        }
+
+    try:
+        return {
+            "point": {
+                "latitude": float(location[1]),
+                "longitude": float(location[0]),
+            },
+            "distance_meters": float(
+                waypoints[0].get(
+                    "distance"
+                ) or 0.0
+            ),
+        }
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return {
+            "point": None,
+            "distance_meters": 0.0,
+        }
+
+
+@lru_cache(maxsize=PAIR_CACHE_MAX)
+def _request_pair_route(
+    start: tuple[float, float],
+    end: tuple[float, float],
+) -> dict[str, Any]:
+    requested_start = {
+        "latitude": start[0],
+        "longitude": start[1],
     }
+
+    requested_end = {
+        "latitude": end[0],
+        "longitude": end[1],
+    }
+
+    # Two identical consecutive stops are valid itinerary entries and should
+    # not be rendered as an artificial "unroutable" road.
+    if _same_point(
+        requested_start,
+        requested_end,
+        tolerance=1e-6,
+    ):
+        return {
+            "points": [
+                dict(requested_start),
+                dict(requested_end),
+            ],
+            "distance_meters": 0.0,
+            "duration_seconds": 0.0,
+            "routed": True,
+            "fallback": False,
+            "snapped_start": dict(requested_start),
+            "snapped_end": dict(requested_end),
+            "snap_distance_start_meters": 0.0,
+            "snap_distance_end_meters": 0.0,
+        }
+
+    settings = get_settings()
+    base_url = (
+        settings.routing_base_url
+        .rstrip("/")
+    )
+
+    coordinate_path = (
+        f"{start[1]:.6f},{start[0]:.6f};"
+        f"{end[1]:.6f},{end[0]:.6f}"
+    )
+
+    route_url = (
+        f"{base_url}/route/v1/"
+        f"driving/{coordinate_path}"
+    )
+
+    route_params = {
+        "overview": "full",
+        "geometries": "geojson",
+        "steps": "false",
+    }
+
+    try:
+        with httpx.Client(
+            timeout=ROUTE_TIMEOUT_SECONDS,
+            headers={
+                "User-Agent": (
+                    f"FairShare/"
+                    f"{settings.app_version} "
+                    "route-planner"
+                )
+            },
+            follow_redirects=True,
+        ) as client:
+            payload = _request_http(
+                client,
+                route_url,
+                route_params,
+            )
+
+            direct = _route_candidate(
+                payload,
+                requested_start,
+                requested_end,
+                fallback=False,
+            )
+
+            if direct["routed"]:
+                return direct
+
+    except httpx.HTTPError:
+        pass
+
+    # Second chance for arbitrary POIs such as lakes, monuments or viewpoints:
+    # snap both endpoints to the nearest drivable road and route the snapped pair.
+    nearest_start = _request_nearest(
+        start
+    )
+    nearest_end = _request_nearest(
+        end
+    )
+
+    snapped_start = (
+        nearest_start["point"]
+        or requested_start
+    )
+
+    snapped_end = (
+        nearest_end["point"]
+        or requested_end
+    )
+
+    # If nearest snapping made no meaningful change and the direct request
+    # already failed, there is no value in repeating exactly the same request.
+    if (
+        _same_point(
+            snapped_start,
+            requested_start,
+            tolerance=1e-7,
+        )
+        and _same_point(
+            snapped_end,
+            requested_end,
+            tolerance=1e-7,
+        )
+    ):
+        return _empty_pair(
+            requested_start,
+            requested_end,
+        )
+
+    snapped_path = (
+        f"{snapped_start['longitude']:.6f},"
+        f"{snapped_start['latitude']:.6f};"
+        f"{snapped_end['longitude']:.6f},"
+        f"{snapped_end['latitude']:.6f}"
+    )
+
+    snapped_url = (
+        f"{base_url}/route/v1/"
+        f"driving/{snapped_path}"
+    )
+
+    try:
+        with httpx.Client(
+            timeout=ROUTE_TIMEOUT_SECONDS,
+            headers={
+                "User-Agent": (
+                    f"FairShare/"
+                    f"{settings.app_version} "
+                    "route-planner"
+                )
+            },
+            follow_redirects=True,
+        ) as client:
+            snapped_payload = _request_http(
+                client,
+                snapped_url,
+                route_params,
+            )
+    except httpx.HTTPError:
+        snapped_payload = None
+
+    recovered = _route_candidate(
+        snapped_payload,
+        snapped_start,
+        snapped_end,
+        fallback=True,
+        snap_distance_start=float(
+            nearest_start[
+                "distance_meters"
+            ]
+        ),
+        snap_distance_end=float(
+            nearest_end[
+                "distance_meters"
+            ]
+        ),
+    )
+
+    if recovered["routed"]:
+        return recovered
+
+    return _empty_pair(
+        requested_start,
+        requested_end,
+    )
+
+
+def _route_pairs_in_parallel(
+    input_points: list[dict[str, float]],
+) -> list[dict[str, Any]]:
+    pair_count = (
+        len(input_points) - 1
+    )
+
+    if pair_count <= 0:
+        return []
+
+    # For one leg, avoid creating a worker thread.
+    if pair_count == 1:
+        return [
+            _request_pair_route(
+                (
+                    input_points[0][
+                        "latitude"
+                    ],
+                    input_points[0][
+                        "longitude"
+                    ],
+                ),
+                (
+                    input_points[1][
+                        "latitude"
+                    ],
+                    input_points[1][
+                        "longitude"
+                    ],
+                ),
+            )
+        ]
+
+    results: list[dict[str, Any] | None] = [
+        None
+    ] * pair_count
+
+    with ThreadPoolExecutor(
+        max_workers=min(
+            MAX_PARALLEL_LEGS,
+            pair_count,
+        )
+    ) as executor:
+        futures = {
+            executor.submit(
+                _request_pair_route,
+                (
+                    input_points[index][
+                        "latitude"
+                    ],
+                    input_points[index][
+                        "longitude"
+                    ],
+                ),
+                (
+                    input_points[index + 1][
+                        "latitude"
+                    ],
+                    input_points[index + 1][
+                        "longitude"
+                    ],
+                ),
+            ): index
+            for index in range(pair_count)
+        }
+
+        for future in as_completed(futures):
+            index = futures[future]
+
+            try:
+                results[index] = future.result()
+            except Exception:
+                results[index] = _empty_pair(
+                    input_points[index],
+                    input_points[index + 1],
+                )
+
+    return [
+        result
+        if result is not None
+        else _empty_pair(
+            input_points[index],
+            input_points[index + 1],
+        )
+        for index, result in enumerate(
+            results
+        )
+    ]
+
+
+def _combine_leg_geometries(
+    legs: list[dict[str, Any]],
+) -> list[dict[str, float]]:
+    combined: list[dict[str, float]] = []
+
+    for leg in legs:
+        _append_points(
+            combined,
+            leg.get("points") or [],
+        )
+
+    return combined
 
 
 @lru_cache(maxsize=ROUTE_CACHE_MAX)
@@ -308,26 +776,12 @@ def _request_route(
     coordinates_key: tuple[tuple[float, float], ...],
 ) -> dict[str, Any]:
     """
-    Return one explicit route leg for every consecutive input coordinate.
+    Calculate routes strictly as independent consecutive pairs.
 
-    Provider strategy:
-      1. OSRM overview=by_legs when supported.
-      2. OSRM full overview + deterministic geometry splitting.
-      3. Pair-level OSRM retry for only the missing leg.
-      4. Non-road visual connector when the pair is genuinely unroutable.
+    N stops always produces N-1 route legs. There is intentionally no
+    multi-stop geometry splitting in the normal routing path.
     """
-    settings = get_settings()
-    base_url = settings.routing_base_url.rstrip("/")
-    coordinate_path = ";".join(
-        f"{lon:.6f},{lat:.6f}" for lat, lon in coordinates_key
-    )
-    url = f"{base_url}/route/v1/driving/{coordinate_path}"
-    input_points = [
-        {"latitude": lat, "longitude": lon}
-        for lat, lon in coordinates_key
-    ]
-
-    if len(input_points) < 2:
+    if len(coordinates_key) < 2:
         return {
             "distance_meters": 0.0,
             "duration_seconds": 0.0,
@@ -336,237 +790,250 @@ def _request_route(
             "legs": [],
             "has_fallback_legs": False,
             "has_non_routed_legs": False,
+            "warning": None,
         }
 
-    payload: dict[str, Any] | None = None
-    try:
-        with httpx.Client(
-            timeout=ROUTE_TIMEOUT_SECONDS,
-            headers={
-                "User-Agent": f"FairShare/{settings.app_version} route-planner"
-            },
-            follow_redirects=True,
-        ) as client:
-            # Preferred path: one geometry for every actual OSRM route leg.
-            by_legs_payload = _request_http(
-                client,
-                url,
-                {
-                    "overview": "by_legs",
-                    "geometries": "geojson",
-                    "steps": "false",
-                    "snapping": "any",
-                    "source": "first",
-                    "destination": "last",
-                },
-            )
+    input_points = [
+        {
+            "latitude": lat,
+            "longitude": lon,
+        }
+        for lat, lon in coordinates_key
+    ]
 
-            if (
-                by_legs_payload
-                and by_legs_payload.get("code") == "Ok"
-                and by_legs_payload.get("routes")
-            ):
-                candidate = by_legs_payload["routes"][0]
-                candidate_leg_geometries = _parse_leg_geometries(
-                    candidate.get("geometry")
-                )
-                if len(candidate_leg_geometries) == len(input_points) - 1 and all(
-                    len(points) >= 2 for points in candidate_leg_geometries
-                ):
-                    snapped = _snap_points(by_legs_payload)
-                    if len(snapped) != len(input_points):
-                        snapped = [None] * len(input_points)
-
-                    legs = []
-                    for index, points in enumerate(candidate_leg_geometries):
-                        start = snapped[index] or input_points[index]
-                        end = snapped[index + 1] or input_points[index + 1]
-                        points = _with_endpoints(points, start, end)
-                        raw_leg = (
-                            candidate.get("legs", [])[index]
-                            if index < len(candidate.get("legs", []))
-                            and isinstance(candidate.get("legs", [])[index], dict)
-                            else {}
-                        )
-                        legs.append(
-                            {
-                                "points": points,
-                                "distance_meters": float(raw_leg.get("distance") or 0),
-                                "duration_seconds": float(raw_leg.get("duration") or 0),
-                                "routed": True,
-                                "fallback": False,
-                            }
-                        )
-
-                    combined = _combine_leg_geometries(legs)
-                    return {
-                        "distance_meters": float(candidate.get("distance") or 0),
-                        "duration_seconds": float(candidate.get("duration") or 0),
-                        "geometry": combined,
-                        "snapped_stops": [
-                            point for point in snapped if point is not None
-                        ],
-                        "legs": legs,
-                        "has_fallback_legs": False,
-                        "has_non_routed_legs": False,
-                    }
-
-            # Compatibility path for older OSRM servers that don't understand
-            # overview=by_legs.
-            payload = _request_http(
-                client,
-                url,
-                {
-                    "overview": "full",
-                    "geometries": "geojson",
-                    "steps": "false",
-                    "snapping": "any",
-                    "source": "first",
-                    "destination": "last",
-                },
-            )
-    except httpx.HTTPError:
-        payload = None
-
-    route_distance = 0.0
-    route_duration = 0.0
-    full_geometry: list[dict[str, float]] = []
-    snapped: list[dict[str, float] | None] = []
-    raw_legs: list[dict[str, Any]] = []
-
-    if payload and payload.get("code") == "Ok" and payload.get("routes"):
-        route = payload["routes"][0]
-        route_distance = float(route.get("distance") or 0)
-        route_duration = float(route.get("duration") or 0)
-        full_geometry = _parse_line_string(route.get("geometry"))
-        snapped = _snap_points(payload)
-        raw_legs = [
-            leg
-            for leg in (route.get("legs") or [])
-            if isinstance(leg, dict)
-        ]
-
-    boundaries = (
-        snapped
-        if len(snapped) == len(input_points) and all(snapped)
-        else input_points
+    raw_legs = _route_pairs_in_parallel(
+        input_points
     )
-
-    sliced_legs = _build_leg_geometries(
-        full_geometry,
-        [point for point in boundaries if point],
-        input_points,
-    )
-
-    if len(sliced_legs) != len(input_points) - 1:
-        sliced_legs = [[] for _ in range(len(input_points) - 1)]
 
     legs: list[dict[str, Any]] = []
-    for index in range(len(input_points) - 1):
-        start_point = boundaries[index]
-        end_point = boundaries[index + 1]
 
-        points = sliced_legs[index]
-        distance = (
-            float(raw_legs[index].get("distance") or 0)
-            if index < len(raw_legs)
-            else 0.0
-        )
-        duration = (
-            float(raw_legs[index].get("duration") or 0)
-            if index < len(raw_legs)
-            else 0.0
-        )
+    snapped_by_index: dict[int, dict[str, Any]] = {}
 
-        fallback = False
-        routed = len(points) >= 2
-
-        if not routed:
-            pair = _request_pair_route(
-                (input_points[index]["latitude"], input_points[index]["longitude"]),
-                (
-                    input_points[index + 1]["latitude"],
-                    input_points[index + 1]["longitude"],
-                ),
+    for index, raw in enumerate(
+        raw_legs
+    ):
+        if raw.get("snapped_start"):
+            snapped_by_index.setdefault(
+                index,
+                {
+                    "point": raw[
+                        "snapped_start"
+                    ],
+                    "distance_meters": float(
+                        raw.get(
+                            "snap_distance_start_meters"
+                        )
+                        or 0.0
+                    ),
+                },
             )
-            if pair["routed"]:
-                points = _with_endpoints(
-                    pair["points"],
-                    start_point,
-                    end_point,
-                )
-                distance = pair["distance_meters"]
-                duration = pair["duration_seconds"]
-                routed = True
-                fallback = True
-            else:
-                # Keep the Journey visually continuous, but explicitly mark
-                # this as non-road so the client never presents it as driving.
-                points = [dict(start_point), dict(end_point)]
-                distance = 0.0
-                duration = 0.0
-                routed = False
-                fallback = True
+
+        if raw.get("snapped_end"):
+            snapped_by_index.setdefault(
+                index + 1,
+                {
+                    "point": raw[
+                        "snapped_end"
+                    ],
+                    "distance_meters": float(
+                        raw.get(
+                            "snap_distance_end_meters"
+                        )
+                        or 0.0
+                    ),
+                },
+            )
 
         legs.append(
             {
-                "points": points,
-                "distance_meters": distance,
-                "duration_seconds": duration,
-                "routed": routed,
-                "fallback": fallback,
+                "points": raw.get(
+                    "points"
+                )
+                or [
+                    dict(input_points[index]),
+                    dict(input_points[index + 1]),
+                ],
+                "distance_meters": float(
+                    raw.get(
+                        "distance_meters"
+                    )
+                    or 0.0
+                ),
+                "duration_seconds": float(
+                    raw.get(
+                        "duration_seconds"
+                    )
+                    or 0.0
+                ),
+                "routed": bool(
+                    raw.get(
+                        "routed",
+                        False,
+                    )
+                ),
+                "fallback": bool(
+                    raw.get(
+                        "fallback",
+                        False,
+                    )
+                ),
+                "status": (
+                    "routed"
+                    if raw.get("routed")
+                    and not raw.get("fallback")
+                    else (
+                        "fallback"
+                        if raw.get(
+                            "routed"
+                        )
+                        else "unroutable"
+                    )
+                ),
             }
         )
 
-    road_distance = sum(
-        float(leg["distance_meters"])
+    routed_distance = sum(
+        leg["distance_meters"]
         for leg in legs
         if leg["routed"]
     )
-    road_duration = sum(
-        float(leg["duration_seconds"])
-        for leg in legs
-        if leg["routed"]
-    )
-    any_fallback = any(bool(leg["fallback"]) for leg in legs)
-    any_non_routed = any(not bool(leg["routed"]) for leg in legs)
 
-    # Always build the display geometry from the exact legs the client sees.
-    # This prevents an old/top-level provider geometry from disagreeing with
-    # the explicit 1→2, 2→3, ... N-1→N route legs.
-    display_geometry = _combine_leg_geometries(legs)
+    routed_duration = sum(
+        leg["duration_seconds"]
+        for leg in legs
+        if leg["routed"]
+    )
+
+    any_fallback = any(
+        leg["fallback"]
+        for leg in legs
+    )
+
+    any_unrouted = any(
+        not leg["routed"]
+        for leg in legs
+    )
+
+    snapped_stops = []
+
+    for index, data in sorted(
+        snapped_by_index.items()
+    ):
+        point = data["point"]
+        input_point = input_points[index]
+
+        if (
+            _haversine_meters(
+                input_point,
+                point,
+            )
+            >= SNAP_CONNECTOR_METERS
+        ):
+            snapped_stops.append(
+                {
+                    "index": index,
+                    "latitude": point[
+                        "latitude"
+                    ],
+                    "longitude": point[
+                        "longitude"
+                    ],
+                    "distance_meters": float(
+                        data[
+                            "distance_meters"
+                        ]
+                        or 0.0
+                    ),
+                }
+            )
+
+    warning = None
+
+    if any_unrouted:
+        warning = (
+            "One or more consecutive stops could not be connected "
+            "to the drivable road network. Those sections are shown "
+            "as dashed connectors."
+        )
+    elif any_fallback:
+        warning = (
+            "Some stops were snapped to the nearest drivable road "
+            "before routing."
+        )
 
     return {
-        "distance_meters": (
-            route_distance
-            if route_distance > 0 and not any_fallback
-            else road_distance
+        "distance_meters": routed_distance,
+        "duration_seconds": routed_duration,
+        "geometry": _combine_leg_geometries(
+            legs
         ),
-        "duration_seconds": (
-            route_duration
-            if route_duration > 0 and not any_fallback
-            else road_duration
-        ),
-        "geometry": display_geometry or full_geometry,
-        "snapped_stops": [
-            point for point in snapped if point is not None
-        ],
+        "snapped_stops": snapped_stops,
         "legs": legs,
         "has_fallback_legs": any_fallback,
-        "has_non_routed_legs": any_non_routed,
+        "has_non_routed_legs": any_unrouted,
+        "warning": warning,
     }
 
 
-def _route_warning(legs: list[dict[str, Any]]) -> str | None:
-    if any(not bool(leg.get("routed", True)) for leg in legs):
-        return (
-            "One or more stops are off the road network. "
-            "A dashed visual connector is shown for those sections."
-        )
-    if any(bool(leg.get("fallback")) for leg in legs):
-        return "Some route sections used a fallback road request."
-    return None
 
+def _build_route_response(
+    calculated: dict[str, Any],
+    route_stops: list[dict[str, Any]],
+    day_number: int | None,
+) -> dict[str, Any]:
+    """Build a fresh API response without mutating the LRU-cached route object."""
+    response = dict(calculated)
+    response["day_number"] = day_number
+    response["stops"] = route_stops
+
+    normalized_snapped: list[dict[str, Any]] = []
+    for item in calculated.get("snapped_stops") or []:
+        if not isinstance(item, dict):
+            continue
+
+        index_value = item.get("index")
+        if index_value is None and item.get("stop_id") is not None:
+            stop_id = str(item.get("stop_id"))
+            index_value = next(
+                (i for i, stop in enumerate(route_stops)
+                 if str(stop.get("stop_id")) == stop_id),
+                None,
+            )
+
+        try:
+            index = int(index_value)
+        except (TypeError, ValueError):
+            continue
+
+        if not 0 <= index < len(route_stops):
+            continue
+
+        latitude = item.get("latitude")
+        longitude = item.get("longitude")
+        if latitude is None or longitude is None:
+            continue
+
+        normalized_snapped.append({
+            "stop_id": route_stops[index]["stop_id"],
+            "latitude": float(latitude),
+            "longitude": float(longitude),
+            "distance_meters": float(item.get("distance_meters") or 0.0),
+        })
+
+    normalized_legs: list[dict[str, Any]] = []
+    for index, raw_leg in enumerate(calculated.get("legs") or []):
+        if index >= len(route_stops) - 1:
+            break
+        if not isinstance(raw_leg, dict):
+            continue
+        leg = dict(raw_leg)
+        leg["from_stop_id"] = route_stops[index]["stop_id"]
+        leg["to_stop_id"] = route_stops[index + 1]["stop_id"]
+        normalized_legs.append(leg)
+
+    response["snapped_stops"] = normalized_snapped
+    response["legs"] = normalized_legs
+    return response
 
 def get_trip_route(
     session: Session,
@@ -574,8 +1041,17 @@ def get_trip_route(
     user_id: UUID,
     day_number: int | None = None,
 ) -> dict[str, Any]:
-    _require_trip_access(session, group_id, user_id)
-    trip = _get_trip(session, group_id)
+    _require_trip_access(
+        session,
+        group_id,
+        user_id,
+    )
+
+    trip = _get_trip(
+        session,
+        group_id,
+    )
+
     if trip is None:
         raise HTTPException(
             status_code=404,
@@ -590,37 +1066,64 @@ def get_trip_route(
 
     query = (
         select(TripStop)
-        .where(TripStop.trip_id == trip.id)
-        .order_by(TripStop.day_number.asc(), TripStop.sequence.asc())
+        .where(
+            TripStop.trip_id == trip.id
+        )
+        .order_by(
+            TripStop.day_number.asc(),
+            TripStop.sequence.asc(),
+        )
     )
-    if day_number is not None:
-        query = query.where(TripStop.day_number == day_number)
 
-    stops = list(session.scalars(query))
+    if day_number is not None:
+        query = query.where(
+            TripStop.day_number == day_number
+        )
+
+    stops = list(
+        session.scalars(query)
+    )
+
     if len(stops) < 2:
-        detail = (
-            (
-                f"Add at least two stops to Day {day_number} "
+        if day_number is not None:
+            detail = (
+                f"Add at least two stops to Day "
+                f"{day_number} before calculating a route."
+            )
+        else:
+            detail = (
+                "Add at least two itinerary stops "
                 "before calculating a route."
             )
-            if day_number is not None
-            else "Add at least two itinerary stops before calculating a route."
+
+        raise HTTPException(
+            status_code=422,
+            detail=detail,
         )
-        raise HTTPException(status_code=422, detail=detail)
 
     missing = [
         stop.name
         for stop in stops
-        if stop.latitude is None or stop.longitude is None
+        if stop.latitude is None
+        or stop.longitude is None
     ]
+
     if missing:
-        preview = ", ".join(missing[:3])
-        suffix = "…" if len(missing) > 3 else ""
+        preview = ", ".join(
+            missing[:3]
+        )
+        suffix = (
+            "…"
+            if len(missing) > 3
+            else ""
+        )
+
         raise HTTPException(
             status_code=422,
             detail=(
-                "Add coordinates to every itinerary stop before calculating "
-                f"a route. Missing: {preview}{suffix}"
+                "Add coordinates to every itinerary stop "
+                f"before calculating a route. Missing: "
+                f"{preview}{suffix}"
             ),
         )
 
@@ -638,22 +1141,19 @@ def get_trip_route(
     ]
 
     coordinates = [
-        (item["latitude"], item["longitude"])
+        (
+            item["latitude"],
+            item["longitude"],
+        )
         for item in route_stops
     ]
-    calculated = _request_route(_cache_key(coordinates))
-    calculated["day_number"] = day_number
 
-    snapped_by_index = calculated.get("snapped_stops") or []
-    for index, snapped in enumerate(snapped_by_index):
-        if index < len(route_stops):
-            snapped["stop_id"] = route_stops[index]["stop_id"]
+    calculated = _request_route(
+        _cache_key(coordinates)
+    )
 
-    for index, leg in enumerate(calculated.get("legs") or []):
-        if index < len(route_stops) - 1:
-            leg["from_stop_id"] = route_stops[index]["stop_id"]
-            leg["to_stop_id"] = route_stops[index + 1]["stop_id"]
-
-    calculated["stops"] = route_stops
-    calculated["warning"] = _route_warning(calculated.get("legs") or [])
-    return calculated
+    return _build_route_response(
+        calculated=calculated,
+        route_stops=route_stops,
+        day_number=day_number,
+    )

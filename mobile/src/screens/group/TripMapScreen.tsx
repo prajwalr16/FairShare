@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,40 +17,47 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { WebView } from 'react-native-webview';
 
 import { getCachedTrip, getTrip, Trip } from '../../services/tripService';
-import { getCachedTripRoute, getTripRoute, TripRoute } from '../../services/routeService';
+import {
+  getCachedTripRoute,
+  getTripRoute,
+  TripRoute,
+} from '../../services/routeService';
 
-function isAbortError(error: any) {
-  return error?.name === 'AbortError';
-}
-
-function parseDate(value: string | null | undefined) {
-  if (!value) return new Date();
+function parseDate(value: string) {
   const [year, month, day] = value.split('-').map(Number);
-  if (!year || !month || !day) return new Date();
   return new Date(year, month - 1, day, 12, 0, 0, 0);
 }
 
 function getDayCount(trip: Trip | null) {
-  if (!trip?.start_date || !trip.end_date) return 1;
-  return Math.max(
-    1,
-    Math.round((parseDate(trip.end_date).getTime() - parseDate(trip.start_date).getTime()) / 86400000) + 1,
+  if (!trip?.start_date || !trip?.end_date) return 1;
+  return (
+    Math.round(
+      (parseDate(trip.end_date).getTime() -
+        parseDate(trip.start_date).getTime()) /
+        86400000,
+    ) + 1
   );
 }
 
 function addDaysIso(value: string, days: number) {
   const date = parseDate(value);
   date.setDate(date.getDate() + days);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
 }
 
 function formatDayDate(trip: Trip, dayNumber: number) {
   if (!trip.start_date) return `Day ${dayNumber}`;
   const iso = addDaysIso(trip.start_date, dayNumber - 1);
   const [year, month, day] = iso.split('-').map(Number);
-  return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(
-    new Date(year, month - 1, day),
-  );
+
+  return new Intl.DateTimeFormat('en-IN', {
+    day: 'numeric',
+    month: 'short',
+  }).format(new Date(year, month - 1, day));
 }
 
 function formatDistance(meters: number) {
@@ -61,19 +69,30 @@ function formatDuration(seconds: number) {
   const totalMinutes = Math.max(0, Math.round(seconds / 60));
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes} min`;
-  return minutes === 0 ? `${hours} hr` : `${hours} hr ${minutes} min`;
+
+  if (!hours) return `${minutes} min`;
+  return minutes ? `${hours} hr ${minutes} min` : `${hours} hr`;
 }
 
-function escapeForScript(value: unknown) {
-  return JSON.stringify(value).replace(/</g, '\\u003c');
-}
-
-function buildMapHtml(routeData: TripRoute | null, trip: Trip, dayNumber?: number) {
-  const sourceStops = routeData?.stops || trip.stops
-    .filter((stop) => dayNumber == null || stop.day_number === dayNumber)
-    .filter((stop) => stop.latitude != null && stop.longitude != null)
-    .map((stop) => ({
+function buildMapHtml(
+  trip: Trip,
+  dayNumber: number | null,
+) {
+  const sourceStops = trip.stops
+    .filter(
+      stop =>
+        dayNumber == null || stop.day_number === dayNumber,
+    )
+    .filter(
+      stop =>
+        stop.latitude != null && stop.longitude != null,
+    )
+    .sort(
+      (a, b) =>
+        a.day_number - b.day_number ||
+        a.sequence - b.sequence,
+    )
+    .map(stop => ({
       stop_id: stop.id,
       sequence: stop.sequence,
       day_number: stop.day_number,
@@ -83,10 +102,15 @@ function buildMapHtml(routeData: TripRoute | null, trip: Trip, dayNumber?: numbe
       stop_type: stop.stop_type,
     }));
 
-  const stops = sourceStops.map((stop, index) => ({ ...stop, display_sequence: index + 1 }));
-  const geometry = routeData?.geometry || [];
-  const snappedStops = routeData?.snapped_stops || [];
-  const payload = escapeForScript({ stops, geometry, snappedStops });
+  const stops = sourceStops.map((stop, index) => ({
+    ...stop,
+    display_sequence: index + 1,
+  }));
+
+  // Only the selected stop scope is part of the HTML. Route responses are
+  // injected into this already-mounted MapLibre instance so the camera does
+  // not jump when asynchronous routing completes.
+  const payload = JSON.stringify({stops}).replace(/</g, '\u003c');
 
   return `<!doctype html>
 <html>
@@ -95,172 +119,435 @@ function buildMapHtml(routeData: TripRoute | null, trip: Trip, dayNumber?: numbe
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-gl.css">
 <style>
-html, body, #map { height:100%; width:100%; margin:0; background:#E8EEF4; }
-.stop-marker { width:32px; height:32px; border-radius:16px; display:flex; align-items:center; justify-content:center; color:#fff; font:900 12px system-ui,-apple-system,sans-serif; border:2px solid #fff; box-shadow:0 2px 8px rgba(15,23,42,.32); }
-.start { background:#0EA5A4; } .stop { background:#2563EB; } .destination { background:#F97316; }
-.maplibregl-popup-content { font:13px system-ui,-apple-system,sans-serif; border-radius:12px; padding:10px 12px; }
-.maplibregl-ctrl-group { border-radius:12px; overflow:hidden; }
+html, body, #map {
+  width:100%;
+  height:100%;
+  margin:0;
+  overflow:hidden;
+  background:#E8EEF4;
+}
+.stop-marker {
+  width:32px;
+  height:32px;
+  border-radius:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  font:900 12px system-ui,-apple-system,sans-serif;
+  border:2px solid #fff;
+  box-shadow:0 2px 8px rgba(15,23,42,.30);
+}
+.start { background:#0EA5A4; }
+.stop { background:#2563EB; }
+.destination { background:#F97316; }
 </style>
 </head>
-<body><div id="map"></div>
+<body>
+<div id="map"></div>
 <script type="module">
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-gl.mjs';
+
 const payload = ${payload};
 const points = payload.stops || [];
-const geometry = payload.geometry || [];
-const snappedStops = payload.snappedStops || [];
-const first = points[0];
-const fallback = first ? [first.longitude, first.latitude] : [78.9629, 20.5937];
+let mapReady = false;
+let pendingRoute = null;
+
 const map = new maplibregl.Map({
   container:'map',
   style:'https://tiles.openfreemap.org/styles/liberty',
-  center:fallback,
-  zoom:points.length ? 8 : 4,
+  center:[78.9629, 20.5937],
+  zoom:${dayNumber == null ? 4.5 : 8},
   attributionControl:false,
+  cooperativeGestures:true,
 });
-map.addControl(new maplibregl.NavigationControl({showCompass:false}), 'top-right');
-map.addControl(new maplibregl.AttributionControl({compact:true}), 'bottom-right');
+
+map.addControl(
+  new maplibregl.NavigationControl({showCompass:false}),
+  'top-right'
+);
+
+map.addControl(
+  new maplibregl.AttributionControl({compact:true}),
+  'bottom-right'
+);
+
+function emptyCollection() {
+  return { type:'FeatureCollection', features:[] };
+}
+
+function ensureRouteSources() {
+  if (!map.getSource('road-legs')) {
+    map.addSource('road-legs', { type:'geojson', data:emptyCollection() });
+    map.addLayer({
+      id:'road-legs-line',
+      type:'line',
+      source:'road-legs',
+      layout:{'line-cap':'round','line-join':'round'},
+      paint:{'line-color':'#0EA5A4','line-width':5,'line-opacity':0.92},
+    });
+  }
+
+  if (!map.getSource('unrouted-legs')) {
+    map.addSource('unrouted-legs', { type:'geojson', data:emptyCollection() });
+    map.addLayer({
+      id:'unrouted-legs-line',
+      type:'line',
+      source:'unrouted-legs',
+      layout:{'line-cap':'round','line-join':'round'},
+      paint:{
+        'line-color':'#F59E0B',
+        'line-width':3,
+        'line-opacity':0.95,
+        'line-dasharray':[2,2],
+      },
+    });
+  }
+
+}
+
+
+function renderRoute(route) {
+  if (!mapReady) {
+    pendingRoute = route || null;
+    return;
+  }
+
+  ensureRouteSources();
+
+  const legs = route?.legs || [];
+  const snappedStops = route?.snapped_stops || [];
+  const roadFeatures = [];
+  const unroutedFeatures = [];
+
+  legs.forEach(leg => {
+    const coordinates = (leg.points || [])
+      .map(point => [Number(point.longitude), Number(point.latitude)])
+      .filter(point => Number.isFinite(point[0]) && Number.isFinite(point[1]));
+
+    if (coordinates.length < 2) return;
+
+    const feature = {
+      type:'Feature',
+      geometry:{type:'LineString',coordinates},
+      properties:{
+        status:leg.status || (leg.routed ? 'routed' : 'unroutable'),
+      },
+    };
+
+    if (leg.status === 'unroutable' || leg.routed === false) {
+      unroutedFeatures.push(feature);
+    } else {
+      roadFeatures.push(feature);
+    }
+  });
+
+  // Snapped stop coordinates remain part of the route response and are used
+  // by the backend routing logic. They are intentionally not rendered on the
+  // map: users should only see the numbered stop markers and the route line.
+  void snappedStops;
+
+  map.getSource('road-legs').setData({
+    type:'FeatureCollection',features:roadFeatures,
+  });
+  map.getSource('unrouted-legs').setData({
+    type:'FeatureCollection',features:unroutedFeatures,
+  });
+
+  // Never refit here. The stop scope determines the camera; the route is
+  // an asynchronous visual overlay on top of that stable camera.
+}
+
+window.applyFairShareRoute = route => {
+  pendingRoute = route || null;
+  renderRoute(pendingRoute);
+};
+
 map.on('load', () => {
-  const bounds = new maplibregl.LngLatBounds();
-  points.forEach((stop) => {
-    bounds.extend([stop.longitude, stop.latitude]);
+  const stopBounds = new maplibregl.LngLatBounds();
+  let stopCount = 0;
+
+  points.forEach(stop => {
+    const longitude = Number(stop.longitude);
+    const latitude = Number(stop.latitude);
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return;
+
+    const coordinate = [longitude, latitude];
+    stopBounds.extend(coordinate);
+    stopCount += 1;
+
     const el = document.createElement('div');
     el.className = 'stop-marker ' + (stop.stop_type || 'stop');
     el.textContent = String(stop.display_sequence);
-    new maplibregl.Marker({element:el, anchor:'center'})
-      .setLngLat([stop.longitude, stop.latitude])
-      .setPopup(new maplibregl.Popup({offset:16}).setHTML('<strong>' + stop.display_sequence + '. ' + stop.name.replaceAll('<','&lt;') + '</strong>'))
+
+    new maplibregl.Marker({element:el,anchor:'center'})
+      .setLngLat(coordinate)
+      .setPopup(
+        new maplibregl.Popup({offset:16}).setHTML(
+          '<strong>' +
+          String(stop.display_sequence) +
+          '. ' +
+          String(stop.name).replaceAll('<','&lt;') +
+          '</strong>'
+        )
+      )
       .addTo(map);
   });
-  if (geometry.length >= 2) {
-    const geojson = {type:'Feature', geometry:{type:'LineString', coordinates:geometry.map((p) => [p.longitude,p.latitude])}, properties:{}};
-    if (map.getSource('route')) map.getSource('route').setData(geojson);
-    else map.addSource('route', {type:'geojson', data:geojson});
-    if (!map.getLayer('route-line')) {
-      map.addLayer({id:'route-line', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#0EA5A4','line-width':5,'line-opacity':0.88}});
-    }
-    geojson.geometry.coordinates.forEach((coord) => bounds.extend(coord));
-  }
-  if (snappedStops.length) {
-    const connectorFeatures = snappedStops.map((snap) => {
-      const stop = points.find((item) => item.stop_id === snap.stop_id);
-      if (!stop) return null;
-      if (Math.abs(stop.latitude - snap.latitude) < 0.00005 && Math.abs(stop.longitude - snap.longitude) < 0.00005) return null;
-      bounds.extend([snap.longitude, snap.latitude]);
-      bounds.extend([stop.longitude, stop.latitude]);
-      return {type:'Feature', geometry:{type:'LineString', coordinates:[[stop.longitude,stop.latitude],[snap.longitude,snap.latitude]]}, properties:{}};
-    }).filter(Boolean);
-    if (connectorFeatures.length) {
-      const connectorGeojson = {type:'FeatureCollection', features:connectorFeatures};
-      map.addSource('route-connectors', {type:'geojson', data:connectorGeojson});
-      map.addLayer({id:'route-connectors-line', type:'line', source:'route-connectors', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#64748B','line-width':2,'line-opacity':0.75}});
-    }
-  }
 
-  if (!bounds.isEmpty()) {
-    map.fitBounds(bounds, {padding:{top:60,bottom:60,left:45,right:45}, duration:300, maxZoom:13});
-  }
+  ensureRouteSources();
+  mapReady = true;
+
+  const fitStops = () => {
+    map.resize();
+
+    if (stopCount >= 2 && !stopBounds.isEmpty()) {
+      map.fitBounds(stopBounds, {
+        padding:{top:70,right:50,bottom:70,left:50},
+        duration:0,
+        maxZoom:${dayNumber == null ? 8.5 : 12},
+      });
+      return;
+    }
+
+    if (stopCount === 1) {
+      const point = points[0];
+      map.jumpTo({
+        center:[Number(point.longitude), Number(point.latitude)],
+        zoom:12,
+      });
+    }
+  };
+
+  requestAnimationFrame(() => {
+    fitStops();
+    setTimeout(fitStops, 120);
+    setTimeout(fitStops, 350);
+  });
+
+  if (pendingRoute) renderRoute(pendingRoute);
 });
 </script>
-</body></html>`;
+</body>
+</html>`;
 }
 
 export default function TripMapScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const groupId = route.params?.groupId as string | undefined;
-  const groupName = route.params?.groupName as string | undefined;
-  const requestedDay = route.params?.dayNumber as number | undefined;
+
+  const groupId =
+    route.params?.groupId as string | undefined;
+  const groupName =
+    route.params?.groupName as string | undefined;
+  const requestedDay =
+    route.params?.dayNumber as number | undefined;
 
   const cachedTrip = getCachedTrip(groupId || '');
   const [trip, setTrip] = useState<Trip | null>(cachedTrip);
   const [loading, setLoading] = useState(!cachedTrip);
-  const [selectedDay, setSelectedDay] = useState<number | null>(requestedDay ?? null);
-  const [routeData, setRouteData] = useState<TripRoute | null>(
-    getCachedTripRoute(groupId || '', requestedDay ?? null),
-  );
+  const [selectedDay, setSelectedDay] =
+    useState<number | null>(requestedDay ?? null);
+
+  const [routeData, setRouteData] =
+    useState<TripRoute | null>(
+      getCachedTripRoute(
+        groupId || '',
+        requestedDay ?? null,
+      ),
+    );
+
   const [routing, setRouting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const mapWebViewRef = useRef<WebView>(null);
+
+  const pushRouteDataToMap = useCallback(
+    (data: TripRoute | null) => {
+      if (!mapWebViewRef.current) return;
+
+      const payload = JSON.stringify({
+        legs: data?.legs || [],
+        snapped_stops: data?.snapped_stops || [],
+      })
+        .replace(/</g, '\u003c')
+        .replace(/\u2028/g, '\u2028')
+        .replace(/\u2029/g, '\u2029');
+
+      mapWebViewRef.current.injectJavaScript(
+        `if (window.applyFairShareRoute) { window.applyFairShareRoute(${payload}); } true;`,
+      );
+    },
+    [],
+  );
+
+  useEffect(() => {
+    pushRouteDataToMap(routeData);
+  }, [pushRouteDataToMap, routeData]);
 
   const dayCount = getDayCount(trip);
 
   const selectedStops = useMemo(() => {
     if (!trip) return [];
+
     return trip.stops
-      .filter((stop) => selectedDay == null || stop.day_number === selectedDay)
-      .sort((a, b) => a.day_number - b.day_number || a.sequence - b.sequence);
+      .filter(
+        stop =>
+          selectedDay == null ||
+          stop.day_number === selectedDay,
+      )
+      .sort(
+        (a,b) =>
+          a.day_number - b.day_number ||
+          a.sequence - b.sequence,
+      );
   }, [selectedDay, trip]);
 
   const coordinateStops = useMemo(
-    () => selectedStops.filter((stop) => stop.latitude != null && stop.longitude != null),
+    () =>
+      selectedStops.filter(
+        stop =>
+          stop.latitude != null &&
+          stop.longitude != null,
+      ),
     [selectedStops],
   );
 
   const loadTrip = useCallback(async () => {
     if (!groupId) return;
+
     const cached = getCachedTrip(groupId);
+
     if (cached) {
       setTrip(cached);
       setLoading(false);
     }
-    const result = await getTrip(groupId, Boolean(cached));
-    if (isAbortError(result.error)) return;
+
+    const result = await getTrip(
+      groupId,
+      Boolean(cached),
+    );
+
     if (result.error) {
-      if (!cached) Alert.alert('Unable to load journey', result.error.message);
+      if (!cached) {
+        Alert.alert(
+          'Unable to load journey',
+          result.error.message,
+        );
+      }
       return;
     }
+
     if (result.data) {
       setTrip(result.data);
       setLoading(false);
     }
   }, [groupId]);
 
-  const canCalculateRoute = selectedStops.length >= 2 && coordinateStops.length === selectedStops.length;
+  const calculateRoute = useCallback(
+    async (
+      force = false,
+      signal?: AbortSignal,
+    ) => {
+      if (!groupId) return;
 
-  const calculateRoute = useCallback(async (force = false) => {
-    if (!groupId) return;
+      if (
+        selectedStops.length < 2 ||
+        coordinateStops.length !==
+          selectedStops.length
+      ) {
+        setRouting(false);
+        setRouteData(null);
+        setErrorMessage(
+          selectedStops.length < 2
+            ? 'Add at least two stops to this map scope.'
+            : 'Add coordinates to every stop in this map scope.',
+        );
+        return;
+      }
 
-    if (!canCalculateRoute) {
-      setRouting(false);
-      setRouteData(null);
-      setErrorMessage(
-        selectedStops.length < 2
-          ? 'Add at least two stops to this map scope.'
-          : 'Add coordinates to every stop in this map scope.',
+      setRouting(true);
+      setErrorMessage('');
+
+      const result = await getTripRoute(
+        groupId,
+        selectedDay,
+        force,
+        signal,
       );
-      return;
-    }
 
-    setRouting(true);
-    setErrorMessage('');
-    const result = await getTripRoute(groupId, selectedDay, force);
-    setRouting(false);
-    if (isAbortError(result.error)) return;
-    if (result.error) {
-      setRouteData(null);
-      setErrorMessage(result.error.message || 'A route cannot be calculated yet.');
-      return;
-    }
-    setRouteData(result.data);
-  }, [canCalculateRoute, coordinateStops.length, groupId, selectedDay, selectedStops.length]);
+      if (result.error?.name === 'AbortError') {
+        return;
+      }
+
+      setRouting(false);
+
+      if (result.error) {
+        setRouteData(null);
+        setErrorMessage(
+          result.error.message ||
+            'A route cannot be calculated yet.',
+        );
+        return;
+      }
+
+      setRouteData(result.data);
+    },
+    [
+      coordinateStops.length,
+      groupId,
+      selectedDay,
+      selectedStops.length,
+    ],
+  );
 
   useEffect(() => {
     void loadTrip();
   }, [loadTrip]);
 
   useEffect(() => {
-    if (!trip) return;
-    if (requestedDay != null && requestedDay <= dayCount) {
+    if (!trip || requestedDay == null) return;
+
+    if (
+      requestedDay >= 1 &&
+      requestedDay <= dayCount
+    ) {
       setSelectedDay(requestedDay);
     }
-  }, [dayCount, requestedDay, trip]);
+  }, [
+    dayCount,
+    requestedDay,
+    trip,
+  ]);
 
   useEffect(() => {
-    const cached = groupId ? getCachedTripRoute(groupId, selectedDay) : null;
-    setRouteData(cached);
-    void calculateRoute(Boolean(cached));
-  }, [calculateRoute, groupId, selectedDay]);
+    const controller = new AbortController();
+
+    setRouteData(
+      groupId
+        ? getCachedTripRoute(
+            groupId,
+            selectedDay,
+          )
+        : null,
+    );
+
+    void calculateRoute(
+      Boolean(
+        groupId &&
+          getCachedTripRoute(
+            groupId,
+            selectedDay,
+          ),
+      ),
+      controller.signal,
+    );
+
+    return () => controller.abort();
+  }, [
+    calculateRoute,
+    groupId,
+    selectedDay,
+  ]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -275,37 +562,98 @@ export default function TripMapScreen() {
   if (!groupId) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.center}><Text style={styles.emptyTitle}>Map unavailable</Text></View>
+        <View style={styles.center}>
+          <Text style={styles.emptyTitle}>
+            Map unavailable
+          </Text>
+        </View>
       </SafeAreaView>
     );
   }
 
-  const mapHtml = trip ? buildMapHtml(routeData, trip, selectedDay ?? undefined) : '<html><body style="background:#0F172A"></body></html>';
-  const displayRouteStops = routeData?.stops || coordinateStops.map((stop) => ({
-    stop_id: stop.id,
-    sequence: stop.sequence,
-    day_number: stop.day_number,
-    latitude: stop.latitude as number,
-    longitude: stop.longitude as number,
-    name: stop.name,
-    stop_type: stop.stop_type,
-  }));
+  const mapHtml = trip
+    ? buildMapHtml(
+        trip,
+        selectedDay,
+      )
+    : '<html><body style="background:#0F172A"></body></html>';
+
+  const displayStops =
+    routeData?.stops ||
+    coordinateStops.map(stop => ({
+      stop_id: stop.id,
+      sequence: stop.sequence,
+      day_number: stop.day_number,
+      latitude: stop.latitude as number,
+      longitude: stop.longitude as number,
+      name: stop.name,
+      stop_type: stop.stop_type,
+    }));
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={['top','left','right']}
+    >
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="#0F172A"
+      />
+
       <View style={styles.container}>
         <View style={styles.header}>
-          <Pressable style={styles.headerButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+          <Pressable
+            style={styles.headerButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons
+              name="arrow-back"
+              size={22}
+              color="#FFFFFF"
+            />
           </Pressable>
+
           <View style={styles.headerCenter}>
-            <Text style={styles.headerEyebrow}>MAP & ROUTE</Text>
-            <Text style={styles.headerTitle} numberOfLines={1}>{groupName || 'Trip map'}</Text>
-            <Text style={styles.headerSubtitle}>{selectedDay == null ? 'Whole trip' : `Day ${selectedDay} • ${trip ? formatDayDate(trip, selectedDay) : ''}`}</Text>
+            <Text style={styles.headerEyebrow}>
+              MAP & ROUTE
+            </Text>
+            <Text
+              style={styles.headerTitle}
+              numberOfLines={1}
+            >
+              {groupName || 'Trip map'}
+            </Text>
+            <Text style={styles.headerSubtitle}>
+              {selectedDay == null
+                ? 'Whole trip'
+                : `Day ${selectedDay} • ${
+                    trip
+                      ? formatDayDate(
+                          trip,
+                          selectedDay,
+                        )
+                      : ''
+                  }`}
+            </Text>
           </View>
-          <Pressable style={styles.headerButton} onPress={() => void handleRefresh()} disabled={refreshing}>
-            {refreshing ? <ActivityIndicator size="small" color="#CBD5E1" /> : <Ionicons name="refresh-outline" size={20} color="#FFFFFF" />}
+
+          <Pressable
+            style={styles.headerButton}
+            onPress={() => void handleRefresh()}
+            disabled={refreshing}
+          >
+            {refreshing ? (
+              <ActivityIndicator
+                size="small"
+                color="#CBD5E1"
+              />
+            ) : (
+              <Ionicons
+                name="refresh-outline"
+                size={20}
+                color="#FFFFFF"
+              />
+            )}
           </Pressable>
         </View>
 
@@ -313,17 +661,46 @@ export default function TripMapScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#0EA5A4" />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor="#0EA5A4"
+            />
+          }
         >
           {loading ? (
-            <View style={styles.card}><ActivityIndicator size="small" color="#0EA5A4" /><Text style={styles.mutedCenter}>Loading journey…</Text></View>
+            <View style={styles.card}>
+              <ActivityIndicator
+                size="small"
+                color="#0EA5A4"
+              />
+              <Text style={styles.mutedCenter}>
+                Loading journey…
+              </Text>
+            </View>
           ) : !trip ? (
             <View style={styles.card}>
-              <View style={styles.emptyIcon}><Ionicons name="map-outline" size={28} color="#0EA5A4" /></View>
-              <Text style={styles.title}>Create the Journey first</Text>
-              <Text style={styles.muted}>Map planning is optional. Open Journey from the Trip group when you want to add dates and stops.</Text>
-              <Pressable style={styles.primaryButton} onPress={() => navigation.navigate('TripDetails', { groupId, groupName })}>
-                <Text style={styles.primaryButtonText}>Open Journey</Text>
+              <Text style={styles.title}>
+                Create the Journey first
+              </Text>
+              <Text style={styles.muted}>
+                Map planning is optional. Open Journey
+                from the Trip group when you want to add
+                dates and stops.
+              </Text>
+              <Pressable
+                style={styles.primaryButton}
+                onPress={() =>
+                  navigation.navigate(
+                    'TripDetails',
+                    {groupId, groupName},
+                  )
+                }
+              >
+                <Text style={styles.primaryButtonText}>
+                  Open Journey
+                </Text>
               </Pressable>
             </View>
           ) : (
@@ -331,27 +708,99 @@ export default function TripMapScreen() {
               <View style={styles.daySelectorCard}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.flexOne}>
-                    <Text style={styles.titleSmall}>Map scope</Text>
-                    <Text style={styles.muted}>Switch between the full trip and a single day.</Text>
+                    <Text style={styles.titleSmall}>
+                      Map scope
+                    </Text>
+                    <Text style={styles.muted}>
+                      One finger scrolls the page. Two
+                      fingers pan or zoom the map.
+                    </Text>
                   </View>
-                  <View style={styles.scopeBadge}><Ionicons name="layers-outline" size={14} color="#0EA5A4" /></View>
+                  <View style={styles.scopeBadge}>
+                    <Ionicons
+                      name="layers-outline"
+                      size={14}
+                      color="#0EA5A4"
+                    />
+                  </View>
                 </View>
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayChips}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.dayChips}
+                >
                   <Pressable
-                    style={[styles.dayChip, selectedDay == null && styles.dayChipActive]}
+                    style={[
+                      styles.dayChip,
+                      selectedDay == null &&
+                        styles.dayChipActive,
+                    ]}
                     onPress={() => setSelectedDay(null)}
                   >
-                    <Text style={[styles.dayChipTop, selectedDay == null && styles.dayChipActiveText]}>ALL</Text>
-                    <Text style={[styles.dayChipBottom, selectedDay == null && styles.dayChipActiveText]}>Trip</Text>
+                    <Text
+                      style={[
+                        styles.dayChipTop,
+                        selectedDay == null &&
+                          styles.dayChipActiveText,
+                      ]}
+                    >
+                      ALL
+                    </Text>
+                    <Text
+                      style={[
+                        styles.dayChipBottom,
+                        selectedDay == null &&
+                          styles.dayChipActiveText,
+                      ]}
+                    >
+                      Trip
+                    </Text>
                   </Pressable>
-                  {Array.from({ length: dayCount }, (_, index) => index + 1).map((day) => {
-                    const active = selectedDay === day;
-                    const count = trip.stops.filter((stop) => stop.day_number === day).length;
+
+                  {Array.from(
+                    {length:dayCount},
+                    (_, index) => index + 1,
+                  ).map(day => {
+                    const active =
+                      selectedDay === day;
+
+                    const count =
+                      trip.stops.filter(
+                        stop =>
+                          stop.day_number === day,
+                      ).length;
+
                     return (
-                      <Pressable key={day} style={[styles.dayChip, active && styles.dayChipActive]} onPress={() => setSelectedDay(day)}>
-                        <Text style={[styles.dayChipTop, active && styles.dayChipActiveText]}>DAY {day}</Text>
-                        <Text style={[styles.dayChipBottom, active && styles.dayChipActiveText]}>{formatDayDate(trip, day)} · {count}</Text>
+                      <Pressable
+                        key={day}
+                        style={[
+                          styles.dayChip,
+                          active &&
+                            styles.dayChipActive,
+                        ]}
+                        onPress={() =>
+                          setSelectedDay(day)
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.dayChipTop,
+                            active &&
+                              styles.dayChipActiveText,
+                          ]}
+                        >
+                          DAY {day}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.dayChipBottom,
+                            active &&
+                              styles.dayChipActiveText,
+                          ]}
+                        >
+                          {formatDayDate(trip, day)} · {count}
+                        </Text>
                       </Pressable>
                     );
                   })}
@@ -360,58 +809,171 @@ export default function TripMapScreen() {
 
               <View style={styles.mapCard}>
                 <WebView
+                  ref={mapWebViewRef}
+                  key={`${selectedDay ?? 'all'}`}
                   originWhitelist={['*']}
-                  source={{ html: mapHtml, baseUrl: 'https://fairshare.local' }}
+                  source={{
+                    html: mapHtml,
+                    baseUrl:'https://fairshare.local',
+                  }}
                   javaScriptEnabled
                   domStorageEnabled
+                  nestedScrollEnabled
                   startInLoadingState
                   renderLoading={() => (
-                    <View style={styles.webLoading}><ActivityIndicator size="small" color="#0EA5A4" /><Text style={styles.muted}>Loading map…</Text></View>
+                    <View style={styles.webLoading}>
+                      <ActivityIndicator
+                        size="small"
+                        color="#0EA5A4"
+                      />
+                      <Text style={styles.muted}>
+                        Loading map…
+                      </Text>
+                    </View>
                   )}
+                  onLoadEnd={() => {
+                    const latestCachedRoute = groupId
+                      ? getCachedTripRoute(
+                          groupId,
+                          selectedDay,
+                        )
+                      : null;
+                    pushRouteDataToMap(
+                      latestCachedRoute,
+                    );
+                  }}
                   style={styles.map}
                 />
               </View>
 
               <View style={styles.statsRow}>
-                <View style={styles.statCard}><Text style={styles.statLabel}>Stops</Text><Text style={styles.statValue}>{selectedStops.length}</Text></View>
-                <View style={styles.statCard}><Text style={styles.statLabel}>Mapped</Text><Text style={styles.statValue}>{coordinateStops.length}/{selectedStops.length}</Text></View>
-                <View style={styles.statCard}><Text style={styles.statLabel}>Route</Text><Text style={styles.statValue}>{routeData ? formatDistance(routeData.distance_meters) : '—'}</Text></View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statLabel}>
+                    Stops
+                  </Text>
+                  <Text style={styles.statValue}>
+                    {selectedStops.length}
+                  </Text>
+                </View>
+
+                <View style={styles.statCard}>
+                  <Text style={styles.statLabel}>
+                    Mapped
+                  </Text>
+                  <Text style={styles.statValue}>
+                    {coordinateStops.length}/
+                    {selectedStops.length}
+                  </Text>
+                </View>
+
+                <View style={styles.statCard}>
+                  <Text style={styles.statLabel}>
+                    Route
+                  </Text>
+                  <Text style={styles.statValue}>
+                    {routeData
+                      ? formatDistance(
+                          routeData.distance_meters,
+                        )
+                      : '—'}
+                  </Text>
+                </View>
               </View>
 
               <View style={styles.card}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.flexOne}>
-                    <Text style={styles.titleSmall}>{selectedDay == null ? 'Whole-trip route' : `Day ${selectedDay} route`}</Text>
-                    <Text style={styles.muted}>Follows the saved itinerary order.</Text>
+                    <Text style={styles.titleSmall}>
+                      {selectedDay == null
+                        ? 'Whole-trip route'
+                        : `Day ${selectedDay} route`}
+                    </Text>
+                    <Text style={styles.muted}>
+                      Each consecutive pair is routed independently.
+                    </Text>
                   </View>
-                  <Pressable style={styles.secondaryButton} onPress={() => void calculateRoute(true)} disabled={routing}>
-                    {routing ? <ActivityIndicator size="small" color="#CBD5E1" /> : <Ionicons name="navigate-outline" size={15} color="#CBD5E1" />}
-                    <Text style={styles.secondaryButtonText}>{routing ? 'Calculating' : 'Recalculate'}</Text>
+
+                  <Pressable
+                    style={styles.secondaryButton}
+                    onPress={() =>
+                      void calculateRoute(true)
+                    }
+                    disabled={routing}
+                  >
+                    {routing ? (
+                      <ActivityIndicator
+                        size="small"
+                        color="#CBD5E1"
+                      />
+                    ) : (
+                      <Ionicons
+                        name="navigate-outline"
+                        size={15}
+                        color="#CBD5E1"
+                      />
+                    )}
+                    <Text
+                      style={
+                        styles.secondaryButtonText
+                      }
+                    >
+                      {routing
+                        ? 'Calculating'
+                        : 'Recalculate'}
+                    </Text>
                   </Pressable>
                 </View>
 
                 {routeData ? (
-                  <View style={styles.routeSummaryRow}>
-                    <View style={styles.routeSummaryItem}>
-                      <Text style={styles.metaLabel}>Distance</Text>
-                      <Text style={styles.metaValue}>{formatDistance(routeData.distance_meters)}</Text>
+                  <>
+                    <View style={styles.routeSummaryRow}>
+                      <View style={styles.routeSummaryItem}>
+                        <Text style={styles.metaLabel}>
+                          Distance
+                        </Text>
+                        <Text style={styles.metaValue}>
+                          {formatDistance(
+                            routeData.distance_meters,
+                          )}
+                        </Text>
+                      </View>
+
+                      <View style={styles.routeSummaryItem}>
+                        <Text style={styles.metaLabel}>
+                          Estimated drive
+                        </Text>
+                        <Text style={styles.metaValue}>
+                          {formatDuration(
+                            routeData.duration_seconds,
+                          )}
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.routeSummaryItem}>
-                      <Text style={styles.metaLabel}>Estimated drive</Text>
-                      <Text style={styles.metaValue}>{formatDuration(routeData.duration_seconds)}</Text>
-                    </View>
-                  </View>
+
+                    {routeData.warning ? (
+                      <View style={styles.warningBox}>
+                        <Ionicons
+                          name="information-circle-outline"
+                          size={20}
+                          color="#F59E0B"
+                        />
+                        <Text style={styles.warningText}>
+                          {routeData.warning}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </>
                 ) : (
                   <View style={styles.infoBox}>
-                    <Ionicons name="information-circle-outline" size={21} color="#F59E0B" />
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={21}
+                      color="#F59E0B"
+                    />
                     <View style={styles.flexOne}>
-                      <Text style={styles.infoTitle}>{errorMessage || 'A route cannot be calculated yet.'}</Text>
-                      <Text style={styles.muted}>
-                        {selectedStops.length < 2
-                          ? 'Add at least two stops to this map scope.'
-                          : coordinateStops.length < selectedStops.length
-                            ? 'Add map coordinates to every stop in this scope.'
-                            : 'The route provider did not return a usable route.'}
+                      <Text style={styles.infoTitle}>
+                        {errorMessage ||
+                          'A route cannot be calculated yet.'}
                       </Text>
                     </View>
                   </View>
@@ -421,36 +983,76 @@ export default function TripMapScreen() {
               <View style={styles.card}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.flexOne}>
-                    <Text style={styles.titleSmall}>Stops on this map</Text>
-                    <Text style={styles.muted}>Edit names, days and coordinates in Journey.</Text>
+                    <Text style={styles.titleSmall}>
+                      Stops on this map
+                    </Text>
+                    <Text style={styles.muted}>
+                      Edit names, days and coordinates in Journey.
+                    </Text>
                   </View>
-                  <Pressable style={styles.secondaryButton} onPress={() => navigation.navigate('TripDetails', { groupId, groupName })}>
-                    <Ionicons name="create-outline" size={15} color="#CBD5E1" />
-                    <Text style={styles.secondaryButtonText}>Edit</Text>
+
+                  <Pressable
+                    style={styles.secondaryButton}
+                    onPress={() =>
+                      navigation.navigate(
+                        'TripDetails',
+                        {groupId, groupName},
+                      )
+                    }
+                  >
+                    <Ionicons
+                      name="create-outline"
+                      size={15}
+                      color="#CBD5E1"
+                    />
+                    <Text
+                      style={
+                        styles.secondaryButtonText
+                      }
+                    >
+                      Edit
+                    </Text>
                   </Pressable>
                 </View>
 
-                {displayRouteStops.length === 0 ? (
-                  <View style={styles.smallEmpty}>
-                    <Ionicons name="location-outline" size={24} color="#64748B" />
-                    <Text style={styles.mutedCenter}>No mapped stops in this scope.</Text>
-                  </View>
-                ) : (
-                  displayRouteStops.map((stop, index) => (
-                    <View key={stop.stop_id} style={styles.stopRow}>
-                      <View style={styles.stopNumber}><Text style={styles.stopNumberText}>{index + 1}</Text></View>
+                {displayStops.map(
+                  (stop, index) => (
+                    <View
+                      key={stop.stop_id}
+                      style={styles.stopRow}
+                    >
+                      <View style={styles.stopNumber}>
+                        <Text style={styles.stopNumberText}>
+                          {index + 1}
+                        </Text>
+                      </View>
+
                       <View style={styles.flexOne}>
-                        <Text style={styles.stopName} numberOfLines={1}>{stop.name}</Text>
-                        <Text style={styles.stopMeta}>{stop.stop_type.toUpperCase()} {stop.latitude == null ? '• coordinates missing' : ''}</Text>
+                        <Text
+                          style={styles.stopName}
+                          numberOfLines={1}
+                        >
+                          {stop.name}
+                        </Text>
+                        <Text style={styles.stopMeta}>
+                          {stop.stop_type.toUpperCase()}
+                        </Text>
                       </View>
                     </View>
-                  ))
+                  ),
                 )}
               </View>
 
               <View style={styles.noteCard}>
-                <Ionicons name="information-circle-outline" size={16} color="#64748B" />
-                <Text style={styles.noteText}>Map data uses OpenStreetMap-based tiles. Route distance and duration are approximate planning estimates.</Text>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={16}
+                  color="#64748B"
+                />
+                <Text style={styles.noteText}>
+                  Road distance and drive time are planning
+                  estimates based on OpenStreetMap road data.
+                </Text>
               </View>
             </>
           )}
@@ -461,57 +1063,57 @@ export default function TripMapScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#0F172A' },
-  container: { flex: 1, backgroundColor: '#0F172A' },
-  header: { minHeight: 76, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#1E293B' },
-  headerButton: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#263247', alignItems: 'center', justifyContent: 'center' },
-  headerCenter: { flex: 1, minWidth: 0, paddingHorizontal: 12 },
-  headerEyebrow: { color: '#0EA5A4', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
-  headerTitle: { color: '#FFFFFF', fontSize: 19, fontWeight: '900', marginTop: 2 },
-  headerSubtitle: { color: '#64748B', fontSize: 11, marginTop: 3 },
-  scroll: { flex: 1 },
-  content: { padding: 16, paddingBottom: 50 },
-  flexOne: { flex: 1, minWidth: 0 },
-  card: { backgroundColor: '#1E293B', borderRadius: 20, padding: 18, marginBottom: 14 },
-  daySelectorCard: { backgroundColor: '#1E293B', borderRadius: 20, padding: 16, marginBottom: 14 },
-  mapCard: { height: 405, backgroundColor: '#1E293B', borderRadius: 20, overflow: 'hidden', marginBottom: 14, borderWidth: 1, borderColor: '#263247' },
-  map: { flex: 1, backgroundColor: '#E8EEF4' },
-  webLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F172A' },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  title: { color: '#FFFFFF', fontSize: 21, fontWeight: '900', marginTop: 10 },
-  titleSmall: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
-  muted: { color: '#94A3B8', fontSize: 11, lineHeight: 17, marginTop: 4 },
-  mutedCenter: { color: '#94A3B8', fontSize: 11, textAlign: 'center', lineHeight: 17, marginTop: 8 },
-  scopeBadge: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#2A3A50', alignItems: 'center', justifyContent: 'center' },
-  dayChips: { paddingRight: 8 },
-  dayChip: { minWidth: 86, paddingHorizontal: 10, paddingVertical: 9, borderRadius: 13, backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#2A3A50', marginRight: 8 },
-  dayChipActive: { backgroundColor: '#0EA5A4', borderColor: '#0EA5A4' },
-  dayChipTop: { color: '#94A3B8', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
-  dayChipBottom: { color: '#CBD5E1', fontSize: 10, fontWeight: '800', marginTop: 3 },
-  dayChipActiveText: { color: '#FFFFFF' },
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
-  statCard: { flex: 1, backgroundColor: '#1E293B', borderRadius: 16, padding: 14 },
-  statLabel: { color: '#64748B', fontSize: 9, fontWeight: '800' },
-  statValue: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', marginTop: 6 },
-  secondaryButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: '#243147', flexDirection: 'row', alignItems: 'center', gap: 5 },
-  secondaryButtonText: { color: '#CBD5E1', fontSize: 10, fontWeight: '900' },
-  routeSummaryRow: { flexDirection: 'row', gap: 10 },
-  routeSummaryItem: { flex: 1, backgroundColor: '#0F172A', borderRadius: 14, padding: 13 },
-  metaLabel: { color: '#64748B', fontSize: 9, fontWeight: '800' },
-  metaValue: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', marginTop: 5 },
-  infoBox: { backgroundColor: '#0F172A', borderRadius: 14, padding: 14, flexDirection: 'row', gap: 10 },
-  infoTitle: { color: '#F8FAFC', fontSize: 12, fontWeight: '800', lineHeight: 18 },
-  stopRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#243147' },
-  stopNumber: { width: 30, height: 30, borderRadius: 10, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center', marginRight: 11 },
-  stopNumberText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
-  stopName: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
-  stopMeta: { color: '#64748B', fontSize: 9, marginTop: 3 },
-  smallEmpty: { backgroundColor: '#0F172A', borderRadius: 14, padding: 20, alignItems: 'center' },
-  noteCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 3, paddingBottom: 5 },
-  noteText: { flex: 1, color: '#64748B', fontSize: 9, lineHeight: 14 },
-  primaryButton: { backgroundColor: '#0EA5A4', borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 15 },
-  primaryButtonText: { color: '#FFFFFF', fontWeight: '900', fontSize: 13 },
-  emptyIcon: { width: 56, height: 56, borderRadius: 17, backgroundColor: '#13283A', alignItems: 'center', justifyContent: 'center' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '900' },
+  safeArea:{flex:1,backgroundColor:'#0F172A'},
+  container:{flex:1,backgroundColor:'#0F172A'},
+  header:{minHeight:76,paddingHorizontal:16,flexDirection:'row',alignItems:'center',borderBottomWidth:1,borderBottomColor:'#1E293B'},
+  headerButton:{width:42,height:42,borderRadius:13,backgroundColor:'#1E293B',borderWidth:1,borderColor:'#263247',alignItems:'center',justifyContent:'center'},
+  headerCenter:{flex:1,minWidth:0,paddingHorizontal:12},
+  headerEyebrow:{color:'#0EA5A4',fontSize:9,fontWeight:'900',letterSpacing:1.1},
+  headerTitle:{color:'#FFFFFF',fontSize:19,fontWeight:'900',marginTop:2},
+  headerSubtitle:{color:'#64748B',fontSize:11,marginTop:3},
+  scroll:{flex:1},
+  content:{padding:16,paddingBottom:50},
+  flexOne:{flex:1,minWidth:0},
+  card:{backgroundColor:'#1E293B',borderRadius:20,padding:18,marginBottom:14},
+  daySelectorCard:{backgroundColor:'#1E293B',borderRadius:20,padding:16,marginBottom:14},
+  mapCard:{height:405,backgroundColor:'#1E293B',borderRadius:20,overflow:'hidden',marginBottom:14,borderWidth:1,borderColor:'#263247'},
+  map:{flex:1,backgroundColor:'#E8EEF4'},
+  webLoading:{flex:1,alignItems:'center',justifyContent:'center',backgroundColor:'#0F172A'},
+  sectionHeader:{flexDirection:'row',alignItems:'center',marginBottom:12},
+  title:{color:'#FFFFFF',fontSize:21,fontWeight:'900',marginTop:10},
+  titleSmall:{color:'#FFFFFF',fontSize:16,fontWeight:'900'},
+  muted:{color:'#94A3B8',fontSize:11,lineHeight:17,marginTop:4},
+  mutedCenter:{color:'#94A3B8',fontSize:11,textAlign:'center',lineHeight:17,marginTop:8},
+  scopeBadge:{width:34,height:34,borderRadius:11,backgroundColor:'#0F172A',borderWidth:1,borderColor:'#2A3A50',alignItems:'center',justifyContent:'center'},
+  dayChips:{paddingRight:8},
+  dayChip:{minWidth:86,paddingHorizontal:10,paddingVertical:9,borderRadius:13,backgroundColor:'#0F172A',borderWidth:1,borderColor:'#2A3A50',marginRight:8},
+  dayChipActive:{backgroundColor:'#0EA5A4',borderColor:'#0EA5A4'},
+  dayChipTop:{color:'#94A3B8',fontSize:9,fontWeight:'900',letterSpacing:.5},
+  dayChipBottom:{color:'#CBD5E1',fontSize:10,fontWeight:'800',marginTop:3},
+  dayChipActiveText:{color:'#FFFFFF'},
+  statsRow:{flexDirection:'row',gap:10,marginBottom:14},
+  statCard:{flex:1,backgroundColor:'#1E293B',borderRadius:16,padding:14},
+  statLabel:{color:'#64748B',fontSize:9,fontWeight:'800'},
+  statValue:{color:'#FFFFFF',fontSize:16,fontWeight:'900',marginTop:6},
+  secondaryButton:{backgroundColor:'#0F172A',borderRadius:12,paddingHorizontal:10,paddingVertical:8,borderWidth:1,borderColor:'#243147',flexDirection:'row',alignItems:'center',gap:5},
+  secondaryButtonText:{color:'#CBD5E1',fontSize:10,fontWeight:'900'},
+  routeSummaryRow:{flexDirection:'row',gap:10},
+  routeSummaryItem:{flex:1,backgroundColor:'#0F172A',borderRadius:14,padding:13},
+  metaLabel:{color:'#64748B',fontSize:9,fontWeight:'800'},
+  metaValue:{color:'#FFFFFF',fontSize:16,fontWeight:'900',marginTop:5},
+  warningBox:{marginTop:12,backgroundColor:'#241E10',borderRadius:14,padding:12,flexDirection:'row',gap:9},
+  warningText:{flex:1,color:'#FCD34D',fontSize:10,lineHeight:15,fontWeight:'700'},
+  infoBox:{backgroundColor:'#0F172A',borderRadius:14,padding:14,flexDirection:'row',gap:10},
+  infoTitle:{color:'#F8FAFC',fontSize:12,fontWeight:'800',lineHeight:18},
+  stopRow:{flexDirection:'row',alignItems:'center',paddingVertical:10,borderTopWidth:1,borderTopColor:'#243147'},
+  stopNumber:{width:30,height:30,borderRadius:10,backgroundColor:'#0EA5A4',alignItems:'center',justifyContent:'center',marginRight:11},
+  stopNumberText:{color:'#FFFFFF',fontSize:11,fontWeight:'900'},
+  stopName:{color:'#FFFFFF',fontSize:13,fontWeight:'800'},
+  stopMeta:{color:'#64748B',fontSize:9,marginTop:3},
+  noteCard:{flexDirection:'row',alignItems:'flex-start',gap:8,paddingHorizontal:3,paddingBottom:5},
+  noteText:{flex:1,color:'#64748B',fontSize:9,lineHeight:14},
+  primaryButton:{backgroundColor:'#0EA5A4',borderRadius:14,paddingVertical:14,alignItems:'center',marginTop:15},
+  primaryButtonText:{color:'#FFFFFF',fontWeight:'900',fontSize:13},
+  center:{flex:1,alignItems:'center',justifyContent:'center'},
+  emptyTitle:{color:'#FFFFFF',fontSize:20,fontWeight:'900'},
 });
