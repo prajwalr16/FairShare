@@ -18,6 +18,7 @@ type Expense = {
   split_type?: string | null;
   category?: ExpenseCategory | null;
   paid_by?: string | null;
+  location_name?: string | null;
   created_at?: string | null;
 };
 
@@ -46,6 +47,7 @@ function splitLabel(splitType?: string | null) {
 export default function ExpenseCard({ expense, currency = 'INR' }: Props) {
   const navigation = useNavigation<any>();
   const dateLabel = formatDate(expense.created_at);
+  const locationLabel = expense.location_name?.trim() || '';
 
   return (
     <Pressable
@@ -58,7 +60,11 @@ export default function ExpenseCard({ expense, currency = 'INR' }: Props) {
       }
     >
       <View style={styles.iconContainer}>
-        <Ionicons name={expense.category ? EXPENSE_CATEGORY_ICONS[expense.category] : 'receipt-outline'} size={19} color="#0EA5A4" />
+        <Ionicons
+          name={expense.category ? EXPENSE_CATEGORY_ICONS[expense.category] : 'receipt-outline'}
+          size={19}
+          color="#0EA5A4"
+        />
       </View>
 
       <View style={styles.info}>
@@ -70,6 +76,15 @@ export default function ExpenseCard({ expense, currency = 'INR' }: Props) {
           {expense.category || 'Other'}  •  {splitLabel(expense.split_type)}
           {dateLabel ? `  •  ${dateLabel}` : ''}
         </Text>
+
+        {locationLabel ? (
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={13} color="#94A3B8" />
+            <Text style={styles.locationText} numberOfLines={1}>
+              {locationLabel}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.amountContainer}>
@@ -114,6 +129,18 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 11,
     marginTop: 4,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    minWidth: 0,
+  },
+  locationText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    marginLeft: 4,
+    flex: 1,
   },
   amountContainer: {
     marginLeft: 10,

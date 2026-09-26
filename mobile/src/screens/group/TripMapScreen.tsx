@@ -3,7 +3,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -78,7 +77,6 @@ function formatDuration(seconds: number) {
 function buildMapHtml(
   trip: Trip,
   dayNumber: number | null,
-  initialRoute: TripRoute | null = null,
 ) {
   const sourceStops = trip.stops
     .filter(
@@ -109,22 +107,10 @@ function buildMapHtml(
     display_sequence: index + 1,
   }));
 
-  // Only the selected stop scope is part of the HTML. On native platforms,
-  // later route responses are injected into this already-mounted MapLibre
-  // instance so the camera does not jump. On web, the current route is
-  // included in the iframe HTML because there is no native WebView injection.
-  const payload = JSON.stringify({stops})
-    .replace(/</g, '\\u003c')
-    .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029');
-
-  const initialRoutePayload = JSON.stringify({
-    legs: initialRoute?.legs || [],
-    snapped_stops: initialRoute?.snapped_stops || [],
-  })
-    .replace(/</g, '\\u003c')
-    .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029');
+  // Only the selected stop scope is part of the HTML. Route responses are
+  // injected into this already-mounted MapLibre instance so the camera does
+  // not jump when asynchronous routing completes.
+  const payload = JSON.stringify({stops}).replace(/</g, '\u003c');
 
   return `<!doctype html>
 <html>
@@ -164,12 +150,8 @@ import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-
 
 const payload = ${payload};
 const points = payload.stops || [];
-const initialRoute = ${initialRoutePayload};
 let mapReady = false;
-let pendingRoute =
-  initialRoute && (initialRoute.legs || []).length
-    ? initialRoute
-    : null;
+let pendingRoute = null;
 
 const map = new maplibregl.Map({
   container:'map',
@@ -593,7 +575,6 @@ export default function TripMapScreen() {
     ? buildMapHtml(
         trip,
         selectedDay,
-        Platform.OS === 'web' ? routeData : null,
       )
     : '<html><body style="background:#0F172A"></body></html>';
 
@@ -827,56 +808,42 @@ export default function TripMapScreen() {
               </View>
 
               <View style={styles.mapCard}>
-                {Platform.OS === 'web' ? (
-                  React.createElement('iframe', {
-                    key: `${selectedDay ?? 'all'}-${routeData ? 'routed' : 'empty'}`,
-                    title: 'FairShare trip map',
-                    srcDoc: mapHtml,
-                    style: {
-                      width: '100%',
-                      height: '100%',
-                      border: '0',
-                      display: 'block',
-                    },
-                  })
-                ) : (
-                  <WebView
-                    ref={mapWebViewRef}
-                    key={`${selectedDay ?? 'all'}`}
-                    originWhitelist={['*']}
-                    source={{
-                      html: mapHtml,
-                      baseUrl:'https://fairshare.local',
-                    }}
-                    javaScriptEnabled
-                    domStorageEnabled
-                    nestedScrollEnabled
-                    startInLoadingState
-                    renderLoading={() => (
-                      <View style={styles.webLoading}>
-                        <ActivityIndicator
-                          size="small"
-                          color="#0EA5A4"
-                        />
-                        <Text style={styles.muted}>
-                          Loading map…
-                        </Text>
-                      </View>
-                    )}
-                    onLoadEnd={() => {
-                      const latestCachedRoute = groupId
-                        ? getCachedTripRoute(
-                            groupId,
-                            selectedDay,
-                          )
-                        : null;
-                      pushRouteDataToMap(
-                        latestCachedRoute,
-                      );
-                    }}
-                    style={styles.map}
-                  />
-                )}
+                <WebView
+                  ref={mapWebViewRef}
+                  key={`${selectedDay ?? 'all'}`}
+                  originWhitelist={['*']}
+                  source={{
+                    html: mapHtml,
+                    baseUrl:'https://fairshare.local',
+                  }}
+                  javaScriptEnabled
+                  domStorageEnabled
+                  nestedScrollEnabled
+                  startInLoadingState
+                  renderLoading={() => (
+                    <View style={styles.webLoading}>
+                      <ActivityIndicator
+                        size="small"
+                        color="#0EA5A4"
+                      />
+                      <Text style={styles.muted}>
+                        Loading map…
+                      </Text>
+                    </View>
+                  )}
+                  onLoadEnd={() => {
+                    const latestCachedRoute = groupId
+                      ? getCachedTripRoute(
+                          groupId,
+                          selectedDay,
+                        )
+                      : null;
+                    pushRouteDataToMap(
+                      latestCachedRoute,
+                    );
+                  }}
+                  style={styles.map}
+                />
               </View>
 
               <View style={styles.statsRow}>
@@ -1048,32 +1015,52 @@ export default function TripMapScreen() {
                   </Pressable>
                 </View>
 
-                {displayStops.map(
-                  (stop, index) => (
-                    <View
-                      key={stop.stop_id}
-                      style={styles.stopRow}
-                    >
-                      <View style={styles.stopNumber}>
-                        <Text style={styles.stopNumberText}>
-                          {index + 1}
-                        </Text>
-                      </View>
+                {displayStops.map((stop, index) => {
+                  const showDayDivider =
+                    selectedDay == null &&
+                    (index === 0 ||
+                      displayStops[index - 1].day_number !==
+                        stop.day_number);
 
-                      <View style={styles.flexOne}>
-                        <Text
-                          style={styles.stopName}
-                          numberOfLines={1}
-                        >
-                          {stop.name}
-                        </Text>
-                        <Text style={styles.stopMeta}>
-                          {stop.stop_type.toUpperCase()}
-                        </Text>
+                  return (
+                    <React.Fragment key={stop.stop_id}>
+                      {showDayDivider ? (
+                        <View style={styles.dayDivider}>
+                          <View style={styles.dayDividerLine} />
+                          <View style={styles.dayDividerCenter}>
+                            <Text style={styles.dayDividerText}>
+                              DAY {stop.day_number}
+                            </Text>
+                            <Text style={styles.dayDividerDate}>
+                              {formatDayDate(trip, stop.day_number)}
+                            </Text>
+                          </View>
+                          <View style={styles.dayDividerLine} />
+                        </View>
+                      ) : null}
+
+                      <View style={styles.stopRow}>
+                        <View style={styles.stopNumber}>
+                          <Text style={styles.stopNumberText}>
+                            {index + 1}
+                          </Text>
+                        </View>
+
+                        <View style={styles.flexOne}>
+                          <Text
+                            style={styles.stopName}
+                            numberOfLines={1}
+                          >
+                            {stop.name}
+                          </Text>
+                          <Text style={styles.stopMeta}>
+                            {stop.stop_type.toUpperCase()}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
-                  ),
-                )}
+                    </React.Fragment>
+                  );
+                })}
               </View>
 
               <View style={styles.noteCard}>
@@ -1138,6 +1125,11 @@ const styles = StyleSheet.create({
   warningText:{flex:1,color:'#FCD34D',fontSize:10,lineHeight:15,fontWeight:'700'},
   infoBox:{backgroundColor:'#0F172A',borderRadius:14,padding:14,flexDirection:'row',gap:10},
   infoTitle:{color:'#F8FAFC',fontSize:12,fontWeight:'800',lineHeight:18},
+  dayDivider:{flexDirection:'row',alignItems:'center',paddingTop:16,paddingBottom:4,gap:10},
+  dayDividerLine:{flex:1,height:1,backgroundColor:'#334155'},
+  dayDividerCenter:{alignItems:'center',minWidth:82},
+  dayDividerText:{color:'#0EA5A4',fontSize:10,fontWeight:'900',letterSpacing:.8},
+  dayDividerDate:{color:'#64748B',fontSize:9,fontWeight:'800',marginTop:2},
   stopRow:{flexDirection:'row',alignItems:'center',paddingVertical:10,borderTopWidth:1,borderTopColor:'#243147'},
   stopNumber:{width:30,height:30,borderRadius:10,backgroundColor:'#0EA5A4',alignItems:'center',justifyContent:'center',marginRight:11},
   stopNumberText:{color:'#FFFFFF',fontSize:11,fontWeight:'900'},

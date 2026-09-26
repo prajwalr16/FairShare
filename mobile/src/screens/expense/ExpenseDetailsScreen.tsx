@@ -276,6 +276,17 @@ export default function ExpenseDetailsScreen() {
               </View>
               <Text style={styles.infoValue} numberOfLines={1}>{expense.category || 'Other'}</Text>
             </View>
+            {expense.location_name ? (
+              <View style={styles.infoRow}>
+                <View style={styles.infoLabelContainer}>
+                  <Ionicons name="location-outline" size={18} color="#0EA5A4" />
+                  <Text style={styles.infoLabel}>Location</Text>
+                </View>
+                <Text style={styles.infoValue} numberOfLines={2}>
+                  {expense.location_name}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.sectionHeader}>

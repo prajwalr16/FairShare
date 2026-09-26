@@ -36,7 +36,7 @@ type RootStackParamList = {
   Profile: undefined;
   GroupDetails: { groupId?: string; groupName?: string; initialTab?: string } | undefined;
   TripDetails: { groupId?: string; groupName?: string } | undefined;
-  TripMap: { groupId?: string; groupName?: string; dayNumber?: number | null } | undefined;
+  TripMap: { groupId?: string; groupName?: string; dayNumber?: number | null} | undefined;
   AddExpense: { groupId?: string; groupName?: string } | undefined;
   ExpenseDetails: { expenseId?: string; groupId?: string } | undefined;
   EditExpense: { expenseId?: string; groupId?: string } | undefined;
@@ -202,7 +202,7 @@ export default function AppNavigator() {
       if (event === 'SIGNED_OUT' && navigationRef.isReady()) {
         navigationRef.reset({
           index: 0,
-          routes: [{ name: 'Welcome' }],
+          routes: [{ name: 'Login' }],
         });
       }
     });
@@ -240,7 +240,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Welcome" component={WelcomeScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="SignUp" component={SignUpScreen} />
-        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen}/>
         <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
         <Stack.Screen name="AcceptInvite" component={AcceptInviteScreen} />
         <Stack.Screen name="Home" component={HomeScreen} />
@@ -249,7 +249,7 @@ export default function AppNavigator() {
         <Stack.Screen name="TripDetails" component={TripDetailsScreen} />
         <Stack.Screen name="TripMap" component={TripMapScreen} />
         <Stack.Screen name="AddExpense" component={AddExpenseScreen} />
-        <Stack.Screen name="ExpenseDetails" component={ExpenseDetailsScreen} />
+        <Stack.Screen name="ExpenseDetails" component={ExpenseDetailsScreen}/>
         <Stack.Screen name="EditExpense" component={EditExpenseScreen} />
         <Stack.Screen name="GroupHistory" component={HistoryScreen} />
         <Stack.Screen name="GroupSettings" component={GroupSettingsScreen} />
