@@ -27,7 +27,7 @@ export async function signIn(
 }
 
 export async function signOut() {
-  return await supabase.auth.signOut();
+  return await supabase.auth.signOut({ scope: 'local' });
 }
 
 export async function forgotPassword(

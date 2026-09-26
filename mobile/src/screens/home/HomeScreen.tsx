@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -35,6 +34,10 @@ const filters: Array<{ key: Filter; label: string; icon: keyof typeof Ionicons.g
   { key: 'Other', label: 'Other', icon: 'grid-outline' },
 ];
 
+function getErrorMessage(error: any) {
+  return error?.message || 'Unable to load your groups. Please try again.';
+}
+
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
@@ -42,33 +45,47 @@ export default function HomeScreen() {
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [filter, setFilter] = useState<Filter>('All');
 
-  const loadGroups = useCallback(async (background = false) => {
+  const loadGroups = useCallback(async () => {
     const result = await getGroups();
+
     if (result.error) {
-      if (!background) {
-        Alert.alert('Unable to load groups', result.error.message);
-      }
-      return;
+      setLoading(false);
+      setError(getErrorMessage(result.error));
+      return false;
     }
 
     setGroups(result.data || []);
+    setError(null);
     setLoading(false);
+    return true;
   }, []);
 
   useEffect(() => {
     let active = true;
 
-    (async () => {
-      const cached = await getCachedGroups();
-      if (active && cached) {
+    // Cache is an optimization only. Do not await it before starting the
+    // authoritative API request, otherwise a web storage/session issue can
+    // leave the screen stuck on "Loading groups…" without ever calling
+    // GET /groups.
+    const loadCachedGroups = async () => {
+      try {
+        const cached = await getCachedGroups();
+        if (!active || !cached) return;
+
         setGroups(cached);
+        setError(null);
         setLoading(false);
+      } catch {
+        // Persistent cache is optional. The API request below is authoritative.
       }
-      await loadGroups(Boolean(cached));
-    })();
+    };
+
+    void loadCachedGroups();
+    void loadGroups();
 
     return () => {
       active = false;
@@ -92,20 +109,24 @@ export default function HomeScreen() {
       Office: 0,
       Other: 0,
     };
+
     groups.forEach((group) => {
       const type = group.type as Exclude<Filter, 'All'>;
       if (type in counts) counts[type] += 1;
     });
+
     return counts;
   }, [groups]);
 
   const handleCreateGroup = async (group: any) => {
     const result = await createGroup(group);
     if (result.error) {
-      Alert.alert('Unable to create group', result.error.message);
+      setError(getErrorMessage(result.error));
       return;
     }
+
     setShowCreate(false);
+    setError(null);
     setFilter(group.type === 'Trip' ? 'Trip' : 'All');
     await loadGroups();
   };
@@ -212,6 +233,18 @@ export default function HomeScreen() {
                   <ActivityDots />
                   <Text style={styles.emptyTitle}>Loading groups…</Text>
                 </View>
+              ) : error ? (
+                <View style={styles.emptyState}>
+                  <View style={styles.emptyIcon}>
+                    <Ionicons name="alert-circle-outline" size={30} color="#0EA5A4" />
+                  </View>
+                  <Text style={styles.emptyTitle}>Unable to load groups</Text>
+                  <Text style={styles.emptySubtitle}>{error}</Text>
+                  <Pressable style={styles.retryButton} onPress={() => void loadGroups()}>
+                    <Ionicons name="refresh-outline" size={16} color="#FFFFFF" />
+                    <Text style={styles.retryButtonText}>Retry</Text>
+                  </Pressable>
+                </View>
               ) : (
                 <View style={styles.emptyState}>
                   <View style={styles.emptyIcon}>
@@ -315,12 +348,14 @@ const styles = StyleSheet.create({
   listContent: { paddingTop: 1 },
   emptyState: { alignItems: 'center', marginTop: 90, paddingHorizontal: 24 },
   emptyIcon: { width: 66, height: 66, borderRadius: 21, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#263247' },
-  emptyTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginTop: 14 },
+  emptyTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginTop: 14, textAlign: 'center' },
   emptySubtitle: { color: '#94A3B8', textAlign: 'center', marginTop: 7, lineHeight: 20, fontSize: 12 },
   activityDots: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#0EA5A4' },
   dotOne: { opacity: 0.4 },
   dotTwo: { opacity: 0.7 },
   dotThree: { opacity: 1 },
+  retryButton: { marginTop: 16, minHeight: 44, paddingHorizontal: 16, borderRadius: 13, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 },
+  retryButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   fab: { position: 'absolute', right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: '#0EA5A4', justifyContent: 'center', alignItems: 'center', elevation: 12, shadowColor: '#000000', shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
 });

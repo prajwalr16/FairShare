@@ -83,5 +83,5 @@ export async function changePassword(
 }
 
 export async function signOutAccount() {
-  return await supabase.auth.signOut();
+  return await supabase.auth.signOut({ scope: 'local' });
 }

@@ -202,7 +202,7 @@ export default function AppNavigator() {
       if (event === 'SIGNED_OUT' && navigationRef.isReady()) {
         navigationRef.reset({
           index: 0,
-          routes: [{ name: 'Login' }],
+          routes: [{ name: 'Welcome' }],
         });
       }
     });

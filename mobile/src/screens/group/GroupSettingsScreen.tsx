@@ -240,31 +240,57 @@ export default function GroupSettingsScreen() {
   const handleDeleteGroup = () => {
     if (!groupId || !group) return;
 
+    const message =
+      `This permanently deletes ${group.name || 'this group'}, including ` +
+      'its expenses, splits, settlements and memberships. This cannot be undone.';
+
+    const performDelete = async () => {
+      setDangerLoading(true);
+
+      const { error } = await deleteGroup(groupId);
+
+      setDangerLoading(false);
+
+      if (error) {
+        if (Platform.OS === 'web') {
+          window.alert(`Unable to delete group\n\n${error.message}`);
+        } else {
+          Alert.alert('Unable to delete group', error.message);
+        }
+        return;
+      }
+
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Home' }],
+      });
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        `Delete group?\n\n${message}`,
+      );
+
+      if (confirmed) {
+        void performDelete();
+      }
+
+      return;
+    }
+
     Alert.alert(
       'Delete group?',
-      `This permanently deletes ${group.name || 'this group'}, including its expenses, splits, settlements and memberships. This cannot be undone.`,
+      message,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            setDangerLoading(true);
-            const { error } = await deleteGroup(groupId);
-            setDangerLoading(false);
-
-            if (error) {
-              Alert.alert('Unable to delete group', error.message);
-              return;
-            }
-
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Home' }],
-            });
+          onPress: () => {
+            void performDelete();
           },
         },
-      ]
+      ],
     );
   };
 

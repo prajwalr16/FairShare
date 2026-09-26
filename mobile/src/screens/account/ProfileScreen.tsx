@@ -64,6 +64,7 @@ export default function ProfileScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -213,27 +214,47 @@ export default function ProfileScreen() {
   };
 
   const confirmSignOut = () => {
-    if (saving || passwordBusy) return;
+    if (saving || passwordBusy || signingOut) return;
+
+    const performSignOut = async () => {
+      setSigningOut(true);
+
+      const { error } = await signOutAccount();
+      if (error) {
+        setSigningOut(false);
+        if (Platform.OS === 'web') {
+          window.alert(`Unable to sign out\n\n${error.message}`);
+        } else {
+          Alert.alert('Unable to sign out', error.message);
+        }
+        return;
+      }
+
+      // AppNavigator owns navigation after auth changes. The Supabase
+      // SIGNED_OUT event resets the stack to the Welcome screen.
+    };
+
+    const message =
+      'You will need to sign in again to access your FairShare account.';
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(`Sign out?\n\n${message}`);
+      if (confirmed) {
+        void performSignOut();
+      }
+      return;
+    }
 
     Alert.alert(
       'Sign out?',
-      'You will need to sign in again to access your FairShare account.',
+      message,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Sign out',
           style: 'destructive',
-          onPress: async () => {
-            const { error } = await signOutAccount();
-            if (error) {
-              Alert.alert('Unable to sign out', error.message);
-              return;
-            }
-
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Welcome' }],
-            });
+          onPress: () => {
+            void performSignOut();
           },
         },
       ],
@@ -422,10 +443,16 @@ export default function ProfileScreen() {
               <Pressable
                 style={styles.signOutButton}
                 onPress={confirmSignOut}
-                disabled={saving || passwordBusy}
+                disabled={saving || passwordBusy || signingOut}
               >
-                <Ionicons name="log-out-outline" size={19} color="#FCA5A5" />
-                <Text style={styles.signOutText}>Sign out</Text>
+                {signingOut ? (
+                  <ActivityIndicator size="small" color="#FCA5A5" />
+                ) : (
+                  <Ionicons name="log-out-outline" size={19} color="#FCA5A5" />
+                )}
+                <Text style={styles.signOutText}>
+                  {signingOut ? 'Signing out…' : 'Sign out'}
+                </Text>
               </Pressable>
             </View>
 
