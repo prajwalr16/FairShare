@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     supabase_publishable_key: str = Field(description="Supabase publishable key")
     supabase_secret_key: str | None = None
     supabase_service_role_key: str | None = None
+    fairshare_web_url: str | None = None
     cors_origins: str = "*"
     api_prefix: str = "/api/v1"
     routing_base_url: str = "https://router.project-osrm.org"
