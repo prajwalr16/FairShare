@@ -5,7 +5,6 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import {
@@ -15,6 +14,11 @@ import { useNavigation } from '@react-navigation/native';
 import PasswordInput from '../../components/PasswordInput';
 import { signUp } from '../../services/authService';
 
+type Status = {
+  type: 'error' | 'success';
+  message: string;
+} | null;
+
 export default function SignUpScreen() {
   const navigation = useNavigation<any>();
 
@@ -23,63 +27,75 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<Status>(null);
 
   const createAccount = async () => {
+    setStatus(null);
+
     if (!name.trim()) {
-      return Alert.alert(
-        'Missing name',
-        'Please enter your full name.'
-      );
+      return setStatus({ type: 'error', message: 'Please enter your full name.' });
     }
 
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
-      return Alert.alert(
-        'Invalid email',
-        'Please enter a valid email address.'
-      );
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+      return setStatus({ type: 'error', message: 'Please enter a valid email address.' });
     }
 
     if (password.length < 8) {
-      return Alert.alert(
-        'Weak password',
-        'Password must be at least 8 characters.'
-      );
+      return setStatus({
+        type: 'error',
+        message: 'Password must be at least 8 characters.',
+      });
     }
 
     if (password !== confirmPassword) {
-      return Alert.alert(
-        'Passwords do not match',
-        'Enter the same password in both fields.'
-      );
+      return setStatus({
+        type: 'error',
+        message: 'Enter the same password in both fields.',
+      });
     }
 
     setLoading(true);
 
-    const { error } = await signUp(
-      email,
-      password,
-      name
-    );
+    try {
+      const { data, error } = await signUp(normalizedEmail, password, name);
 
-    setLoading(false);
+      if (error) {
+        setStatus({
+          type: 'error',
+          message: error.message || 'Unable to create your account.',
+        });
+        return;
+      }
 
-    if (error) {
-      return Alert.alert(
-        'Sign Up Failed',
-        error.message
-      );
+      if (data.session) {
+        setStatus({
+          type: 'success',
+          message: 'Account created successfully. Opening FairShare…',
+        });
+
+        setTimeout(() => {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Home' }],
+          });
+        }, 250);
+        return;
+      }
+
+      setStatus({
+        type: 'success',
+        message:
+          'Account created. Check your email and verify your address before signing in.',
+      });
+    } catch (error: any) {
+      setStatus({
+        type: 'error',
+        message: error?.message || 'Unable to create your account.',
+      });
+    } finally {
+      setLoading(false);
     }
-
-    Alert.alert(
-      'Account created',
-      'Check your email for verification.',
-      [
-        {
-          text: 'OK',
-          onPress: () => navigation.navigate('Login'),
-        },
-      ]
-    );
   };
 
   return (
@@ -89,9 +105,7 @@ export default function SignUpScreen() {
     >
       <View style={styles.container}>
         <View style={styles.card}>
-          <Text style={styles.title}>
-            Create Account
-          </Text>
+          <Text style={styles.title}>Create Account</Text>
 
           <Text style={styles.subtitle}>
             Set up your FairShare profile.
@@ -103,6 +117,8 @@ export default function SignUpScreen() {
             placeholderTextColor="#64748B"
             value={name}
             onChangeText={setName}
+            editable={!loading}
+            autoCapitalize="words"
           />
 
           <TextInput
@@ -114,6 +130,7 @@ export default function SignUpScreen() {
             autoCorrect={false}
             value={email}
             onChangeText={setEmail}
+            editable={!loading}
           />
 
           <PasswordInput
@@ -128,31 +145,50 @@ export default function SignUpScreen() {
             onChangeText={setConfirmPassword}
           />
 
+          {status ? (
+            <View
+              style={[
+                styles.statusBox,
+                status.type === 'error'
+                  ? styles.statusError
+                  : styles.statusSuccess,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  status.type === 'error'
+                    ? styles.statusErrorText
+                    : styles.statusSuccessText,
+                ]}
+              >
+                {status.message}
+              </Text>
+            </View>
+          ) : null}
+
           <Pressable
-            style={[
-              styles.button,
-              loading && styles.disabled,
-            ]}
+            style={[styles.button, loading && styles.disabled]}
             onPress={createAccount}
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <>
+                <ActivityIndicator color="#FFFFFF" />
+                <Text style={styles.loadingText}>Creating account…</Text>
+              </>
             ) : (
-              <Text style={styles.buttonText}>
-                Create Account
-              </Text>
+              <Text style={styles.buttonText}>Create Account</Text>
             )}
           </Pressable>
 
           <Pressable
             onPress={() => navigation.goBack()}
+            disabled={loading}
           >
             <Text style={styles.footer}>
               Already have an account?{' '}
-              <Text style={styles.link}>
-                Sign In
-              </Text>
+              <Text style={styles.link}>Sign In</Text>
             </Text>
           </Pressable>
         </View>
@@ -204,6 +240,40 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
+  statusBox: {
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 2,
+    marginBottom: 12,
+  },
+
+  statusError: {
+    backgroundColor: '#3B1720',
+    borderWidth: 1,
+    borderColor: '#7F1D1D',
+  },
+
+  statusSuccess: {
+    backgroundColor: '#12332F',
+    borderWidth: 1,
+    borderColor: '#115E59',
+  },
+
+  statusText: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
+  },
+
+  statusErrorText: {
+    color: '#FCA5A5',
+  },
+
+  statusSuccessText: {
+    color: '#99F6E4',
+  },
+
   button: {
     backgroundColor: '#0EA5A4',
     minHeight: 54,
@@ -211,6 +281,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
+    flexDirection: 'row',
+    gap: 9,
   },
 
   disabled: {
@@ -220,6 +292,12 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#FFFFFF',
     fontSize: 16,
+    fontWeight: '700',
+  },
+
+  loadingText: {
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '700',
   },
 
