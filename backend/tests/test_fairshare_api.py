@@ -230,7 +230,7 @@ def test_invitation_flow_contract_with_mocked_auth_api(client, seed_users, monke
     group = create_group(client)
     gid = group['id']
     monkeypatch.setattr('app.services.invite_service._find_auth_user_by_email', lambda email: None)
-    monkeypatch.setattr('app.services.invite_service._send_invitation', lambda email, redirect_to, group_id: {'user': {'id': str(USER_C)}})
+    monkeypatch.setattr('app.services.invite_service._send_invitation', lambda email, group_id: {'user': {'id': str(USER_C)}})
     response = client.post(f'/api/v1/groups/{gid}/members/invite', json={'email': 'new@example.com', 'redirect_to': 'fairshare://accept-invite'})
     assert response.status_code == 200, response.text
     assert response.json()['status'] == 'pending'

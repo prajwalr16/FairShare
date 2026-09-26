@@ -1,4 +1,3 @@
-import * as Linking from 'expo-linking';
 import { apiRequest } from './apiClient';
 import { invalidateGroupOverview } from './groupService';
 
@@ -59,12 +58,12 @@ export async function getGroupMembers(groupId: string, signal?: AbortSignal, for
 
 export async function addGroupMember(groupId: string, email: string) {
   try {
-    const redirectTo = Linking.createURL('accept-invite');
+    // The backend now owns the invitation redirect URL. Keeping it
+    // server-side makes invitation links stable across Android, iOS and web.
     const data = await apiRequest<any>(`/groups/${groupId}/members/invite`, {
       method: 'POST',
       body: {
         email: email.trim().toLowerCase(),
-        redirect_to: redirectTo,
       },
     });
     invalidateGroupMembers(groupId);
