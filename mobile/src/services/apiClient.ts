@@ -17,8 +17,6 @@ let sessionLookup: Promise<string | null> | null = null;
 let accessToken: string | null = null;
 let accessTokenInitialized = false;
 
-// Supabase keeps the session persisted locally. Keep the access token in memory
-// so ordinary FairShare API requests do not hit storage for every request.
 supabase.auth.onAuthStateChange((_event, session) => {
   accessToken = session?.access_token || null;
   accessTokenInitialized = true;
@@ -33,7 +31,10 @@ async function getAccessToken(): Promise<string> {
     sessionLookup = supabase.auth
       .getSession()
       .then(({ data, error }) => {
-        if (error) throw new ApiError(error.message, 401);
+        if (error) {
+          throw new ApiError(error.message, 401);
+        }
+
         accessToken = data.session?.access_token || null;
         accessTokenInitialized = true;
         return accessToken;
@@ -44,10 +45,52 @@ async function getAccessToken(): Promise<string> {
   }
 
   const token = await sessionLookup;
+
   if (!token) {
     throw new ApiError('Your session has expired. Please sign in again.', 401);
   }
+
   return token;
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.auth.refreshSession();
+
+    if (error) {
+      return null;
+    }
+
+    accessToken = data.session?.access_token || null;
+    accessTokenInitialized = true;
+    return accessToken;
+  } catch {
+    return null;
+  }
+}
+
+async function performRequest(
+  baseUrl: string,
+  path: string,
+  token: string,
+  options: {
+    method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    body?: unknown;
+    signal?: AbortSignal;
+  },
+) {
+  return fetch(`${baseUrl}${path}`, {
+    method: options.method || 'GET',
+    signal: options.signal,
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(options.body !== undefined
+        ? { 'Content-Type': 'application/json' }
+        : {}),
+    },
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+  });
 }
 
 export async function apiRequest<T>(
@@ -59,26 +102,18 @@ export async function apiRequest<T>(
   } = {},
 ): Promise<T> {
   const baseUrl = assertApiConfigured();
-  const token = await getAccessToken();
-  const method = options.method || 'GET';
   const started = globalThis.performance?.now?.() ?? Date.now();
 
+  let token = await getAccessToken();
   let response: Response;
+
   try {
-    response = await fetch(`${baseUrl}${path}`, {
-      method,
-      signal: options.signal,
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...(options.body !== undefined
-          ? { 'Content-Type': 'application/json' }
-          : {}),
-      },
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    });
+    response = await performRequest(baseUrl, path, token, options);
   } catch (error: any) {
-    if (error?.name === 'AbortError') throw error;
+    if (error?.name === 'AbortError') {
+      throw error;
+    }
+
     throw new ApiError(
       'Unable to reach the FairShare server. Check that the backend is running and the API URL is correct.',
       0,
@@ -86,8 +121,31 @@ export async function apiRequest<T>(
     );
   }
 
+  if (response.status === 401) {
+    const refreshedToken = await refreshAccessToken();
+
+    if (refreshedToken && refreshedToken !== token) {
+      token = refreshedToken;
+
+      try {
+        response = await performRequest(baseUrl, path, token, options);
+      } catch (error: any) {
+        if (error?.name === 'AbortError') {
+          throw error;
+        }
+
+        throw new ApiError(
+          'Unable to reach the FairShare server. Check that the backend is running and the API URL is correct.',
+          0,
+          error,
+        );
+      }
+    }
+  }
+
   const raw = await response.text();
   let payload: any = null;
+
   if (raw) {
     try {
       payload = JSON.parse(raw);
@@ -99,8 +157,11 @@ export async function apiRequest<T>(
   if (__DEV__) {
     const ended = globalThis.performance?.now?.() ?? Date.now();
     const serverMs = response.headers.get('x-response-time-ms');
+
     console.debug(
-      `[FairShare] ${method} ${path} ${Math.round(ended - started)}ms client / ${serverMs || '?'}ms server (${response.status})`,
+      `[FairShare] ${options.method || 'GET'} ${path} ${Math.round(
+        ended - started,
+      )}ms client / ${serverMs || '?'}ms server (${response.status})`,
     );
   }
 
@@ -108,10 +169,16 @@ export async function apiRequest<T>(
     const detail =
       typeof payload === 'string'
         ? payload
-        : payload?.detail || payload?.message || `Request failed (${response.status}).`;
+        : payload?.detail ||
+          payload?.message ||
+          `Request failed (${response.status}).`;
+
     throw new ApiError(detail, response.status, payload);
   }
 
-  if (response.status === 204) return undefined as T;
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return payload as T;
 }

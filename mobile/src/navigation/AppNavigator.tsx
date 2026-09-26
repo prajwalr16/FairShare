@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
+import type { Session } from '@supabase/supabase-js';
 
 import { supabase } from '../config/supabase';
 
@@ -74,25 +76,42 @@ const linking = {
 function getUrlParams(url: string) {
   const queryPart = url.includes('?') ? url.split('?')[1].split('#')[0] : '';
   const hashPart = url.includes('#') ? url.split('#')[1] : '';
+
   const parse = (value: string) => {
     const params: Record<string, string> = {};
     if (!value) return params;
+
     value.split('&').forEach((pair) => {
       const [rawKey, ...rawValueParts] = pair.split('=');
       const rawValue = rawValueParts.join('=');
       if (!rawKey) return;
+
       try {
         params[decodeURIComponent(rawKey)] = decodeURIComponent(rawValue || '');
       } catch {
         params[rawKey] = rawValue || '';
       }
     });
+
     return params;
   };
+
   return { ...parse(queryPart), ...parse(hashPart) };
 }
 
+function LoadingScreen() {
+  return (
+    <View style={styles.loadingContainer}>
+      <Text style={styles.loadingLogo}>FS</Text>
+      <Text style={styles.loadingTitle}>FairShare</Text>
+      <ActivityIndicator size="small" color="#0EA5A4" style={styles.loadingIndicator} />
+    </View>
+  );
+}
+
 export default function AppNavigator() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const pendingUrl = useRef<string | null>(null);
 
   const routeFromUrl = useCallback((url: string) => {
@@ -100,43 +119,96 @@ export default function AppNavigator() {
       pendingUrl.current = url;
       return;
     }
+
     if (url.includes('reset-password') || url.includes('type=recovery')) {
       navigationRef.navigate('ResetPassword');
       return;
     }
+
     if (url.includes('accept-invite') || url.includes('type=invite')) {
       navigationRef.navigate('AcceptInvite');
     }
   }, []);
 
-  const handleDeepLink = useCallback(async (url: string) => {
-    const params = getUrlParams(url);
-    if (params.access_token && params.refresh_token) {
-      await supabase.auth.setSession({ access_token: params.access_token, refresh_token: params.refresh_token });
-    } else if (params.code) {
-      await supabase.auth.exchangeCodeForSession(params.code);
-    }
-    routeFromUrl(url);
-  }, [routeFromUrl]);
+  const handleDeepLink = useCallback(
+    async (url: string) => {
+      const params = getUrlParams(url);
+
+      if (params.access_token && params.refresh_token) {
+        const { error } = await supabase.auth.setSession({
+          access_token: params.access_token,
+          refresh_token: params.refresh_token,
+        });
+
+        if (error) {
+          console.warn('[FairShare] Failed to restore deep-link session:', error.message);
+        }
+      } else if (params.code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(params.code);
+
+        if (error) {
+          console.warn('[FairShare] Failed to exchange deep-link code:', error.message);
+        }
+      }
+
+      routeFromUrl(url);
+    },
+    [routeFromUrl],
+  );
 
   useEffect(() => {
-    const checkInitialUrl = async () => {
-      const url = await Linking.getInitialURL();
-      if (url) await handleDeepLink(url);
+    let mounted = true;
+
+    const bootstrapAuth = async () => {
+      try {
+        const initialUrl = await Linking.getInitialURL();
+
+        if (initialUrl) {
+          await handleDeepLink(initialUrl);
+        }
+
+        const {
+          data: { session: restoredSession },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (!mounted) return;
+
+        if (error) {
+          console.warn('[FairShare] Failed to restore session:', error.message);
+        }
+
+        setSession(restoredSession ?? null);
+      } finally {
+        if (mounted) {
+          setAuthReady(true);
+        }
+      }
     };
-    void checkInitialUrl();
+
+    void bootstrapAuth();
 
     const linkSub = Linking.addEventListener('url', ({ url }) => {
       void handleDeepLink(url);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY' && navigationRef.isReady()) {
-        navigationRef.navigate('ResetPassword');
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!mounted) return;
+
+      setSession(nextSession ?? null);
+
+      if (event === 'SIGNED_OUT' && navigationRef.isReady()) {
+        navigationRef.reset({
+          index: 0,
+          routes: [{ name: 'Welcome' }],
+        });
       }
     });
 
     return () => {
+      mounted = false;
       linkSub.remove();
       subscription.unsubscribe();
     };
@@ -144,15 +216,27 @@ export default function AppNavigator() {
 
   const handleNavigationReady = () => {
     const url = pendingUrl.current;
+
     if (url) {
       pendingUrl.current = null;
       routeFromUrl(url);
     }
   };
 
+  if (!authReady) {
+    return <LoadingScreen />;
+  }
+
   return (
-    <NavigationContainer ref={navigationRef} linking={linking} onReady={handleNavigationReady}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <NavigationContainer
+      ref={navigationRef}
+      linking={linking}
+      onReady={handleNavigationReady}
+    >
+      <Stack.Navigator
+        initialRouteName={session ? 'Home' : 'Welcome'}
+        screenOptions={{ headerShown: false }}
+      >
         <Stack.Screen name="Welcome" component={WelcomeScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="SignUp" component={SignUpScreen} />
@@ -174,3 +258,26 @@ export default function AppNavigator() {
     </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0F172A',
+  },
+  loadingLogo: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: '#0EA5A4',
+  },
+  loadingTitle: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  loadingIndicator: {
+    marginTop: 18,
+  },
+});
