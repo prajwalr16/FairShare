@@ -153,7 +153,7 @@ def expenses(group_id: UUID, limit: int | None = Query(default=None, ge=1, le=20
 
 @router.post("/groups/{group_id}/expenses", response_model=ExpenseSummary, status_code=status.HTTP_201_CREATED)
 def create_expense_route(group_id: UUID, payload: ExpenseCreate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
-    return create_expense(session, group_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user)
+    return create_expense(session, group_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user, payload.location_name, payload.journey_stop_id, payload.latitude, payload.longitude)
 
 
 @router.get("/expenses/{expense_id}", response_model=ExpenseDetails)
@@ -164,7 +164,7 @@ def expense_detail(expense_id: UUID, user: CurrentUser = Depends(get_current_use
 
 @router.put("/expenses/{expense_id}", response_model=ExpenseSummary)
 def update_expense_route(expense_id: UUID, payload: ExpenseCreate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
-    return update_expense(session, expense_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user.id)
+    return update_expense(session, expense_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user.id, payload.location_name, payload.journey_stop_id, payload.latitude, payload.longitude)
 
 
 @router.delete("/expenses/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)

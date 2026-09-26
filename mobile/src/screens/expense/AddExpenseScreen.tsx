@@ -24,6 +24,8 @@ import {
 import { createExpense } from '../../services/expenseService';
 import { getCurrentUser } from '../../services/authService';
 import { getGroupSettings } from '../../services/groupService';
+import { getTrip, TripStop } from '../../services/tripService';
+import ExpenseLocationPicker from '../../components/ExpenseLocationPicker';
 import {
   buildDefaultInputs,
   calculateSplits,
@@ -63,6 +65,11 @@ export default function AddExpenseScreen() {
   const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
   const [category, setCategory] = useState<ExpenseCategory>('Other');
   const [currency, setCurrency] = useState('INR');
+  const [tripStops, setTripStops] = useState<TripStop[]>([]);
+  const [locationName, setLocationName] = useState('');
+  const [journeyStopId, setJourneyStopId] = useState<string | null>(null);
+  const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
+  const [locationLongitude, setLocationLongitude] = useState<number | null>(null);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [saving, setSaving] = useState(false);
   const [valuesCustomized, setValuesCustomized] = useState(false);
@@ -81,6 +88,11 @@ export default function AddExpenseScreen() {
           setCurrentUserId(null);
           setPayerId(null);
           setCurrency('INR');
+          setTripStops([]);
+          setLocationName('');
+          setJourneyStopId(null);
+          setLocationLatitude(null);
+          setLocationLongitude(null);
           setLoadingMembers(false);
         }
         return;
@@ -96,8 +108,19 @@ export default function AddExpenseScreen() {
 
       const userId = userResult.data.user?.id || null;
       setCurrentUserId(userId);
+      setTripStops([]);
+      setLocationName('');
+      setJourneyStopId(null);
+      setLocationLatitude(null);
+      setLocationLongitude(null);
       if (groupResult?.data?.currency) {
         setCurrency(groupResult.data.currency);
+      }
+      if (groupResult?.data?.type === 'Trip') {
+        const tripResult = await getTrip(groupId);
+        if (!cancelled && tripResult.data) {
+          setTripStops(tripResult.data.stops || []);
+        }
       }
       setPayerId(userId);
       setCategory('Other');
@@ -353,6 +376,10 @@ export default function AddExpenseScreen() {
       splitType,
       category,
       splits: effectiveInputs,
+      locationName: locationName.trim() || null,
+      journeyStopId,
+      latitude: locationLatitude,
+      longitude: locationLongitude,
     });
 
     setSaving(false);
@@ -522,6 +549,31 @@ export default function AddExpenseScreen() {
                 <Ionicons name="chevron-down" size={20} color="#94A3B8" />
               </Pressable>
             </View>
+
+            <ExpenseLocationPicker
+              stops={tripStops}
+              selectedStopId={journeyStopId}
+              locationName={locationName}
+              onSelectStop={(stop) => {
+                setJourneyStopId(stop.id);
+                setLocationName(stop.name);
+                setLocationLatitude(stop.latitude ?? null);
+                setLocationLongitude(stop.longitude ?? null);
+              }}
+              onManualChange={(value) => {
+                setJourneyStopId(null);
+                setLocationName(value);
+                setLocationLatitude(null);
+                setLocationLongitude(null);
+              }}
+              onClear={() => {
+                setJourneyStopId(null);
+                setLocationName('');
+                setLocationLatitude(null);
+                setLocationLongitude(null);
+              }}
+              disabled={saving}
+            />
 
             <View style={styles.section}>
               <Text style={styles.label}>Split type</Text>

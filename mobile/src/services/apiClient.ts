@@ -14,6 +14,8 @@ export class ApiError extends Error {
 }
 
 let sessionLookup: Promise<string | null> | null = null;
+let refreshPromise: Promise<string | null> | null = null;
+let localSignOutPromise: Promise<void> | null = null;
 let accessToken: string | null = null;
 let accessTokenInitialized = false;
 
@@ -47,26 +49,51 @@ async function getAccessToken(): Promise<string> {
   const token = await sessionLookup;
 
   if (!token) {
-    throw new ApiError('Your session has expired. Please sign in again.', 401);
+    throw new ApiError('Please sign in to continue.', 401);
   }
 
   return token;
 }
 
 async function refreshAccessToken(): Promise<string | null> {
-  try {
-    const { data, error } = await supabase.auth.refreshSession();
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const { data, error } = await supabase.auth.refreshSession();
 
-    if (error) {
-      return null;
-    }
+        if (error) {
+          return null;
+        }
 
-    accessToken = data.session?.access_token || null;
-    accessTokenInitialized = true;
-    return accessToken;
-  } catch {
-    return null;
+        accessToken = data.session?.access_token || null;
+        accessTokenInitialized = true;
+        return accessToken;
+      } catch {
+        return null;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
   }
+
+  return refreshPromise;
+}
+
+async function forceLocalSignOut(): Promise<void> {
+  accessToken = null;
+  accessTokenInitialized = true;
+
+  if (!localSignOutPromise) {
+    localSignOutPromise = supabase.auth
+      .signOut({ scope: 'local' })
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => {
+        localSignOutPromise = null;
+      });
+  }
+
+  await localSignOutPromise;
 }
 
 async function performRequest(
@@ -124,22 +151,29 @@ export async function apiRequest<T>(
   if (response.status === 401) {
     const refreshedToken = await refreshAccessToken();
 
-    if (refreshedToken && refreshedToken !== token) {
-      token = refreshedToken;
+    if (!refreshedToken) {
+      await forceLocalSignOut();
+      throw new ApiError('Your session has expired. Please sign in again.', 401);
+    }
 
-      try {
-        response = await performRequest(baseUrl, path, token, options);
-      } catch (error: any) {
-        if (error?.name === 'AbortError') {
-          throw error;
-        }
+    token = refreshedToken;
 
-        throw new ApiError(
-          'Unable to reach the FairShare server. Check that the backend is running and the API URL is correct.',
-          0,
-          error,
-        );
+    try {
+      response = await performRequest(baseUrl, path, token, options);
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        throw error;
       }
+
+      throw new ApiError(
+        'Unable to reach the FairShare server. Check that the backend is running and the API URL is correct.',
+        0,
+        error,
+      );
+    }
+
+    if (response.status === 401) {
+      await forceLocalSignOut();
     }
   }
 

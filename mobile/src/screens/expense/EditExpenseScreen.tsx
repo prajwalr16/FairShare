@@ -20,6 +20,8 @@ import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_ICONS, ExpenseCategory } from '../
 import { getGroupMembers, GroupMember } from '../../services/memberService';
 import { getCurrentUser } from '../../services/authService';
 import { getGroupSettings } from '../../services/groupService';
+import { getTrip, TripStop } from '../../services/tripService';
+import ExpenseLocationPicker from '../../components/ExpenseLocationPicker';
 import {
   ExpenseSplitRecord,
   getExpenseDetails,
@@ -148,6 +150,11 @@ export default function EditExpenseScreen() {
   const [valuesCustomized, setValuesCustomized] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currency, setCurrency] = useState('INR');
+  const [tripStops, setTripStops] = useState<TripStop[]>([]);
+  const [locationName, setLocationName] = useState('');
+  const [journeyStopId, setJourneyStopId] = useState<string | null>(null);
+  const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
+  const [locationLongitude, setLocationLongitude] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,6 +181,14 @@ export default function EditExpenseScreen() {
       setCurrentUserId(userId);
       if (groupResult?.data?.currency) {
         setCurrency(groupResult.data.currency);
+      }
+
+      setTripStops([]);
+      if (groupResult?.data?.type === 'Trip') {
+        const tripResult = await getTrip(groupId);
+        if (!cancelled && tripResult.data) {
+          setTripStops(tripResult.data.stops || []);
+        }
       }
 
       if (memberResult.error) {
@@ -247,6 +262,10 @@ export default function EditExpenseScreen() {
       setAmountText(Number(detail.amount).toFixed(2));
       setPayerId(detail.paid_by);
       setCategory((detail.category as ExpenseCategory) || 'Other');
+      setLocationName(detail.location_name || '');
+      setJourneyStopId(detail.journey_stop_id || null);
+      setLocationLatitude(detail.latitude ?? null);
+      setLocationLongitude(detail.longitude ?? null);
       setSelectedIds(ids);
       setSplitType(detail.split_type);
 
@@ -453,6 +472,10 @@ export default function EditExpenseScreen() {
       splitType,
       category,
       splits: effectiveInputs,
+      locationName: locationName.trim() || null,
+      journeyStopId,
+      latitude: locationLatitude,
+      longitude: locationLongitude,
     });
 
     setSaving(false);
@@ -575,6 +598,31 @@ export default function EditExpenseScreen() {
               <Ionicons name="chevron-down" size={20} color="#94A3B8" />
             </Pressable>
           </View>
+
+          <ExpenseLocationPicker
+            stops={tripStops}
+            selectedStopId={journeyStopId}
+            locationName={locationName}
+            onSelectStop={(stop) => {
+              setJourneyStopId(stop.id);
+              setLocationName(stop.name);
+              setLocationLatitude(stop.latitude ?? null);
+              setLocationLongitude(stop.longitude ?? null);
+            }}
+            onManualChange={(value) => {
+              setJourneyStopId(null);
+              setLocationName(value);
+              setLocationLatitude(null);
+              setLocationLongitude(null);
+            }}
+            onClear={() => {
+              setJourneyStopId(null);
+              setLocationName('');
+              setLocationLatitude(null);
+              setLocationLongitude(null);
+            }}
+            disabled={saving}
+          />
 
           <View style={styles.section}>
             <Text style={styles.label}>Split type</Text>

@@ -452,7 +452,7 @@ export default function GroupDetailsScreen() {
                     <Ionicons name="map-outline" size={24} color="#0EA5A4" />
                   </View>
                   <View style={styles.flexOne}>
-                    <Text style={styles.journeyEyebrow}>OPTIONAL TRIP PLANNING</Text>
+                    <Text style={styles.journeyEyebrow}>TRIP PLANNING</Text>
                     <Text style={styles.journeyTitle}>Plan the road, keep spending separate</Text>
                     <Text style={styles.journeySubtitle}>
                       Journey planning is optional. You can add expenses anytime, even without setting up a journey.

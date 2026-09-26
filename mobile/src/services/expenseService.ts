@@ -3,7 +3,14 @@ import { invalidateGroupOverview, clearGroupOverviewCache } from './groupService
 import { ExpenseCategory } from '../constants/expenseCategories';
 import { CalculatedSplit, SplitInput, SplitType } from '../utils/expenseCalculation';
 
-export type CreateExpenseInput = {
+export type ExpenseLocationInput = {
+  locationName?: string | null;
+  journeyStopId?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+export type CreateExpenseInput = ExpenseLocationInput & {
   groupId: string;
   title: string;
   amount: number;
@@ -13,7 +20,7 @@ export type CreateExpenseInput = {
   splits: SplitInput[];
 };
 
-export type CreateEqualExpenseInput = {
+export type CreateEqualExpenseInput = ExpenseLocationInput & {
   groupId: string;
   title: string;
   amount: number;
@@ -32,6 +39,10 @@ export type ExpenseDetailsRecord = {
   split_type: SplitType;
   category: ExpenseCategory;
   paid_by: string;
+  location_name: string | null;
+  journey_stop_id: string | null;
+  latitude: number | null;
+  longitude: number | null;
   created_at: string;
 };
 
@@ -49,8 +60,14 @@ type ExpenseDetailsPayload = {
 };
 
 const EXPENSE_DETAILS_CACHE_TTL_MS = 120_000;
-const expenseDetailsCache = new Map<string, { data: ExpenseDetailsPayload; cachedAt: number }>();
-const expenseDetailsRequests = new Map<string, Promise<{ data: ExpenseDetailsPayload | null; error: any }>>();
+const expenseDetailsCache = new Map<
+  string,
+  { data: ExpenseDetailsPayload; cachedAt: number }
+>();
+const expenseDetailsRequests = new Map<
+  string,
+  Promise<{ data: ExpenseDetailsPayload | null; error: any }>
+>();
 
 export function invalidateExpenseDetails(expenseId: string) {
   expenseDetailsCache.delete(expenseId);
@@ -61,19 +78,35 @@ export function clearExpenseDetailsCache() {
   expenseDetailsRequests.clear();
 }
 
+function locationPayload(input: ExpenseLocationInput) {
+  return {
+    location_name: input.locationName?.trim() || null,
+    journey_stop_id: input.journeyStopId || null,
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
+  };
+}
+
 export async function createExpense(input: CreateExpenseInput) {
   try {
-    const data = await apiRequest<ExpenseDetailsRecord>(`/groups/${input.groupId}/expenses`, {
-      method: 'POST',
-      body: {
-        title: input.title.trim(),
-        amount: Number(input.amount.toFixed(2)),
-        paid_by: input.paidBy,
-        split_type: input.splitType,
-        category: input.category,
-        splits: input.splits.map((split) => ({ user_id: split.userId, value: split.value })),
+    const data = await apiRequest<ExpenseDetailsRecord>(
+      `/groups/${input.groupId}/expenses`,
+      {
+        method: 'POST',
+        body: {
+          title: input.title.trim(),
+          amount: Number(input.amount.toFixed(2)),
+          paid_by: input.paidBy,
+          split_type: input.splitType,
+          category: input.category,
+          splits: input.splits.map((split) => ({
+            user_id: split.userId,
+            value: split.value,
+          })),
+          ...locationPayload(input),
+        },
       },
-    });
+    );
     invalidateGroupOverview(input.groupId);
     return { data, error: null };
   } catch (error: any) {
@@ -87,19 +120,38 @@ export async function createEqualExpense(input: CreateEqualExpenseInput) {
     title: input.title,
     amount: input.amount,
     paidBy: input.paidBy,
-    splitType: 'Equal',
     category: input.category || 'Other',
-    splits: input.participantIds.map((userId) => ({ userId, value: 1 })),
+    splitType: 'Equal',
+    splits: input.participantIds.map((userId) => ({
+      userId,
+      value: 1,
+    })),
+    locationName: input.locationName,
+    journeyStopId: input.journeyStopId,
+    latitude: input.latitude,
+    longitude: input.longitude,
   });
 }
 
-export async function getExpenseDetails(expenseId: string, force = false, signal?: AbortSignal) {
+export async function getExpenseDetails(
+  expenseId: string,
+  force = false,
+  signal?: AbortSignal,
+) {
   if (!expenseId) {
-    return { data: null, error: new Error('Expense information is missing.') };
+    return {
+      data: null,
+      error: new Error('Expense information is missing.'),
+    };
   }
 
   const cached = expenseDetailsCache.get(expenseId);
-  if (!force && cached && Date.now() - cached.cachedAt < EXPENSE_DETAILS_CACHE_TTL_MS) {
+
+  if (
+    !force &&
+    cached &&
+    Date.now() - cached.cachedAt < EXPENSE_DETAILS_CACHE_TTL_MS
+  ) {
     return { data: cached.data, error: null };
   }
 
@@ -110,35 +162,54 @@ export async function getExpenseDetails(expenseId: string, force = false, signal
 
   const request = (async () => {
     try {
-      const data = await apiRequest<ExpenseDetailsPayload>(`/expenses/${expenseId}`, { signal });
-      expenseDetailsCache.set(expenseId, { data, cachedAt: Date.now() });
+      const data = await apiRequest<ExpenseDetailsPayload>(
+        `/expenses/${expenseId}`,
+        { signal },
+      );
+      expenseDetailsCache.set(expenseId, {
+        data,
+        cachedAt: Date.now(),
+      });
       return { data, error: null };
     } catch (error: any) {
       return { data: null, error };
     }
   })();
 
-  if (!force && !signal) expenseDetailsRequests.set(expenseId, request);
+  if (!force && !signal) {
+    expenseDetailsRequests.set(expenseId, request);
+  }
+
   try {
     return await request;
   } finally {
-    if (expenseDetailsRequests.get(expenseId) === request) expenseDetailsRequests.delete(expenseId);
+    if (expenseDetailsRequests.get(expenseId) === request) {
+      expenseDetailsRequests.delete(expenseId);
+    }
   }
 }
 
 export async function updateExpense(input: UpdateExpenseInput) {
   try {
-    const data = await apiRequest<ExpenseDetailsRecord>(`/expenses/${input.expenseId}`, {
-      method: 'PUT',
-      body: {
-        title: input.title.trim(),
-        amount: Number(input.amount.toFixed(2)),
-        paid_by: input.paidBy,
-        split_type: input.splitType,
-        category: input.category,
-        splits: input.splits.map((split) => ({ user_id: split.userId, value: split.value })),
+    const data = await apiRequest<ExpenseDetailsRecord>(
+      `/expenses/${input.expenseId}`,
+      {
+        method: 'PUT',
+        body: {
+          title: input.title.trim(),
+          amount: Number(input.amount.toFixed(2)),
+          paid_by: input.paidBy,
+          split_type: input.splitType,
+          category: input.category,
+          splits: input.splits.map((split) => ({
+            user_id: split.userId,
+            value: split.value,
+          })),
+          ...locationPayload(input),
+        },
       },
-    });
+    );
+
     invalidateExpenseDetails(input.expenseId);
     invalidateGroupOverview(input.groupId);
     return { data, error: null };
@@ -149,7 +220,9 @@ export async function updateExpense(input: UpdateExpenseInput) {
 
 export async function deleteExpense(expenseId: string) {
   try {
-    await apiRequest<void>(`/expenses/${expenseId}`, { method: 'DELETE' });
+    await apiRequest<void>(`/expenses/${expenseId}`, {
+      method: 'DELETE',
+    });
     invalidateExpenseDetails(expenseId);
     clearGroupOverviewCache();
     return { data: expenseId, error: null };
@@ -167,17 +240,29 @@ export async function getGroupExpenses(
 ) {
   try {
     const params = new URLSearchParams();
+
     if (limit) params.set('limit', String(limit));
     if (category && category !== 'All') params.set('category', category);
     if (scope !== 'all') params.set('scope', scope);
+
     const query = params.toString() ? `?${params.toString()}` : '';
-    const data = await apiRequest<ExpenseDetailsRecord[]>(`/groups/${groupId}/expenses${query}`, { signal });
+
+    const data = await apiRequest<ExpenseDetailsRecord[]>(
+      `/groups/${groupId}/expenses${query}`,
+      { signal },
+    );
+
     return { data, error: null };
   } catch (error: any) {
     return { data: null, error };
   }
 }
 
-export function mapCalculatedSplitsToInputs(shares: CalculatedSplit[]): SplitInput[] {
-  return shares.map((share) => ({ userId: share.userId, value: share.value }));
+export function mapCalculatedSplitsToInputs(
+  shares: CalculatedSplit[],
+): SplitInput[] {
+  return shares.map((share) => ({
+    userId: share.userId,
+    value: share.value,
+  }));
 }

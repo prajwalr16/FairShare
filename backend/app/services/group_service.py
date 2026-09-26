@@ -122,11 +122,27 @@ def _postgres_group_overview(session: Session, group_id: UUID, user_id: UUID) ->
                     'split_type', e.split_type,
                     'category', e.category,
                     'paid_by', e.paid_by,
+                    'location_name', e.location_name,
+                    'journey_stop_id', e.journey_stop_id,
+                    'latitude', e.latitude,
+                    'longitude', e.longitude,
                     'created_at', e.created_at
                 ) ORDER BY e.created_at DESC
             ), '[]'::jsonb) AS data
             FROM (
-                SELECT id, group_id, title, amount, split_type, category, paid_by, created_at
+                SELECT
+                    id,
+                    group_id,
+                    title,
+                    amount,
+                    split_type,
+                    category,
+                    paid_by,
+                    location_name,
+                    journey_stop_id,
+                    latitude,
+                    longitude,
+                    created_at
                 FROM public.expenses
                 WHERE group_id = :group_id
                 ORDER BY created_at DESC
