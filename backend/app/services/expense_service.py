@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, delete, insert, select
 from sqlalchemy.orm import Session
 
-from ..models import Expense, ExpenseSplit, Group, GroupMember, User
+from ..models import Expense, ExpenseSplit, Group, GroupMember, Trip, TripStop, User
 from ..repositories.expense_repository import get_expense, list_expenses
 from ..schemas.expense import SUPPORTED_EXPENSE_CATEGORIES
 from .permissions import get_group_and_role, require_permission
@@ -35,7 +35,10 @@ def _calculate_and_validate(amount: Decimal, split_type: str, entries) -> list:
 
 
 def _participant_ids(paid_by: UUID, entries, caller_id: UUID | None = None) -> set[UUID]:
-    ids = {item.user_id if isinstance(item.user_id, UUID) else UUID(str(item.user_id)) for item in entries}
+    ids = {
+        item.user_id if isinstance(item.user_id, UUID) else UUID(str(item.user_id))
+        for item in entries
+    }
     ids.add(paid_by)
     if caller_id:
         ids.add(caller_id)
@@ -57,7 +60,12 @@ def _load_write_context(session: Session, expense_id: UUID, participant_ids: set
     return rows
 
 
-def _validate_participants(session: Session, group_id: UUID, paid_by: UUID, entries: list[SplitInput]) -> None:
+def _validate_participants(
+    session: Session,
+    group_id: UUID,
+    paid_by: UUID,
+    entries: list[SplitInput],
+) -> None:
     ids = {UUID(item.user_id) for item in entries}
     ids.add(paid_by)
     members = session.scalars(
@@ -69,22 +77,84 @@ def _validate_participants(session: Session, group_id: UUID, paid_by: UUID, entr
     ).all()
     active_ids = {item for item in members if item}
     if missing := ids - active_ids:
-        raise HTTPException(status_code=400, detail="All payers and split participants must be active group members.")
+        raise HTTPException(
+            status_code=400,
+            detail="All payers and split participants must be active group members.",
+        )
 
 
-def create_expense(session: Session, group_id: UUID, title: str, amount: Decimal, paid_by: UUID, split_type: str, category: str, entries, caller: User) -> Expense:
+def _resolve_location(
+    session: Session,
+    group_id: UUID,
+    location_name: str | None,
+    journey_stop_id: UUID | None,
+    latitude: float | None,
+    longitude: float | None,
+) -> tuple[str | None, UUID | None, float | None, float | None]:
+    clean_name = location_name.strip() if location_name else None
+
+    if journey_stop_id is not None:
+        stop = session.scalar(
+            select(TripStop)
+            .join(Trip, Trip.id == TripStop.trip_id)
+            .where(
+                TripStop.id == journey_stop_id,
+                Trip.group_id == group_id,
+            )
+        )
+        if stop is None:
+            raise HTTPException(
+                status_code=400,
+                detail="The selected Journey place does not belong to this group.",
+            )
+
+        # Treat the Journey place as the authoritative location metadata.
+        clean_name = stop.name.strip()
+        latitude = stop.latitude
+        longitude = stop.longitude
+
+    return clean_name or None, journey_stop_id, latitude, longitude
+
+
+def create_expense(
+    session: Session,
+    group_id: UUID,
+    title: str,
+    amount: Decimal,
+    paid_by: UUID,
+    split_type: str,
+    category: str,
+    entries,
+    caller: User,
+    location_name: str | None = None,
+    journey_stop_id: UUID | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
+) -> Expense:
     group, role = get_group_and_role(session, group_id, caller.id)
     require_permission(role, "money", "Viewers cannot create expenses.")
+
     clean_title = title.strip()
     if not clean_title:
         raise HTTPException(status_code=400, detail="Expense title is required.")
+
     clean_category = category.strip().title()
     if clean_category not in SUPPORTED_EXPENSE_CATEGORIES:
         raise HTTPException(status_code=400, detail="Unsupported expense category.")
+
     inputs = _split_inputs(entries)
     amount = q2(Decimal(amount))
     _validate_participants(session, group_id, paid_by, inputs)
     calculated = _calculate_and_validate(amount, split_type, entries)
+
+    resolved_name, resolved_stop_id, resolved_lat, resolved_lon = _resolve_location(
+        session,
+        group_id,
+        location_name,
+        journey_stop_id,
+        latitude,
+        longitude,
+    )
 
     expense = Expense(
         id=uuid4(),
@@ -94,17 +164,34 @@ def create_expense(session: Session, group_id: UUID, title: str, amount: Decimal
         paid_by=paid_by,
         split_type=split_type.strip().capitalize(),
         category=clean_category,
+        location_name=resolved_name,
+        journey_stop_id=resolved_stop_id,
+        latitude=resolved_lat,
+        longitude=resolved_lon,
     )
     session.add(expense)
-    session.add_all([
-        ExpenseSplit(expense_id=expense.id, user_id=UUID(item.user_id), amount=q2(item.amount))
-        for item in calculated
-    ])
+    session.add_all(
+        [
+            ExpenseSplit(
+                expense_id=expense.id,
+                user_id=UUID(item.user_id),
+                amount=q2(item.amount),
+            )
+            for item in calculated
+        ]
+    )
     session.commit()
     return expense
 
 
-def list_group_expenses(session: Session, group_id: UUID, user_id: UUID, limit: int | None = None, category: str | None = None, scope: str = "all") -> list[Expense]:
+def list_group_expenses(
+    session: Session,
+    group_id: UUID,
+    user_id: UUID,
+    limit: int | None = None,
+    category: str | None = None,
+    scope: str = "all",
+) -> list[Expense]:
     get_group_and_role(session, group_id, user_id)
     if scope not in {"all", "mine"}:
         raise HTTPException(status_code=400, detail="Invalid expense scope.")
@@ -113,7 +200,11 @@ def list_group_expenses(session: Session, group_id: UUID, user_id: UUID, limit: 
     return list_expenses(session, group_id, limit, category, scope, user_id)
 
 
-def get_details(session: Session, expense_id: UUID, user_id: UUID) -> tuple[Expense, list[ExpenseSplit]]:
+def get_details(
+    session: Session,
+    expense_id: UUID,
+    user_id: UUID,
+) -> tuple[Expense, list[ExpenseSplit]]:
     membership_join = and_(
         GroupMember.group_id == Group.id,
         GroupMember.user_id == user_id,
@@ -130,10 +221,14 @@ def get_details(session: Session, expense_id: UUID, user_id: UUID) -> tuple[Expe
         )
         .order_by(ExpenseSplit.created_at.asc())
     ).all()
+
     if not rows:
         if session.scalar(select(Expense.id).where(Expense.id == expense_id)) is None:
             raise HTTPException(status_code=404, detail="Expense not found.")
-        raise HTTPException(status_code=403, detail="You are not an active member of this group.")
+        raise HTTPException(
+            status_code=403,
+            detail="You are not an active member of this group.",
+        )
 
     expense = rows[0][0]
     splits = [split for _, split in rows if split is not None]
@@ -151,20 +246,29 @@ def _replace_splits(session: Session, expense_id: UUID, calculated: list) -> Non
         }
         for item in calculated
     ]
-    # Keep replacement inside the same SQLAlchemy transaction, but execute the
-    # delete before the insert. A PostgreSQL data-modifying CTE is not suitable
-    # here because the INSERT can still hit the existing (expense_id, user_id)
-    # unique constraint before the CTE's DELETE is visible to conflict checking.
-    # Both statements remain uncommitted until the caller commits the transaction,
-    # so the replacement is still atomic from the application's perspective.
     session.execute(delete(ExpenseSplit).where(ExpenseSplit.expense_id == expense_id))
     session.execute(insert(ExpenseSplit), rows)
 
 
-def update_expense(session: Session, expense_id: UUID, title: str, amount: Decimal, paid_by: UUID, split_type: str, category: str, entries, caller_id: UUID) -> Expense:
+def update_expense(
+    session: Session,
+    expense_id: UUID,
+    title: str,
+    amount: Decimal,
+    paid_by: UUID,
+    split_type: str,
+    category: str,
+    entries,
+    caller_id: UUID,
+    location_name: str | None = None,
+    journey_stop_id: UUID | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
+) -> Expense:
     clean_title = title.strip()
     if not clean_title:
         raise HTTPException(status_code=400, detail="Expense title is required.")
+
     clean_category = category.strip().title()
     if clean_category not in SUPPORTED_EXPENSE_CATEGORIES:
         raise HTTPException(status_code=400, detail="Unsupported expense category.")
@@ -180,20 +284,42 @@ def update_expense(session: Session, expense_id: UUID, title: str, amount: Decim
     expense, group = rows[0][0], rows[0][1]
     membership_roles = {row[2]: row[3] for row in rows if row[2]}
     caller_role = "owner" if group.owner_id == caller_id else membership_roles.get(caller_id)
+
     if caller_role is None:
-        raise HTTPException(status_code=403, detail="You are not an active member of this group.")
+        raise HTTPException(
+            status_code=403,
+            detail="You are not an active member of this group.",
+        )
+
     require_permission(caller_role, "money", "Viewers cannot edit expenses.")
 
     required_participants = participant_ids - {caller_id}
     missing = required_participants - set(membership_roles)
     if missing:
-        raise HTTPException(status_code=400, detail="All payers and split participants must be active group members.")
+        raise HTTPException(
+            status_code=400,
+            detail="All payers and split participants must be active group members.",
+        )
+
+    resolved_name, resolved_stop_id, resolved_lat, resolved_lon = _resolve_location(
+        session,
+        expense.group_id,
+        location_name,
+        journey_stop_id,
+        latitude,
+        longitude,
+    )
 
     expense.title = clean_title
     expense.amount = amount
     expense.paid_by = paid_by
     expense.split_type = split_type.strip().capitalize()
     expense.category = clean_category
+    expense.location_name = resolved_name
+    expense.journey_stop_id = resolved_stop_id
+    expense.latitude = resolved_lat
+    expense.longitude = resolved_lon
+
     _replace_splits(session, expense.id, calculated)
     session.commit()
     return expense
@@ -203,7 +329,9 @@ def delete_expense(session: Session, expense_id: UUID, caller_id: UUID) -> None:
     expense = get_expense(session, expense_id)
     if expense is None:
         raise HTTPException(status_code=404, detail="Expense not found.")
+
     _, role = get_group_and_role(session, expense.group_id, caller_id)
     require_permission(role, "money", "Viewers cannot delete expenses.")
+
     session.delete(expense)
     session.commit()
