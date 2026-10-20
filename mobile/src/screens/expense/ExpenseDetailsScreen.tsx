@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -153,30 +154,54 @@ export default function ExpenseDetailsScreen() {
   const handleDelete = () => {
     if (!expense || deleting) return;
 
+    const message =
+      `Delete “${expense.title}”? This will recalculate the group's ` +
+      'balances and debt relationships.';
+
+    const performDelete = async () => {
+      setDeleting(true);
+
+      const { error } = await deleteExpense(expense.id);
+
+      setDeleting(false);
+
+      if (error) {
+        if (Platform.OS === 'web') {
+          window.alert(`Unable to delete expense\n\n${error.message}`);
+        } else {
+          Alert.alert('Unable to delete expense', error.message);
+        }
+        return;
+      }
+
+      navigation.goBack();
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        `Delete expense?\n\n${message}`,
+      );
+
+      if (confirmed) {
+        void performDelete();
+      }
+
+      return;
+    }
+
     Alert.alert(
       'Delete expense?',
-      `Delete “${expense.title}”? This will recalculate the group's balances and debts.`,
+      message,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-
-            const { error } = await deleteExpense(expense.id);
-
-            setDeleting(false);
-
-            if (error) {
-              Alert.alert('Unable to delete expense', error.message);
-              return;
-            }
-
-            navigation.goBack();
+          onPress: () => {
+            void performDelete();
           },
         },
-      ]
+      ],
     );
   };
 
@@ -255,11 +280,20 @@ export default function ExpenseDetailsScreen() {
             <Text style={styles.title}>{expense.title}</Text>
             <Text style={styles.heroAmount}>{money(expense.amount, currency)}</Text>
             <Text style={styles.heroMeta}>
-              {expense.split_type} split  •  {formatDateTime(expense.created_at)}
+              {expense.split_type} split  •  {formatDateTime(expense.expense_date || expense.created_at)}
             </Text>
           </View>
 
           <View style={styles.infoCard}>
+            <View style={styles.infoRow}>
+              <View style={styles.infoLabelContainer}>
+                <Ionicons name="calendar-outline" size={18} color="#0EA5A4" />
+                <Text style={styles.infoLabel}>Date & Time</Text>
+              </View>
+              <Text style={styles.infoValue} numberOfLines={1}>
+                {formatDateTime(expense.expense_date || expense.created_at)}
+              </Text>
+            </View>
             <View style={styles.infoRow}>
               <View style={styles.infoLabelContainer}>
                 <Ionicons name="wallet-outline" size={18} color="#0EA5A4" />

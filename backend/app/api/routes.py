@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -16,6 +17,7 @@ from ..schemas.group import (
 )
 from ..schemas.place import PlaceSearchResponse
 from ..schemas.settlement import SettlementCreate, SettlementResponse, SettlementUpdate
+from ..schemas.user import UserProfileUpdate, UserResponse
 from ..services.balance_service import compute_balances, compute_financial_snapshot
 from ..services.debt_service import get_group_debts
 from ..services.expense_service import create_expense, delete_expense, get_details, list_group_expenses, update_expense
@@ -44,19 +46,36 @@ def health() -> dict[str, str]:
     return {"status": "healthy", "app": "FairShare API"}
 
 
-@router.get("/me")
-def me(user: CurrentUser = Depends(get_current_user)):
-    return {"id": user.id, "email": user.email, "full_name": user.full_name}
+@router.get("/me", response_model=UserResponse)
+def me(user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_db)):
+    db_u = ensure_user(session, user)
+    return UserResponse(id=db_u.id, email=db_u.email, full_name=db_u.full_name)
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_profile(
+    payload: UserProfileUpdate,
+    user: CurrentUser = Depends(write_context),
+    session: Session = Depends(get_db),
+):
+    db_u = ensure_user(session, user)
+    db_u.full_name = payload.full_name.strip()
+    session.commit()
+    session.refresh(db_u)
+    return UserResponse(id=db_u.id, email=db_u.email, full_name=db_u.full_name)
 
 
 @router.get("/places/search", response_model=PlaceSearchResponse)
-def search_places_route(
+async def search_places_route(
     q: str = Query(min_length=2, max_length=160),
     user: CurrentUser = Depends(get_current_user),
 ):
     del user
     normalized = " ".join(q.strip().split())
-    return {"query": normalized, "results": search_places(normalized)}
+    res = search_places(normalized)
+    if inspect.isawaitable(res):
+        res = await res
+    return {"query": normalized, "results": res}
 
 
 @router.get("/groups", response_model=list[GroupSummary])
@@ -153,7 +172,7 @@ def expenses(group_id: UUID, limit: int | None = Query(default=None, ge=1, le=20
 
 @router.post("/groups/{group_id}/expenses", response_model=ExpenseSummary, status_code=status.HTTP_201_CREATED)
 def create_expense_route(group_id: UUID, payload: ExpenseCreate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
-    return create_expense(session, group_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user, payload.location_name, payload.journey_stop_id, payload.latitude, payload.longitude)
+    return create_expense(session, group_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user, payload.location_name, payload.journey_stop_id, payload.latitude, payload.longitude, payload.expense_date)
 
 
 @router.get("/expenses/{expense_id}", response_model=ExpenseDetails)
@@ -164,7 +183,7 @@ def expense_detail(expense_id: UUID, user: CurrentUser = Depends(get_current_use
 
 @router.put("/expenses/{expense_id}", response_model=ExpenseSummary)
 def update_expense_route(expense_id: UUID, payload: ExpenseCreate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
-    return update_expense(session, expense_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user.id, payload.location_name, payload.journey_stop_id, payload.latitude, payload.longitude)
+    return update_expense(session, expense_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user.id, payload.location_name, payload.journey_stop_id, payload.latitude, payload.longitude, payload.expense_date)
 
 
 @router.delete("/expenses/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)

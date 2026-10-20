@@ -3,7 +3,8 @@ import { supabase } from '../config/supabase';
 export async function signUp(
   email: string,
   password: string,
-  fullName = ''
+  fullName = '',
+  emailRedirectTo?: string,
 ) {
   return await supabase.auth.signUp({
     email: email.trim().toLowerCase(),
@@ -12,6 +13,7 @@ export async function signUp(
       data: {
         full_name: fullName.trim(),
       },
+      emailRedirectTo: emailRedirectTo || undefined,
     },
   });
 }
@@ -27,7 +29,7 @@ export async function signIn(
 }
 
 export async function signOut() {
-  return await supabase.auth.signOut();
+  return await supabase.auth.signOut({ scope: 'local' });
 }
 
 export async function forgotPassword(

@@ -27,5 +27,6 @@ class GroupMember(Base):
     role: Mapped[str] = mapped_column(String(20), nullable=False, default="member")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
     group = relationship("Group", back_populates="members")

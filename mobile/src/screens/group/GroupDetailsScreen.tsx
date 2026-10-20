@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -20,6 +21,8 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import ExpenseCard from '../../components/ExpenseCard';
 import MemberCard from '../../components/MemberCard';
 import AddMemberModal from '../../components/AddMemberModal';
+import UniversalScrollView from '../../components/UniversalScrollView';
+import { shareGroupInvite } from '../../utils/shareInvite';
 import { addGroupMember, getGroupMembers, GroupMember, removeGroupMemberFromGroup } from '../../services/memberService';
 import {
   getCachedGroupOverview,
@@ -382,6 +385,16 @@ export default function GroupDetailsScreen() {
     );
   };
 
+  const memberMap = useMemo(() => {
+    const map = new Map<string, string>();
+    members.forEach((m) => {
+      if (m.user_id) {
+        map.set(m.user_id, m.full_name?.trim() || m.email?.trim() || 'Member');
+      }
+    });
+    return map;
+  }, [members]);
+
   const settlementName = useMemo(
     () => selectedDebt ? `${selectedDebt.from_name} → ${selectedDebt.to_name}` : '',
     [selectedDebt],
@@ -410,13 +423,25 @@ export default function GroupDetailsScreen() {
               <Text style={styles.headerTitle} numberOfLines={1}>{groupName}</Text>
               <Text style={styles.headerSubtitle}>{currency} • {role}</Text>
             </View>
-            <Pressable
-              style={styles.headerButton}
-              onPress={() => navigation.navigate('GroupSettings', { groupId, groupName })}
-              hitSlop={10}
-            >
-              <Ionicons name="settings-outline" size={21} color="#FFFFFF" />
-            </Pressable>
+            <View style={styles.headerActions}>
+              {Platform.OS === 'web' && (
+                <Pressable
+                  style={[styles.headerButton, refreshing && styles.disabledButton]}
+                  onPress={() => void handleRefresh()}
+                  disabled={refreshing}
+                  hitSlop={10}
+                >
+                  <Ionicons name="refresh" size={20} color={refreshing ? '#64748B' : '#0EA5A4'} />
+                </Pressable>
+              )}
+              <Pressable
+                style={styles.headerButton}
+                onPress={() => navigation.navigate('GroupSettings', { groupId, groupName })}
+                hitSlop={10}
+              >
+                <Ionicons name="settings-outline" size={21} color="#FFFFFF" />
+              </Pressable>
+            </View>
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} bounces={false} style={styles.tabsContainer} contentContainerStyle={styles.tabs}>
@@ -439,11 +464,13 @@ export default function GroupDetailsScreen() {
             ))}
           </ScrollView>
 
-          <ScrollView
+          <UniversalScrollView
             style={styles.scroll}
             contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#0EA5A4" />}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            refreshTintColor="#0EA5A4"
           >
             {tab === 'Journey' && (
               <>
@@ -761,7 +788,21 @@ export default function GroupDetailsScreen() {
               <>
                 <View style={styles.sectionHeader}>
                   <View><Text style={styles.sectionTitle}>Members</Text><Text style={styles.sectionSubtitle}>{members.filter((member) => member.status === 'active').length} active</Text></View>
-                  {canManageMembers && <Pressable style={styles.addButton} onPress={() => setShowAddMember(true)}><Ionicons name="add" size={18} color="#FFFFFF" /><Text style={styles.addButtonText}>Add</Text></Pressable>}
+                  <View style={styles.memberActionGroup}>
+                    <Pressable
+                      style={styles.shareLinkButton}
+                      onPress={() => void shareGroupInvite(groupId, groupName)}
+                    >
+                      <Ionicons name="link-outline" size={16} color="#0EA5A4" />
+                      <Text style={styles.shareLinkButtonText}>Share Link</Text>
+                    </Pressable>
+                    {canManageMembers && (
+                      <Pressable style={styles.addButton} onPress={() => setShowAddMember(true)}>
+                        <Ionicons name="add" size={18} color="#FFFFFF" />
+                        <Text style={styles.addButtonText}>Add</Text>
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
                 {members.map((member) => (
                   <MemberCard
@@ -781,17 +822,24 @@ export default function GroupDetailsScreen() {
                   <View style={styles.emptyCard}><Ionicons name="time-outline" size={30} color="#64748B" /><Text style={styles.emptyCardTitle}>No activity yet</Text></View>
                 ) : <>
                   {activityExpenses.map((expense) => <ExpenseCard key={`expense-${expense.id}`} expense={expense} currency={currency} />)}
-                  {settlements.map((settlement) => (
-                    <View key={`settlement-${settlement.id}`} style={styles.activityCard}>
-                      <View style={styles.activityIcon}><Ionicons name="swap-horizontal-outline" size={20} color="#0EA5A4" /></View>
-                      <View style={styles.flexOne}><Text style={styles.activityTitle}>Settlement recorded</Text><Text style={styles.activityMeta}>{settlement.note || 'Settlement'}</Text></View>
-                      <Text style={styles.activityAmount}>{money(settlement.amount, currency)}</Text>
-                    </View>
-                  ))}
+                  {settlements.map((settlement) => {
+                    const fromName = settlement.from_name || memberMap.get(settlement.from_user_id) || 'Member';
+                    const toName = settlement.to_name || memberMap.get(settlement.to_user_id) || 'Member';
+                    return (
+                      <View key={`settlement-${settlement.id}`} style={styles.activityCard}>
+                        <View style={styles.activityIcon}><Ionicons name="swap-horizontal-outline" size={20} color="#0EA5A4" /></View>
+                        <View style={styles.flexOne}>
+                          <Text style={styles.activityTitle}>{fromName} paid {toName}</Text>
+                          <Text style={styles.activityMeta}>{settlement.note || 'Settlement'}</Text>
+                        </View>
+                        <Text style={styles.activityAmount}>{money(settlement.amount, currency)}</Text>
+                      </View>
+                    );
+                  })}
                 </>}
               </>
             )}
-          </ScrollView>
+          </UniversalScrollView>
 
           {canWriteMoney && (tab === 'Overview' || tab === 'Expenses') && (
             <Pressable style={styles.fab} onPress={() => navigation.navigate('AddExpense', { groupId, groupName })}>
@@ -805,6 +853,8 @@ export default function GroupDetailsScreen() {
         visible={showAddMember}
         onClose={() => setShowAddMember(false)}
         onAdd={async (email: string) => { await handleAddMember(email); setShowAddMember(false); }}
+        groupId={groupId}
+        groupName={groupName}
       />
 
       <Modal visible={showSettle} transparent animationType="slide" onRequestClose={closeSettlement}>
@@ -886,6 +936,10 @@ const styles = StyleSheet.create({
   positive: { color: '#2DD4BF' },
   negative: { color: '#FB7185' },
   settled: { color: '#94A3B8' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  memberActionGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  shareLinkButton: { backgroundColor: 'rgba(14, 165, 164, 0.12)', borderWidth: 1, borderColor: '#0EA5A4', borderRadius: 12, paddingHorizontal: 11, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  shareLinkButtonText: { color: '#0EA5A4', fontWeight: '800', fontSize: 12 },
   addButton: { backgroundColor: '#0EA5A4', borderRadius: 12, paddingHorizontal: 11, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 5 },
   addButtonText: { color: '#FFFFFF', fontWeight: '900', fontSize: 12 },
   activityCard: { backgroundColor: '#1E293B', borderRadius: 16, padding: 15, marginBottom: 10, flexDirection: 'row', alignItems: 'center' },

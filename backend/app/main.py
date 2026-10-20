@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from time import perf_counter
 
 from fastapi import FastAPI, Request
@@ -10,17 +11,21 @@ from .core.config import get_settings
 from .core.security import warm_jwks_cache
 
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    warm_jwks_cache()
+    yield
+
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     docs_url="/docs" if settings.environment != "production" else None,
     redoc_url="/redoc" if settings.environment != "production" else None,
+    lifespan=lifespan,
 )
-
-
-@app.on_event("startup")
-def warm_auth_keys() -> None:
-    warm_jwks_cache()
 
 
 app.add_middleware(

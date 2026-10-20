@@ -22,6 +22,7 @@ import { getCurrentUser } from '../../services/authService';
 import { getGroupSettings } from '../../services/groupService';
 import { getTrip, TripStop } from '../../services/tripService';
 import ExpenseLocationPicker from '../../components/ExpenseLocationPicker';
+import ExpenseDatePicker from '../../components/ExpenseDatePicker';
 import {
   ExpenseSplitRecord,
   getExpenseDetails,
@@ -155,6 +156,7 @@ export default function EditExpenseScreen() {
   const [journeyStopId, setJourneyStopId] = useState<string | null>(null);
   const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
   const [locationLongitude, setLocationLongitude] = useState<number | null>(null);
+  const [expenseDate, setExpenseDate] = useState<Date>(new Date());
 
   useEffect(() => {
     let cancelled = false;
@@ -266,6 +268,7 @@ export default function EditExpenseScreen() {
       setJourneyStopId(detail.journey_stop_id || null);
       setLocationLatitude(detail.latitude ?? null);
       setLocationLongitude(detail.longitude ?? null);
+      setExpenseDate(detail.expense_date ? new Date(detail.expense_date) : new Date(detail.created_at));
       setSelectedIds(ids);
       setSplitType(detail.split_type);
 
@@ -476,6 +479,7 @@ export default function EditExpenseScreen() {
       journeyStopId,
       latitude: locationLatitude,
       longitude: locationLongitude,
+      expenseDate: expenseDate.toISOString(),
     });
 
     setSaving(false);

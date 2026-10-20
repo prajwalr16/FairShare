@@ -126,8 +126,10 @@ def _postgres_group_overview(session: Session, group_id: UUID, user_id: UUID) ->
                     'journey_stop_id', e.journey_stop_id,
                     'latitude', e.latitude,
                     'longitude', e.longitude,
-                    'created_at', e.created_at
-                ) ORDER BY e.created_at DESC
+                    'created_at', e.created_at,
+                    'expense_date', e.expense_date,
+                    'updated_at', e.updated_at
+                ) ORDER BY e.expense_date DESC, e.created_at DESC
             ), '[]'::jsonb) AS data
             FROM (
                 SELECT
@@ -142,10 +144,12 @@ def _postgres_group_overview(session: Session, group_id: UUID, user_id: UUID) ->
                     journey_stop_id,
                     latitude,
                     longitude,
-                    created_at
+                    created_at,
+                    expense_date,
+                    updated_at
                 FROM public.expenses
                 WHERE group_id = :group_id
-                ORDER BY created_at DESC
+                ORDER BY expense_date DESC, created_at DESC
                 LIMIT 5
             ) e
         ),

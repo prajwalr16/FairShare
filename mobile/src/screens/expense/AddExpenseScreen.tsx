@@ -26,6 +26,7 @@ import { getCurrentUser } from '../../services/authService';
 import { getGroupSettings } from '../../services/groupService';
 import { getTrip, TripStop } from '../../services/tripService';
 import ExpenseLocationPicker from '../../components/ExpenseLocationPicker';
+import ExpenseDatePicker from '../../components/ExpenseDatePicker';
 import {
   buildDefaultInputs,
   calculateSplits,
@@ -70,6 +71,7 @@ export default function AddExpenseScreen() {
   const [journeyStopId, setJourneyStopId] = useState<string | null>(null);
   const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
   const [locationLongitude, setLocationLongitude] = useState<number | null>(null);
+  const [expenseDate, setExpenseDate] = useState<Date>(new Date());
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [saving, setSaving] = useState(false);
   const [valuesCustomized, setValuesCustomized] = useState(false);
@@ -380,6 +382,7 @@ export default function AddExpenseScreen() {
       journeyStopId,
       latitude: locationLatitude,
       longitude: locationLongitude,
+      expenseDate: expenseDate.toISOString(),
     });
 
     setSaving(false);
@@ -572,6 +575,12 @@ export default function AddExpenseScreen() {
                 setLocationLatitude(null);
                 setLocationLongitude(null);
               }}
+              disabled={saving}
+            />
+
+            <ExpenseDatePicker
+              value={expenseDate}
+              onChange={setExpenseDate}
               disabled={saving}
             />
 

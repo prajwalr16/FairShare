@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
@@ -31,7 +31,7 @@ type RootStackParamList = {
   SignUp: undefined;
   ForgotPassword: undefined;
   ResetPassword: undefined;
-  AcceptInvite: undefined;
+  AcceptInvite: { groupId?: string } | undefined;
   Home: undefined;
   Profile: undefined;
   GroupDetails: { groupId?: string; groupName?: string; initialTab?: string } | undefined;
@@ -57,7 +57,8 @@ const linking = {
       SignUp: 'signup',
       ForgotPassword: 'forgot-password',
       ResetPassword: 'reset-password',
-      AcceptInvite: 'accept-invite',
+      AcceptInvite: 'join',
+      Join: 'join',
       Home: 'home',
       Profile: 'profile',
       GroupDetails: 'group-details',
@@ -120,13 +121,37 @@ export default function AppNavigator() {
       return;
     }
 
+    const params = getUrlParams(url);
+
+    if (params.error || params.error_description) {
+      const msg = (params.error_description || params.error || 'Authentication link issue').replace(/\+/g, ' ');
+      if (Platform.OS === 'web') {
+        window.alert(`Authentication Issue:\n\n${msg}`);
+      } else {
+        Alert.alert('Authentication Issue', msg);
+      }
+      return;
+    }
+
     if (url.includes('reset-password') || url.includes('type=recovery')) {
       navigationRef.navigate('ResetPassword');
       return;
     }
 
-    if (url.includes('accept-invite') || url.includes('type=invite')) {
-      navigationRef.navigate('AcceptInvite');
+    if (url.includes('join') || url.includes('accept-invite') || url.includes('type=invite')) {
+      const resolvedGroupId = params.group || params.groupId || undefined;
+      navigationRef.navigate('AcceptInvite', resolvedGroupId ? { groupId: resolvedGroupId } : undefined);
+      return;
+    }
+
+    if (url.includes('type=signup') || url.includes('type=email_change')) {
+      if (Platform.OS === 'web') {
+        window.alert('Email verified successfully! Welcome to FairShare.');
+      } else {
+        Alert.alert('Email Verified', 'Your email address has been verified. Welcome to FairShare!');
+      }
+      navigationRef.navigate('Home');
+      return;
     }
   }, []);
 
@@ -202,7 +227,7 @@ export default function AppNavigator() {
       if (event === 'SIGNED_OUT' && navigationRef.isReady()) {
         navigationRef.reset({
           index: 0,
-          routes: [{ name: 'Login' }],
+          routes: [{ name: 'Welcome' }],
         });
       }
     });

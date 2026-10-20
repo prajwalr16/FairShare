@@ -20,6 +20,8 @@ type Expense = {
   paid_by?: string | null;
   location_name?: string | null;
   created_at?: string | null;
+  expense_date?: string | null;
+  updated_at?: string | null;
 };
 
 type Props = {
@@ -46,7 +48,7 @@ function splitLabel(splitType?: string | null) {
 
 export default function ExpenseCard({ expense, currency = 'INR' }: Props) {
   const navigation = useNavigation<any>();
-  const dateLabel = formatDate(expense.created_at);
+  const dateLabel = formatDate(expense.expense_date || expense.created_at);
   const locationLabel = expense.location_name?.trim() || '';
 
   return (

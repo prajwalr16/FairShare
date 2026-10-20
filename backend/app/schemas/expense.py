@@ -29,6 +29,7 @@ class ExpenseCreate(BaseModel):
     journey_stop_id: UUID | None = None
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
+    expense_date: datetime | None = None
 
     @field_validator("title")
     @classmethod
@@ -87,6 +88,8 @@ class ExpenseSummary(APIModel):
     latitude: float | None = None
     longitude: float | None = None
     created_at: datetime
+    expense_date: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class ExpenseSplitResponse(APIModel):

@@ -28,3 +28,6 @@ class SettlementResponse(APIModel):
     note: str | None
     created_by: UUID | None
     created_at: datetime
+    updated_at: datetime | None = None
+    from_name: str | None = None
+    to_name: str | None = None

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import * as Linking from 'expo-linking';
 import {
+  Platform,
   View,
   Text,
   TextInput,
@@ -58,7 +60,10 @@ export default function SignUpScreen() {
     setLoading(true);
 
     try {
-      const { data, error } = await signUp(normalizedEmail, password, name);
+      const emailRedirectTo = Platform.OS === 'web' && typeof window !== 'undefined'
+        ? `${window.location.origin}/login`
+        : Linking.createURL('login');
+      const { data, error } = await signUp(normalizedEmail, password, name, emailRedirectTo);
 
       if (error) {
         setStatus({

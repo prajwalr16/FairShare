@@ -32,6 +32,14 @@ def test_health_and_me(client):
     assert me.status_code == 200
     assert me.json()['email'] == 'a@example.com'
 
+    patch_res = client.patch('/api/v1/me', json={'full_name': 'Alice Wonder'})
+    assert patch_res.status_code == 200
+    assert patch_res.json()['full_name'] == 'Alice Wonder'
+
+    me_updated = client.get('/api/v1/me')
+    assert me_updated.status_code == 200
+    assert me_updated.json()['full_name'] == 'Alice Wonder'
+
 
 def test_group_crud_and_members(client, seed_users):
     group = create_group(client)
@@ -170,7 +178,10 @@ def test_balances_debts_and_settlement_lifecycle(client, seed_users):
         'amount': str(first['amount']), 'note': 'UPI',
     })
     assert settlement.status_code == 201, settlement.text
-    sid = settlement.json()['id']
+    settlement_data = settlement.json()
+    sid = settlement_data['id']
+    assert settlement_data.get('from_name') is not None
+    assert settlement_data.get('to_name') is not None
 
     current = client.get(f'/api/v1/groups/{gid}/balances')
     assert current.status_code == 200
@@ -234,6 +245,18 @@ def test_invitation_flow_contract_with_mocked_auth_api(client, seed_users, monke
     response = client.post(f'/api/v1/groups/{gid}/members/invite', json={'email': 'new@example.com', 'redirect_to': 'fairshare://accept-invite'})
     assert response.status_code == 200, response.text
     assert response.json()['status'] == 'pending'
+
+
+def test_invitation_fast_path_for_existing_local_user(client, seed_users, monkeypatch):
+    group = create_group(client)
+    gid = group['id']
+    def fail_if_called(email):
+        raise AssertionError("_find_auth_user_by_email should not be called for existing local user")
+    monkeypatch.setattr('app.services.invite_service._find_auth_user_by_email', fail_if_called)
+    response = client.post(f'/api/v1/groups/{gid}/members/invite', json={'email': 'b@example.com'})
+    assert response.status_code == 200, response.text
+    assert response.json()['status'] == 'active'
+    assert response.json()['member']['user_id'] == str(USER_B)
 
 
 def test_leave_group_owner_is_blocked(client, seed_users):
@@ -330,3 +353,120 @@ def test_history_returns_both_expenses_and_settlements(client, seed_users):
     payload = history.json()
     assert len(payload['expenses']) == 1
     assert len(payload['settlements']) == 1
+
+
+def test_expense_with_custom_date_and_location(client, seed_users):
+    group = create_group(client)
+    gid = group['id']
+    add_members(gid)
+
+    custom_date = "2026-10-15T14:30:00Z"
+    expense = client.post(f'/api/v1/groups/{gid}/expenses', json={
+        'title': 'Temple Entry & Prasad',
+        'amount': '450',
+        'paid_by': str(USER_A),
+        'split_type': 'Equal',
+        'splits': [
+            {'user_id': str(USER_A), 'value': '0'},
+            {'user_id': str(USER_B), 'value': '0'},
+            {'user_id': str(USER_C), 'value': '0'},
+        ],
+        'location_name': 'Rameshwaram Temple',
+        'latitude': 9.2876,
+        'longitude': 79.3129,
+        'expense_date': custom_date,
+    })
+    assert expense.status_code == 201, expense.text
+    data = expense.json()
+    assert data['location_name'] == 'Rameshwaram Temple'
+    assert data['latitude'] == 9.2876
+    assert data['longitude'] == 79.3129
+    assert data['expense_date'].startswith("2026-10-15T14:30:00")
+    assert data['updated_at'] is not None
+
+    expense_id = data['id']
+
+    # Update the expense date and verify updated_at is updated
+    updated_date = "2026-10-15T16:00:00Z"
+    updated = client.put(f'/api/v1/expenses/{expense_id}', json={
+        'title': 'Temple Entry & Prasad (Updated)',
+        'amount': '500',
+        'paid_by': str(USER_A),
+        'split_type': 'Equal',
+        'splits': [
+            {'user_id': str(USER_A), 'value': '0'},
+            {'user_id': str(USER_B), 'value': '0'},
+            {'user_id': str(USER_C), 'value': '0'},
+        ],
+        'location_name': 'Rameshwaram Temple East Gate',
+        'latitude': 9.2880,
+        'longitude': 79.3135,
+        'expense_date': updated_date,
+    })
+    assert updated.status_code == 200, updated.text
+    up_data = updated.json()
+    assert up_data['title'] == 'Temple Entry & Prasad (Updated)'
+    assert up_data['location_name'] == 'Rameshwaram Temple East Gate'
+    assert up_data['expense_date'].startswith("2026-10-15T16:00:00")
+    assert up_data['updated_at'] is not None
+
+
+def test_expense_chronological_ordering_by_expense_date(client, seed_users):
+    group = create_group(client)
+    gid = group['id']
+    add_members(gid)
+
+    # First created expense happened today
+    client.post(f'/api/v1/groups/{gid}/expenses', json={
+        'title': 'Today Dinner',
+        'amount': '300',
+        'paid_by': str(USER_A),
+        'split_type': 'Equal',
+        'splits': [{'user_id': str(USER_A), 'value': '0'}],
+        'expense_date': "2026-10-20T20:00:00Z",
+    })
+
+    # Second created expense happened yesterday
+    client.post(f'/api/v1/groups/{gid}/expenses', json={
+        'title': 'Yesterday Lunch',
+        'amount': '200',
+        'paid_by': str(USER_A),
+        'split_type': 'Equal',
+        'splits': [{'user_id': str(USER_A), 'value': '0'}],
+        'expense_date': "2026-10-19T12:00:00Z",
+    })
+
+    # Third created expense happened earlier today
+    client.post(f'/api/v1/groups/{gid}/expenses', json={
+        'title': 'Today Breakfast',
+        'amount': '150',
+        'paid_by': str(USER_A),
+        'split_type': 'Equal',
+        'splits': [{'user_id': str(USER_A), 'value': '0'}],
+        'expense_date': "2026-10-20T09:00:00Z",
+    })
+
+    feed = client.get(f'/api/v1/groups/{gid}/expenses').json()
+    titles = [item['title'] for item in feed]
+    assert titles == ['Today Dinner', 'Today Breakfast', 'Yesterday Lunch']
+
+
+
+def test_open_invite_link_join(client, seed_users):
+    group = create_group(client)
+    gid = group['id']
+    # Caller is USER_A who created the group. Query invitation status:
+    inv_info = client.get(f'/api/v1/groups/{gid}/invitation')
+    assert inv_info.status_code == 200
+    assert inv_info.json()['group_name'] == group['name']
+    assert inv_info.json()['status'] == 'active'
+
+    # Accept invitation as caller to update display name
+    accept_res = client.post(f'/api/v1/groups/{gid}/members/accept', json={'group_id': gid, 'full_name': 'Alice in Wonderland'})
+    assert accept_res.status_code == 200
+    assert accept_res.json()['status'] == 'active'
+
+    # Check member list reflects new full_name
+    members = client.get(f'/api/v1/groups/{gid}/members').json()
+    owner_member = next(m for m in members if m['user_id'] == str(USER_A))
+    assert owner_member['full_name'] == 'Alice in Wonderland'
