@@ -243,6 +243,7 @@ export async function getGroupExpenses(
   limit?: number,
   category?: ExpenseCategory | 'All',
   scope: 'all' | 'mine' = 'all',
+  paidBy?: string | null,
   paidByOrSignal?: string | null | AbortSignal,
   maybeSignal?: AbortSignal,
 ) {
