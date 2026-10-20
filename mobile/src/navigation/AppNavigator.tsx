@@ -105,7 +105,7 @@ function LoadingScreen() {
     <View style={styles.loadingContainer}>
       <Text style={styles.loadingLogo}>FS</Text>
       <Text style={styles.loadingTitle}>FairShare</Text>
-      <ActivityIndicator size="small" color="#0EA5A4" style={styles.loadingIndicator} />
+      <ActivityIndicator size="small" color="#00E5FF" style={styles.loadingIndicator} />
     </View>
   );
 }
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
   loadingLogo: {
     fontSize: 48,
     fontWeight: '900',
-    color: '#0EA5A4',
+    color: '#00E5FF',
   },
   loadingTitle: {
     color: '#FFFFFF',

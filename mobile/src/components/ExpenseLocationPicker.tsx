@@ -82,7 +82,7 @@ export default function ExpenseLocationPicker({
             disabled={disabled}
           >
             <View style={styles.icon}>
-              <Ionicons name="location-outline" size={20} color="#0EA5A4" />
+              <Ionicons name="location-outline" size={20} color="#00E5FF" />
             </View>
             <View style={styles.selectorTextWrap}>
               <Text
@@ -126,7 +126,7 @@ export default function ExpenseLocationPicker({
       ) : (
         <View style={styles.manualRow}>
           <View style={styles.manualIcon}>
-            <Ionicons name="location-outline" size={19} color="#0EA5A4" />
+            <Ionicons name="location-outline" size={19} color="#00E5FF" />
           </View>
           <TextInput
             value={locationName}
@@ -205,7 +205,7 @@ export default function ExpenseLocationPicker({
                             : 'location-outline'
                         }
                         size={20}
-                        color="#0EA5A4"
+                        color="#00E5FF"
                       />
                     </View>
 
@@ -266,7 +266,7 @@ export default function ExpenseLocationPicker({
                 <Ionicons
                   name="create-outline"
                   size={18}
-                  color="#0EA5A4"
+                  color="#00E5FF"
                 />
                 <Text style={styles.manualButtonText}>
                   Use manual location
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
   },
   stopRowSelected: {
     borderWidth: 1,
-    borderColor: '#0EA5A4',
+    borderColor: '#00E5FF',
   },
   stopIcon: {
     width: 40,
@@ -476,7 +476,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     alignItems: 'center',
     justifyContent: 'center',
   },

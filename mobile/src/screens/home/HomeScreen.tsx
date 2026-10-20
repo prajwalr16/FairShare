@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 import GroupCard from '../../components/GroupCard';
+import BrandLogo from '../../components/BrandLogo';
 import CreateGroupModal from '../../components/CreateGroupModal';
 import UniversalScrollView from '../../components/UniversalScrollView';
 import { Theme } from '../../theme/theme';
@@ -216,15 +217,7 @@ export default function HomeScreen() {
         <View style={styles.container}>
           {/* Top Luxury CRED Glass Navigation Bar */}
           <View style={styles.header}>
-            <View style={styles.brandRow}>
-              <View style={styles.logoBadge}>
-                <Ionicons name="sparkles" size={13} color="#00E5FF" />
-              </View>
-              <View>
-                <Text style={styles.brandTitle}>FAIRSHARE</Text>
-                <Text style={styles.brandSubtitle}>PORTFOLIO INTELLIGENCE</Text>
-              </View>
-            </View>
+            <BrandLogo size="sm" showText={true} />
 
             <View style={styles.headerActions}>
               <Pressable
@@ -276,7 +269,7 @@ export default function HomeScreen() {
                   },
                 ]}
               >
-                {/* Hero Statement Card */}
+                {/* Hero Statement Card - Compact Executive HUD */}
                 <View style={styles.heroCard}>
                   {/* Subtle Top Glowing Strip */}
                   <View
@@ -292,98 +285,81 @@ export default function HomeScreen() {
                     ]}
                   />
 
-                  {/* Eyebrow Position Badge */}
+                  {/* Top Row: Eyebrow + Active Circles Count */}
                   <View style={styles.heroEyebrowRow}>
                     <View style={styles.heroStatusDot} />
-                    <Text style={styles.heroEyebrow}>GLOBAL NET POSITION</Text>
+                    <Text style={styles.heroEyebrow}>TOTAL BALANCE</Text>
                     <View style={styles.activePill}>
-                      <Text style={styles.activePillText}>{groups.length} CIRCLES</Text>
+                      <Text style={styles.activePillText}>{groups.length} {groups.length === 1 ? 'GROUP' : 'GROUPS'}</Text>
                     </View>
                   </View>
 
-                  {/* Main Monetary Net Statement */}
-                  <View style={styles.amountDisplayRow}>
-                    <Text
-                      style={[
-                        styles.heroAmount,
-                        portfolioStats.isPositive && styles.heroAmountPositive,
-                        portfolioStats.isNegative && styles.heroAmountNegative,
-                        portfolioStats.isSettled && styles.heroAmountSettled,
-                      ]}
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                    >
-                      {portfolioStats.isPositive
-                        ? `+${formatCurrency(portfolioStats.totalNet, 'INR')}`
-                        : portfolioStats.isNegative
-                        ? `-${formatCurrency(Math.abs(portfolioStats.totalNet), 'INR')}`
-                        : formatCurrency(0, 'INR')}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.heroPositionDesc}>
-                    {portfolioStats.isPositive
-                      ? '✦ You are owed overall across your groups'
-                      : portfolioStats.isNegative
-                      ? '✦ You owe in total across your groups'
-                      : '✦ All balances settled up across all groups'}
-                  </Text>
-
-                  {/* Dual Stat Glass Pods */}
-                  <View style={styles.statPodsRow}>
-                    {/* Pod 1: You Get */}
-                    <View style={[styles.statPod, styles.statPodGet]}>
-                      <View style={styles.podHeader}>
-                        <View style={[styles.podIconCircle, { backgroundColor: 'rgba(0, 245, 160, 0.2)' }]}>
-                          <Ionicons name="arrow-up" size={13} color="#00F5A0" />
-                        </View>
-                        <Text style={styles.podLabelGet}>YOU GET</Text>
-                      </View>
-                      <Text style={styles.podAmountGet} numberOfLines={1}>
-                        {formatCurrency(portfolioStats.totalYouGet, 'INR')}
-                      </Text>
-                      <Text style={styles.podSubtext}>receivable</Text>
-                    </View>
-
-                    {/* Pod 2: You Owe */}
-                    <View style={[styles.statPod, styles.statPodOwe]}>
-                      <View style={styles.podHeader}>
-                        <View style={[styles.podIconCircle, { backgroundColor: 'rgba(255, 75, 114, 0.2)' }]}>
-                          <Ionicons name="arrow-down" size={13} color="#FF4B72" />
-                        </View>
-                        <Text style={styles.podLabelOwe}>YOU OWE</Text>
-                      </View>
-                      <Text style={styles.podAmountOwe} numberOfLines={1}>
-                        {formatCurrency(portfolioStats.totalYouOwe, 'INR')}
-                      </Text>
-                      <Text style={styles.podSubtext}>to pay back</Text>
-                    </View>
-                  </View>
-
-                  {/* Overall Group Volume Footer */}
-                  <View style={styles.volumeFooter}>
-                    <Ionicons name="pie-chart-outline" size={12} color="#64748B" />
-                    <Text style={styles.volumeText}>
-                      Combined volume across groups:{' '}
-                      <Text style={styles.volumeAmount}>
-                        {formatCurrency(portfolioStats.overallSpend, 'INR')}
-                      </Text>
-                    </Text>
-                  </View>
-
-                  {/* Quick Action Dock */}
-                  <View style={styles.actionDock}>
-                    <Animated.View style={{ flex: 1, transform: [{ scale: createBtnScale }] }}>
-                      <Pressable
-                        onPress={() => setShowCreate(true)}
-                        onPressIn={handleCreatePressIn}
-                        onPressOut={handleCreatePressOut}
-                        style={styles.primaryActionBtn}
+                  {/* Core 2-Column Row: Left Amount, Right Mini Pods */}
+                  <View style={styles.heroCoreRow}>
+                    <View style={styles.heroAmountCol}>
+                      <Text
+                        style={[
+                          styles.heroAmount,
+                          portfolioStats.isPositive && styles.heroAmountPositive,
+                          portfolioStats.isNegative && styles.heroAmountNegative,
+                          portfolioStats.isSettled && styles.heroAmountSettled,
+                        ]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
                       >
-                        <Ionicons name="add-circle" size={18} color="#06090F" />
-                        <Text style={styles.primaryActionText}>CREATE NEW GROUP</Text>
-                      </Pressable>
-                    </Animated.View>
+                        {portfolioStats.isPositive
+                          ? `+${formatCurrency(portfolioStats.totalNet, 'INR')}`
+                          : portfolioStats.isNegative
+                          ? `-${formatCurrency(Math.abs(portfolioStats.totalNet), 'INR')}`
+                          : formatCurrency(0, 'INR')}
+                      </Text>
+                      <Text style={styles.heroPositionDesc}>
+                        {portfolioStats.isPositive
+                          ? '✦ You are owed overall'
+                          : portfolioStats.isNegative
+                          ? '✦ You owe in total'
+                          : '✦ All settled up'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.heroMiniPodsCol}>
+                      {/* Mini Pod: You Get */}
+                      <View style={[styles.miniPod, styles.miniPodGet]}>
+                        <View style={styles.miniPodHeader}>
+                          <Ionicons name="arrow-up" size={10} color="#00F5A0" />
+                          <Text style={styles.miniPodLabelGet}>GET</Text>
+                        </View>
+                        <Text style={styles.miniPodValueGet} numberOfLines={1}>
+                          {formatCurrency(portfolioStats.totalYouGet, 'INR')}
+                        </Text>
+                      </View>
+
+                      {/* Mini Pod: You Owe */}
+                      <View style={[styles.miniPod, styles.miniPodOwe]}>
+                        <View style={styles.miniPodHeader}>
+                          <Ionicons name="arrow-down" size={10} color="#FF4B72" />
+                          <Text style={styles.miniPodLabelOwe}>OWE</Text>
+                        </View>
+                        <Text style={styles.miniPodValueOwe} numberOfLines={1}>
+                          {formatCurrency(portfolioStats.totalYouOwe, 'INR')}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Compact Bottom Footer: Volume on left, New Group button on right */}
+                  <View style={styles.heroBottomRow}>
+                    <Text style={styles.volumeText} numberOfLines={1}>
+                      Total volume: <Text style={styles.volumeAmount}>{formatCurrency(portfolioStats.overallSpend, 'INR')}</Text>
+                    </Text>
+
+                    <Pressable
+                      onPress={() => setShowCreate(true)}
+                      style={styles.compactCreateBtn}
+                    >
+                      <Ionicons name="add" size={14} color="#06090F" />
+                      <Text style={styles.compactCreateBtnText}>NEW GROUP</Text>
+                    </Pressable>
                   </View>
                 </View>
 
@@ -433,7 +409,7 @@ export default function HomeScreen() {
                 {/* Section Header */}
                 <View style={styles.sectionTitleRow}>
                   <Text style={styles.sectionTitle}>
-                    {filter === 'All' ? 'YOUR ACTIVE CIRCLES' : `${filter.toUpperCase()} CIRCLES`}
+                    {filter === 'All' ? 'YOUR GROUPS' : `${filter.toUpperCase()} GROUPS`}
                   </Text>
                   <Text style={styles.sectionCount}>
                     {filteredGroups.length} {filteredGroups.length === 1 ? 'GROUP' : 'GROUPS'}
@@ -584,27 +560,27 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   heroContainer: {
-    marginBottom: 16,
+    marginBottom: 10,
   },
   heroCard: {
     backgroundColor: '#0B101E',
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 20,
+    padding: 15,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.09)',
     overflow: 'hidden',
     position: 'relative',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.45,
-    shadowRadius: 18,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   },
   heroGlowStrip: {
     position: 'absolute',
     top: 0,
-    left: 24,
-    right: 24,
+    left: 20,
+    right: 20,
     height: 2,
     opacity: 0.6,
   },
@@ -612,43 +588,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   heroStatusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#00E5FF',
     marginRight: 6,
   },
   heroEyebrow: {
     flex: 1,
     color: '#94A3B8',
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
-    letterSpacing: 1.3,
+    letterSpacing: 1.2,
   },
   activePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   activePillText: {
     color: '#CBD5E1',
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: '800',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
-  amountDisplayRow: {
+  heroCoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginVertical: 4,
   },
+  heroAmountCol: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 12,
+  },
   heroAmount: {
-    fontSize: 32,
+    fontSize: 25,
     fontWeight: '900',
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
   heroAmountPositive: {
     color: '#00F5A0',
@@ -661,116 +645,98 @@ const styles = StyleSheet.create({
   },
   heroPositionDesc: {
     color: '#94A3B8',
-    fontSize: 12,
+    fontSize: 10.5,
     fontWeight: '500',
     marginTop: 2,
-    marginBottom: 16,
   },
-  statPodsRow: {
+  heroMiniPodsCol: {
+    gap: 6,
+  },
+  miniPod: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
-  },
-  statPod: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 16,
+    alignItems: 'center',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
     borderWidth: 1,
+    minWidth: 115,
+    justifyContent: 'space-between',
   },
-  statPodGet: {
-    backgroundColor: 'rgba(0, 245, 160, 0.06)',
-    borderColor: 'rgba(0, 245, 160, 0.22)',
+  miniPodGet: {
+    backgroundColor: 'rgba(0, 245, 160, 0.08)',
+    borderColor: 'rgba(0, 245, 160, 0.28)',
   },
-  statPodOwe: {
-    backgroundColor: 'rgba(255, 75, 114, 0.06)',
-    borderColor: 'rgba(255, 75, 114, 0.22)',
+  miniPodOwe: {
+    backgroundColor: 'rgba(255, 75, 114, 0.08)',
+    borderColor: 'rgba(255, 75, 114, 0.28)',
   },
-  podHeader: {
+  miniPodHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
+    gap: 4,
   },
-  podIconCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  podLabelGet: {
+  miniPodLabelGet: {
     color: '#00F5A0',
-    fontSize: 9.5,
+    fontSize: 8.5,
     fontWeight: '900',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
-  podLabelOwe: {
+  miniPodLabelOwe: {
     color: '#FF4B72',
-    fontSize: 9.5,
+    fontSize: 8.5,
     fontWeight: '900',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
-  podAmountGet: {
+  miniPodValueGet: {
     color: '#00F5A0',
-    fontSize: 17,
+    fontSize: 11.5,
     fontWeight: '900',
-    letterSpacing: -0.2,
+    marginLeft: 6,
   },
-  podAmountOwe: {
+  miniPodValueOwe: {
     color: '#FF4B72',
-    fontSize: 17,
+    fontSize: 11.5,
     fontWeight: '900',
-    letterSpacing: -0.2,
+    marginLeft: 6,
   },
-  podSubtext: {
-    color: '#64748B',
-    fontSize: 9,
-    fontWeight: '600',
-    marginTop: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  volumeFooter: {
+  heroBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingTop: 10,
+    justifyContent: 'space-between',
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
-    marginBottom: 14,
+    marginTop: 6,
   },
   volumeText: {
     color: '#64748B',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '500',
+    flex: 1,
+    marginRight: 8,
   },
   volumeAmount: {
     color: '#CBD5E1',
     fontWeight: '700',
   },
-  actionDock: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  primaryActionBtn: {
-    backgroundColor: '#00E5FF',
-    borderRadius: 14,
-    paddingVertical: 12,
+  compactCreateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+    gap: 4,
+    backgroundColor: '#00E5FF',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 8,
     shadowColor: '#00E5FF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
   },
-  primaryActionText: {
+  compactCreateBtnText: {
     color: '#06090F',
-    fontSize: 12,
+    fontSize: 9.5,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 0.6,
   },
   filterSection: {
     marginTop: 18,

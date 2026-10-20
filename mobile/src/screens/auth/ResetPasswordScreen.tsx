@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     padding: 24,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   title: {
     fontSize: 26,
@@ -151,16 +151,17 @@ const styles = StyleSheet.create({
   },
   button: {
     height: 50,
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 24,
   },
   buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#06090F',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
   disabled: {
     opacity: 0.6,
@@ -170,7 +171,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   link: {
-    color: '#0EA5A4',
+    color: '#00E5FF',
     fontSize: 14,
     fontWeight: '500',
   },

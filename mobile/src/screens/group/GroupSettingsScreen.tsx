@@ -362,7 +362,7 @@ export default function GroupSettingsScreen() {
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#0EA5A4" />
+            <ActivityIndicator size="small" color="#00E5FF" />
           </View>
         ) : (
           <ScrollView
@@ -476,7 +476,7 @@ export default function GroupSettingsScreen() {
 
                   {rolesLoading ? (
                     <View style={styles.roleLoadingRow}>
-                      <ActivityIndicator size="small" color="#0EA5A4" />
+                      <ActivityIndicator size="small" color="#00E5FF" />
                     </View>
                   ) : roleMembers.length ? (
                     roleMembers.map((member) => {
@@ -522,7 +522,7 @@ export default function GroupSettingsScreen() {
                               disabled={roleUpdatingUserId === member.user_id}
                             >
                               {roleUpdatingUserId === member.user_id ? (
-                                <ActivityIndicator size="small" color="#0EA5A4" />
+                                <ActivityIndicator size="small" color="#00E5FF" />
                               ) : (
                                 <>
                                   <Text style={styles.roleSelectorText}>{roleLabel}</Text>
@@ -570,7 +570,7 @@ export default function GroupSettingsScreen() {
               onPress={() => { if (groupId) void shareGroupInvite(groupId, group?.name || 'Group'); }}
             >
               <View style={styles.shareInviteIcon}>
-                <Ionicons name="link-outline" size={20} color="#0EA5A4" />
+                <Ionicons name="link-outline" size={20} color="#00E5FF" />
               </View>
               <View style={styles.shareInviteText}>
                 <Text style={styles.shareInviteTitle}>Share Group Invite Link</Text>
@@ -692,7 +692,7 @@ export default function GroupSettingsScreen() {
                       </Text>
                     </View>
                     {selectedRoleMember?.role === option.role ? (
-                      <Ionicons name="checkmark-circle" size={21} color="#0EA5A4" />
+                      <Ionicons name="checkmark-circle" size={21} color="#00E5FF" />
                     ) : null}
                   </Pressable>
                 ))}
@@ -729,7 +729,7 @@ export default function GroupSettingsScreen() {
                       >
                         <Text style={styles.pickerRowText}>{item}</Text>
                         {type === item ? (
-                          <Ionicons name="checkmark" size={20} color="#0EA5A4" />
+                          <Ionicons name="checkmark" size={20} color="#00E5FF" />
                         ) : null}
                       </Pressable>
                     ))
@@ -747,7 +747,7 @@ export default function GroupSettingsScreen() {
                           <Text style={styles.pickerRowHint}>{item.name}</Text>
                         </View>
                         {currency === item.code ? (
-                          <Ionicons name="checkmark" size={20} color="#0EA5A4" />
+                          <Ionicons name="checkmark" size={20} color="#00E5FF" />
                         ) : null}
                       </Pressable>
                     ))}
@@ -837,7 +837,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#06090F',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     color: '#FFFFFF',
     fontSize: 15,
     paddingHorizontal: 14,
@@ -853,7 +853,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#06090F',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     paddingHorizontal: 14,
     paddingVertical: 11,
     marginBottom: 17,
@@ -882,7 +882,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#06090F',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     paddingHorizontal: 13,
     alignItems: 'center',
     flexDirection: 'row',
@@ -897,7 +897,7 @@ const styles = StyleSheet.create({
   saveButton: {
     minHeight: 50,
     borderRadius: 15,
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -939,7 +939,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   adminDot: {
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
   },
   memberDot: {
     backgroundColor: '#64748B',
@@ -983,7 +983,7 @@ const styles = StyleSheet.create({
     marginRight: 11,
   },
   roleMemberAvatarText: {
-    color: '#0EA5A4',
+    color: '#00E5FF',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -1007,7 +1007,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#06090F',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1026,7 +1026,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   ownerRoleText: {
-    color: '#0EA5A4',
+    color: '#00E5FF',
     fontSize: 12,
     fontWeight: '800',
   },
@@ -1101,14 +1101,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     marginBottom: 8,
   },
   shareInviteIcon: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(14, 165, 164, 0.12)',
+    backgroundColor: 'rgba(0, 229, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
@@ -1134,7 +1134,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#3F1D29',
+    borderColor: 'rgba(255, 75, 114, 0.35)',
   },
   dangerTitle: {
     color: '#FFFFFF',
@@ -1151,7 +1151,7 @@ const styles = StyleSheet.create({
   deleteButton: {
     minHeight: 48,
     borderRadius: 14,
-    backgroundColor: '#B91C1C',
+    backgroundColor: '#FF4B72',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',

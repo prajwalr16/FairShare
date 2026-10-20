@@ -191,7 +191,7 @@ export default function AcceptInviteScreen() {
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#0EA5A4" />
+          <ActivityIndicator size="large" color="#00E5FF" />
           <Text style={styles.loadingText}>Preparing invitation…</Text>
         </View>
       </SafeAreaView>
@@ -204,7 +204,7 @@ export default function AcceptInviteScreen() {
         <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.container}>
           <View style={styles.icon}>
-            <Ionicons name="link-outline" size={28} color="#0EA5A4" />
+            <Ionicons name="link-outline" size={28} color="#00E5FF" />
           </View>
           <Text style={styles.title}>Invitation</Text>
           <Text style={styles.subtitle}>
@@ -228,7 +228,7 @@ export default function AcceptInviteScreen() {
         <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.container}>
           <View style={styles.icon}>
-            <Ionicons name="people-outline" size={28} color="#0EA5A4" />
+            <Ionicons name="people-outline" size={28} color="#00E5FF" />
           </View>
 
           <Text style={styles.title}>Join a FairShare group</Text>
@@ -273,7 +273,7 @@ export default function AcceptInviteScreen() {
         <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.container}>
           <View style={styles.icon}>
-            <Ionicons name="checkmark-circle-outline" size={28} color="#0EA5A4" />
+            <Ionicons name="checkmark-circle-outline" size={28} color="#00E5FF" />
           </View>
 
           <Text style={styles.title}>Already a member</Text>
@@ -311,7 +311,7 @@ export default function AcceptInviteScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#06090F" />
       <View style={styles.container}>
         <View style={styles.icon}>
-          <Ionicons name="people-outline" size={28} color="#0EA5A4" />
+          <Ionicons name="people-outline" size={28} color="#00E5FF" />
         </View>
 
         <Text style={styles.title}>Join {groupName}</Text>
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   button: {
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: 'center',
@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   buttonText: {
     color: '#FFFFFF',

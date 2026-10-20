@@ -71,7 +71,7 @@ function buildPickerMapHtml(
 <style>
 html,body,#map{height:100%;width:100%;margin:0;background:#E8EEF4;}
 .maplibregl-ctrl-group{border-radius:12px;overflow:hidden;}
-.pick-marker{width:28px;height:28px;border-radius:14px;background:#0EA5A4;border:3px solid #fff;box-shadow:0 3px 10px rgba(15,23,42,.35);}
+.pick-marker{width:28px;height:28px;border-radius:14px;background:#00E5FF;border:3px solid #fff;box-shadow:0 3px 10px rgba(15,23,42,.35);}
 </style>
 </head>
 <body>
@@ -327,7 +327,7 @@ export default function TripLocationPickerModal({
                     onPress={() => selectPlace(place)}
                   >
                     <View style={styles.resultIcon}>
-                      <Ionicons name="location-outline" size={17} color="#0EA5A4" />
+                      <Ionicons name="location-outline" size={17} color="#00E5FF" />
                     </View>
                     <View style={styles.resultText}>
                       <Text style={styles.resultName} numberOfLines={1}>
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
     width: 50,
     minHeight: 48,
     borderRadius: 14,
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -594,7 +594,7 @@ const styles = StyleSheet.create({
     flex: 1.5,
     minHeight: 48,
     borderRadius: 14,
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

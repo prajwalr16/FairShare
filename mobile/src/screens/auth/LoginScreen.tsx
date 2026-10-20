@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from 
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import BrandLogo from '../../components/BrandLogo';
 import PasswordInput from '../../components/PasswordInput';
 import StatusBanner, { StatusBannerType } from '../../components/StatusBanner';
 import { supabase } from '../../config/supabase';
@@ -32,8 +33,6 @@ export default function LoginScreen() {
       return setStatus({ type: 'error', message: error.message || 'Login failed. Please check your credentials.' });
     }
 
-    // Start the groups request before the Home transition. Home reuses the
-    // same in-flight promise instead of creating a second request.
     void getGroups();
 
     navigation.reset({
@@ -45,6 +44,10 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.card}>
+        <View style={styles.logoWrap}>
+          <BrandLogo size="md" showText={false} />
+        </View>
+
         <Text style={styles.title}>Welcome Back</Text>
         <Text style={styles.subtitle}>Sign in to continue using FairShare.</Text>
 
@@ -56,8 +59,8 @@ export default function LoginScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#94A3B8"
+          placeholder="Email address"
+          placeholderTextColor="#64748B"
           keyboardType="email-address"
           autoCapitalize="none"
           value={email}
@@ -86,9 +89,9 @@ export default function LoginScreen() {
 
         <Pressable style={[styles.button, loading && { opacity: 0.7 }]} onPress={signIn} disabled={loading}>
           {loading ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color="#06090F" />
           ) : (
-            <Text style={styles.buttonText}>Sign In</Text>
+            <Text style={styles.buttonText}>SIGN IN</Text>
           )}
         </Pressable>
 
@@ -103,16 +106,96 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#06090F', justifyContent: 'center', padding: 24, alignItems: 'center' },
-  card: { backgroundColor: '#0E1524', borderRadius: 24, padding: 24, width: '100%', maxWidth: 420 },
-  title: { color: '#FFFFFF', fontSize: 30, fontWeight: '700', textAlign: 'center' },
-  subtitle: { color: '#94A3B8', textAlign: 'center', marginTop: 10, marginBottom: 24, lineHeight: 22 },
-  input: { backgroundColor: '#06090F', color: '#FFFFFF', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 16, fontSize: 16 },
-  spacing: { height: 14 },
-  forgotButton: { alignSelf: 'flex-end', marginTop: 12 },
-  forgotText: { color: '#0EA5A4', fontWeight: '600' },
-  button: { backgroundColor: '#0EA5A4', paddingVertical: 16, borderRadius: 14, marginTop: 24, justifyContent: 'center', alignItems: 'center', height: 52 },
-  buttonText: { color: '#FFFFFF', textAlign: 'center', fontWeight: '700', fontSize: 16 },
-  footer: { color: '#CBD5E1', textAlign: 'center', marginTop: 24 },
-  link: { color: '#0EA5A4', fontWeight: '700' },
+  container: {
+    flex: 1,
+    backgroundColor: '#06090F',
+    justifyContent: 'center',
+    padding: 24,
+    alignItems: 'center',
+  },
+  card: {
+    backgroundColor: '#0E1524',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 420,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.45,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  logoWrap: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  title: {
+    color: '#FFFFFF',
+    fontSize: 26,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 20,
+    fontSize: 13,
+  },
+  input: {
+    backgroundColor: '#06090F',
+    color: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  spacing: {
+    height: 12,
+  },
+  forgotButton: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+  },
+  forgotText: {
+    color: '#00E5FF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  button: {
+    backgroundColor: '#00E5FF',
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 50,
+    shadowColor: '#00E5FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonText: {
+    color: '#06090F',
+    textAlign: 'center',
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 1,
+  },
+  footer: {
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 13,
+  },
+  link: {
+    color: '#00E5FF',
+    fontWeight: '800',
+  },
 });

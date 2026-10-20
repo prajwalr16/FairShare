@@ -221,7 +221,7 @@ export default function ExpenseDetailsScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
         <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#0EA5A4" />
+          <ActivityIndicator size="large" color="#00E5FF" />
           <Text style={styles.loadingText}>Loading expense…</Text>
         </View>
       </SafeAreaView>
@@ -275,7 +275,7 @@ export default function ExpenseDetailsScreen() {
         >
           <View style={styles.heroCard}>
             <View style={styles.heroIcon}>
-              <Ionicons name="receipt-outline" size={25} color="#0EA5A4" />
+              <Ionicons name="receipt-outline" size={25} color="#00E5FF" />
             </View>
             <Text style={styles.title}>{expense.title}</Text>
             <Text style={styles.heroAmount}>{money(expense.amount, currency)}</Text>
@@ -287,7 +287,7 @@ export default function ExpenseDetailsScreen() {
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <View style={styles.infoLabelContainer}>
-                <Ionicons name="calendar-outline" size={18} color="#0EA5A4" />
+                <Ionicons name="calendar-outline" size={18} color="#00E5FF" />
                 <Text style={styles.infoLabel}>Date & Time</Text>
               </View>
               <Text style={styles.infoValue} numberOfLines={1}>
@@ -296,7 +296,7 @@ export default function ExpenseDetailsScreen() {
             </View>
             <View style={styles.infoRow}>
               <View style={styles.infoLabelContainer}>
-                <Ionicons name="wallet-outline" size={18} color="#0EA5A4" />
+                <Ionicons name="wallet-outline" size={18} color="#00E5FF" />
                 <Text style={styles.infoLabel}>Paid by</Text>
               </View>
               <Text style={styles.infoValue} numberOfLines={1}>
@@ -305,7 +305,7 @@ export default function ExpenseDetailsScreen() {
             </View>
             <View style={styles.infoRow}>
               <View style={styles.infoLabelContainer}>
-                <Ionicons name={expense.category ? EXPENSE_CATEGORY_ICONS[expense.category as ExpenseCategory] : 'ellipsis-horizontal-circle-outline'} size={18} color="#0EA5A4" />
+                <Ionicons name={expense.category ? EXPENSE_CATEGORY_ICONS[expense.category as ExpenseCategory] : 'ellipsis-horizontal-circle-outline'} size={18} color="#00E5FF" />
                 <Text style={styles.infoLabel}>Category</Text>
               </View>
               <Text style={styles.infoValue} numberOfLines={1}>{expense.category || 'Other'}</Text>
@@ -313,7 +313,7 @@ export default function ExpenseDetailsScreen() {
             {expense.location_name ? (
               <View style={styles.infoRow}>
                 <View style={styles.infoLabelContainer}>
-                  <Ionicons name="location-outline" size={18} color="#0EA5A4" />
+                  <Ionicons name="location-outline" size={18} color="#00E5FF" />
                   <Text style={styles.infoLabel}>Location</Text>
                 </View>
                 <Text style={styles.infoValue} numberOfLines={2}>
@@ -411,13 +411,13 @@ const styles = StyleSheet.create({
   splitCard: { backgroundColor: '#0E1524', borderRadius: 18, padding: 6 },
   splitRow: { minHeight: 58, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center' },
   avatar: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginRight: 11 },
-  avatarText: { color: '#0EA5A4', fontSize: 13, fontWeight: '900' },
+  avatarText: { color: '#00E5FF', fontSize: 13, fontWeight: '900' },
   splitName: { flex: 1, color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   splitAmount: { color: '#FFFFFF', fontSize: 13, fontWeight: '800', marginLeft: 12 },
   noteCard: { marginTop: 16, backgroundColor: '#111C2F', borderRadius: 15, padding: 14, flexDirection: 'row', gap: 9 },
   noteText: { flex: 1, color: '#64748B', fontSize: 11, lineHeight: 16 },
-  primaryButton: { minWidth: 130, minHeight: 46, paddingHorizontal: 18, borderRadius: 13, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center' },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  primaryButton: { minWidth: 130, minHeight: 46, paddingHorizontal: 18, borderRadius: 13, backgroundColor: '#00E5FF', alignItems: 'center', justifyContent: 'center' },
+  primaryButtonText: { color: '#06090F', fontSize: 14, fontWeight: '800' },
   deleteButton: { marginTop: 22, minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: '#7F1D1D', backgroundColor: '#1C1013', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
   deleteButtonText: { color: '#FCA5A5', fontSize: 14, fontWeight: '800' },
   disabledButton: { opacity: 0.65 },

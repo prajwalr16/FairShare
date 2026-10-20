@@ -135,7 +135,7 @@ function buildPickerMapHtml(
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-gl.css">
 <style>
 html,body,#map{height:100%;width:100%;margin:0;background:#dfe8f1;overflow:hidden;touch-action:none}
-.marker{width:38px;height:38px;border-radius:19px;background:#0EA5A4;border:3px solid #fff;box-shadow:0 3px 10px rgba(15,23,42,.35);display:flex;align-items:center;justify-content:center;color:#fff;font:900 13px system-ui,-apple-system,sans-serif}
+.marker{width:38px;height:38px;border-radius:19px;background:#00E5FF;border:3px solid #fff;box-shadow:0 3px 10px rgba(15,23,42,.35);display:flex;align-items:center;justify-content:center;color:#fff;font:900 13px system-ui,-apple-system,sans-serif}
 .maplibregl-ctrl-group{border-radius:13px;overflow:hidden}
 </style>
 </head>
@@ -148,7 +148,7 @@ let currentMarker=null;
 let selected={lat:initial.latitude,lon:initial.longitude,label:initial.label||'Selected location'};
 const map=new maplibregl.Map({
  container:'map',
- style:'https://tiles.openfreemap.org/styles/liberty',
+ style:'https://tiles.openfreemap.org/styles/dark',
  center:initial.longitude!=null&&initial.latitude!=null?[initial.longitude,initial.latitude]:fallback,
  zoom:initial.longitude!=null&&initial.latitude!=null?13:4.4,
  attributionControl:false,
@@ -659,7 +659,7 @@ export default function TripDetailsScreen() {
           </View>
 
           {loading ? (
-            <View style={styles.card}><ActivityIndicator size="small" color="#0EA5A4" /><Text style={styles.mutedCenter}>Loading journey…</Text></View>
+            <View style={styles.card}><ActivityIndicator size="small" color="#00E5FF" /><Text style={styles.mutedCenter}>Loading journey…</Text></View>
           ) : (
             <>
               <View style={styles.card}>
@@ -668,7 +668,7 @@ export default function TripDetailsScreen() {
                     <Text style={styles.sectionTitle}>Trip dates</Text>
                     <Text style={styles.sectionSubtitle}>{startDate && endDate ? `${dayCount} ${dayCount === 1 ? 'day' : 'days'}` : 'Choose the travel window'}</Text>
                   </View>
-                  <View style={styles.dateBadge}><Ionicons name="calendar-outline" size={15} color="#0EA5A4" /><Text style={styles.dateBadgeText}>{dayCount}D</Text></View>
+                  <View style={styles.dateBadge}><Ionicons name="calendar-outline" size={15} color="#00E5FF" /><Text style={styles.dateBadgeText}>{dayCount}D</Text></View>
                 </View>
                 <View style={styles.dateRow}>
                   <Pressable style={styles.dateField} onPress={() => openDatePicker('start')}>
@@ -735,7 +735,7 @@ export default function TripDetailsScreen() {
 
                     {dayStops.length === 0 ? (
                       <View style={styles.dayEmpty}>
-                        <View style={styles.dayEmptyIcon}><Ionicons name="location-outline" size={24} color="#0EA5A4" /></View>
+                        <View style={styles.dayEmptyIcon}><Ionicons name="location-outline" size={24} color="#00E5FF" /></View>
                         <Text style={styles.dayEmptyTitle}>Nothing planned yet</Text>
                         <Text style={styles.dayEmptyText}>Add a start, stop or destination for Day {selectedDay}.</Text>
                       </View>
@@ -856,7 +856,7 @@ export default function TripDetailsScreen() {
 
               {!!pickerResults.length && (
                 <View style={styles.pickerResultsOverlay}>
-                  {pickerResults.map((place) => <Pressable key={place.place_id} style={styles.pickerResultRow} onPress={() => choosePickerResult(place)}><View style={styles.searchResultIcon}><Ionicons name="location-outline" size={16} color="#0EA5A4" /></View><View style={styles.flexOne}><Text style={styles.searchResultName} numberOfLines={1}>{place.name}</Text><Text style={styles.searchResultAddress} numberOfLines={2}>{place.display_name}</Text></View></Pressable>)}
+                  {pickerResults.map((place) => <Pressable key={place.place_id} style={styles.pickerResultRow} onPress={() => choosePickerResult(place)}><View style={styles.searchResultIcon}><Ionicons name="location-outline" size={16} color="#00E5FF" /></View><View style={styles.flexOne}><Text style={styles.searchResultName} numberOfLines={1}>{place.name}</Text><Text style={styles.searchResultAddress} numberOfLines={2}>{place.display_name}</Text></View></Pressable>)}
                   <Text style={styles.searchAttribution}>Search data © OpenStreetMap contributors</Text>
                 </View>
               )}
@@ -908,12 +908,12 @@ const styles = StyleSheet.create({
   header: { minHeight: 76, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#0E1524' },
   headerButton: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#0E1524', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#263247' },
   headerCenter: { flex: 1, minWidth: 0, paddingHorizontal: 12 },
-  headerEyebrow: { color: '#0EA5A4', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  headerEyebrow: { color: '#00E5FF', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
   headerTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '900', marginTop: 2 },
   headerSubtitle: { color: '#64748B', fontSize: 11, marginTop: 3 },
   flexOne: { flex: 1, minWidth: 0 },
   heroCard: { backgroundColor: '#13283A', borderRadius: 24, padding: 20, marginBottom: 14, borderWidth: 1, borderColor: '#234255' },
-  heroIcon: { width: 46, height: 46, borderRadius: 16, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  heroIcon: { width: 46, height: 46, borderRadius: 16, backgroundColor: '#00E5FF', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   heroEyebrow: { color: '#5EEAD4', fontSize: 10, fontWeight: '900', letterSpacing: 1.1 },
   heroTitle: { color: '#FFFFFF', fontSize: 23, fontWeight: '900', lineHeight: 29, marginTop: 7 },
   heroText: { color: '#9FB3C8', fontSize: 12, lineHeight: 19, marginTop: 8 },
@@ -930,7 +930,7 @@ const styles = StyleSheet.create({
   fieldCaption: { color: '#64748B', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
   fieldValueRow: { flexDirection: 'row', alignItems: 'center', marginTop: 9, gap: 7 },
   dateValue: { color: '#F8FAFC', fontSize: 12, fontWeight: '700', flexShrink: 1 },
-  saveJourneyButton: { minHeight: 52, borderRadius: 15, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, marginBottom: 14 },
+  saveJourneyButton: { minHeight: 52, borderRadius: 15, backgroundColor: '#00E5FF', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, marginBottom: 14 },
   saveJourneyButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   detailsToggle: { flexDirection: 'row', alignItems: 'center' },
   detailsToggleIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
@@ -949,7 +949,7 @@ const styles = StyleSheet.create({
   miniStatLabel: { color: '#64748B', fontSize: 9, fontWeight: '800', marginTop: 1 },
   dayChips: { paddingBottom: 4, paddingRight: 8 },
   dayChip: { minWidth: 96, paddingHorizontal: 11, paddingVertical: 10, borderRadius: 14, backgroundColor: '#06090F', borderWidth: 1, borderColor: '#2A3A50', marginRight: 8, position: 'relative' },
-  dayChipActive: { backgroundColor: '#0EA5A4', borderColor: '#0EA5A4' },
+  dayChipActive: { backgroundColor: '#00E5FF', borderColor: '#00E5FF' },
   dayChipNumber: { color: '#94A3B8', fontSize: 9, fontWeight: '900', letterSpacing: 0.4 },
   dayChipDate: { color: '#E2E8F0', fontSize: 11, fontWeight: '800', marginTop: 3 },
   dayChipTextActive: { color: '#FFFFFF' },
@@ -968,12 +968,12 @@ const styles = StyleSheet.create({
   dayEmptyText: { color: '#64748B', fontSize: 11, textAlign: 'center', lineHeight: 17, marginTop: 6 },
   stopCard: { flexDirection: 'row', paddingVertical: 5 },
   stopTimeline: { width: 36, alignItems: 'center' },
-  stopNumber: { width: 30, height: 30, borderRadius: 10, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center' },
+  stopNumber: { width: 30, height: 30, borderRadius: 10, backgroundColor: '#00E5FF', alignItems: 'center', justifyContent: 'center' },
   stopNumberDestination: { backgroundColor: '#F97316' },
   stopNumberText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
   timelineLine: { width: 2, flex: 1, backgroundColor: '#2A3A50', marginTop: 3, minHeight: 16 },
   stopContent: { flex: 1, paddingBottom: 12, paddingLeft: 10 },
-  stopType: { color: '#0EA5A4', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
+  stopType: { color: '#00E5FF', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
   stopName: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', marginTop: 3 },
   stopLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '700', marginTop: 3 },
   stopMeta: { color: '#64748B', fontSize: 10, lineHeight: 15, marginTop: 4 },
@@ -993,7 +993,7 @@ const styles = StyleSheet.create({
   expensesIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginRight: 11 },
   expensesTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   expensesText: { color: '#7F95A9', fontSize: 10, lineHeight: 15, marginTop: 4 },
-  expensesAction: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
+  expensesAction: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#00E5FF', alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   locationPickerButton: { minHeight: 68, borderRadius: 16, backgroundColor: '#06090F', borderWidth: 1, borderColor: '#2A3A50', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   locationPickerIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#13283A', alignItems: 'center', justifyContent: 'center' },
   locationPickerTitle: { color: '#F8FAFC', fontSize: 12, fontWeight: '900' },
@@ -1008,7 +1008,7 @@ const styles = StyleSheet.create({
   stopFormContent: { paddingBottom: 12 },
   stopTypeRow: { flexDirection: 'row', gap: 7 },
   stopTypeChip: { flex: 1, minHeight: 44, borderRadius: 12, backgroundColor: '#06090F', borderWidth: 1, borderColor: '#2A3A50', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 5 },
-  stopTypeChipActive: { backgroundColor: '#0EA5A4', borderColor: '#0EA5A4' },
+  stopTypeChipActive: { backgroundColor: '#00E5FF', borderColor: '#00E5FF' },
   stopTypeChipText: { color: '#94A3B8', fontSize: 10, fontWeight: '800' },
   stopTypeChipTextActive: { color: '#FFFFFF' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(2,6,23,.82)', justifyContent: 'flex-end' },
@@ -1021,18 +1021,18 @@ const styles = StyleSheet.create({
   modalClose: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center' },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
   modalCancel: { flex: 1, minHeight: 48, borderRadius: 13, backgroundColor: '#06090F', borderWidth: 1, borderColor: '#334155', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
-  modalConfirm: { flex: 1.35, minHeight: 48, borderRadius: 13, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 },
+  modalConfirm: { flex: 1.35, minHeight: 48, borderRadius: 13, backgroundColor: '#00E5FF', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 },
   modalCancelText: { color: '#CBD5E1', fontSize: 13, fontWeight: '800' },
   modalConfirmText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   modalDayRow: { paddingBottom: 4, paddingRight: 8 },
   modalDayChip: { minWidth: 84, paddingHorizontal: 9, paddingVertical: 9, borderRadius: 12, backgroundColor: '#06090F', borderWidth: 1, borderColor: '#2A3A50', marginRight: 8 },
-  modalDayChipActive: { backgroundColor: '#0EA5A4', borderColor: '#0EA5A4' },
+  modalDayChipActive: { backgroundColor: '#00E5FF', borderColor: '#00E5FF' },
   modalDayChipText: { color: '#CBD5E1', fontSize: 10, fontWeight: '900' },
   modalDayChipTextActive: { color: '#FFFFFF' },
   modalDayChipDate: { color: '#64748B', fontSize: 9, marginTop: 3 },
   modalDayChipDateActive: { color: '#E6FFFB' },
-  primaryButton: { minHeight: 50, borderRadius: 15, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, marginTop: 14 },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  primaryButton: { minHeight: 50, borderRadius: 15, backgroundColor: '#00E5FF', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, marginTop: 14 },
+  primaryButtonText: { color: '#06090F', fontSize: 13, fontWeight: '900' },
   disabled: { opacity: 0.55 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { color: '#FFFFFF', fontSize: 19, fontWeight: '900' },
@@ -1040,7 +1040,7 @@ const styles = StyleSheet.create({
   locationModalCard: { backgroundColor: '#0E1524', borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 16, paddingBottom: Platform.OS === 'ios' ? 26 : 18, maxHeight: '94%' },
   locationSearchRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   locationSearchInput: { flex: 1, minHeight: 50, borderRadius: 15, backgroundColor: '#06090F', borderWidth: 1, borderColor: '#2A3A50', color: '#FFFFFF', paddingHorizontal: 14, fontSize: 14 },
-  locationSearchButton: { width: 52, minHeight: 50, borderRadius: 15, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center' },
+  locationSearchButton: { width: 52, minHeight: 50, borderRadius: 15, backgroundColor: '#00E5FF', alignItems: 'center', justifyContent: 'center' },
   pickerResultsOverlay: { backgroundColor: '#06090F', borderRadius: 14, borderWidth: 1, borderColor: '#263247', overflow: 'hidden', marginBottom: 10 },
   pickerResultRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 11, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#0E1524' },
   locationMapWrap: { height: 355, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#2A3A50', backgroundColor: '#06090F', position: 'relative' },
@@ -1048,7 +1048,7 @@ const styles = StyleSheet.create({
   mapHintBadge: { position: 'absolute', left: 10, bottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(15,23,42,.90)', borderRadius: 12, paddingHorizontal: 11, paddingVertical: 8 },
   mapHintText: { color: '#FFFFFF', fontSize: 9, fontWeight: '900' },
   selectedLocationCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#06090F', borderRadius: 15, padding: 12, marginTop: 10, borderWidth: 1, borderColor: '#2A3A50' },
-  selectedLocationIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center' },
+  selectedLocationIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#00E5FF', alignItems: 'center', justifyContent: 'center' },
   selectedLocationTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   selectedLocationAddress: { color: '#94A3B8', fontSize: 9, lineHeight: 14, marginTop: 3 },
   locationModalActions: { flexDirection: 'row', gap: 9, marginTop: 10 },

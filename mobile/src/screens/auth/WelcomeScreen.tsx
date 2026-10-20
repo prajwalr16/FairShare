@@ -9,6 +9,8 @@ import {
   SafeAreaView,
 } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import BrandLogo from '../../components/BrandLogo';
 
 export default function WelcomeScreen() {
   const navigation = useNavigation<any>();
@@ -19,15 +21,7 @@ export default function WelcomeScreen() {
       edges={['top', 'bottom', 'left', 'right']}
     >
       <View style={styles.main}>
-        <Text style={styles.logo}>FS</Text>
-
-        <Text style={styles.title}>
-          FairShare
-        </Text>
-
-        <Text style={styles.tagline}>
-          Split expenses. Share memories.
-        </Text>
+        <BrandLogo size="lg" showText={true} showTagline={true} />
       </View>
 
       <Pressable
@@ -35,8 +29,9 @@ export default function WelcomeScreen() {
         onPress={() => navigation.navigate('Login')}
       >
         <Text style={styles.buttonText}>
-          Get Started
+          GET STARTED
         </Text>
+        <Ionicons name="arrow-forward" size={16} color="#06090F" />
       </Pressable>
     </SafeAreaView>
   );
@@ -47,44 +42,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#06090F',
     paddingHorizontal: 24,
+    paddingBottom: 20,
   },
-
   main: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  logo: {
-    fontSize: 60,
-    fontWeight: '800',
-    color: '#0EA5A4',
-  },
-
-  title: {
-    fontSize: 34,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginTop: 4,
-  },
-
-  tagline: {
-    color: '#94A3B8',
-    fontSize: 15,
-    marginTop: 12,
-  },
-
   button: {
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     paddingVertical: 16,
     borderRadius: 14,
     marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#00E5FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
-
   buttonText: {
-    color: '#FFFFFF',
+    color: '#06090F',
     textAlign: 'center',
-    fontWeight: '700',
-    fontSize: 16,
+    fontWeight: '900',
+    fontSize: 14,
+    letterSpacing: 1,
   },
 });

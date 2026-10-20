@@ -156,7 +156,7 @@ export default function ExpenseDatePicker({
           disabled={disabled}
         >
           <View style={styles.icon}>
-            <Ionicons name="calendar-outline" size={20} color="#0EA5A4" />
+            <Ionicons name="calendar-outline" size={20} color="#00E5FF" />
           </View>
           <View style={styles.selectorTextWrap}>
             <Text style={styles.selectorValue}>
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   },
   quickButtonActive: {
     backgroundColor: '#134E4A',
-    borderColor: '#0EA5A4',
+    borderColor: '#00E5FF',
   },
   quickButtonText: {
     color: '#94A3B8',
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
   confirmButton: {
     height: 48,
     borderRadius: 14,
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     alignItems: 'center',
     justifyContent: 'center',
   },

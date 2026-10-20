@@ -516,7 +516,7 @@ export default function AddExpenseScreen() {
                 disabled={loadingMembers || members.length === 0}
               >
                 <View style={styles.payerSelectorIcon}>
-                  <Ionicons name="wallet-outline" size={20} color="#0EA5A4" />
+                  <Ionicons name="wallet-outline" size={20} color="#00E5FF" />
                 </View>
                 <View style={styles.payerSelectorInfo}>
                   <Text style={styles.payerSelectorName} numberOfLines={1}>
@@ -543,7 +543,7 @@ export default function AddExpenseScreen() {
                 disabled={saving}
               >
                 <View style={styles.categorySelectorIcon}>
-                  <Ionicons name={EXPENSE_CATEGORY_ICONS[category]} size={19} color="#0EA5A4" />
+                  <Ionicons name={EXPENSE_CATEGORY_ICONS[category]} size={19} color="#00E5FF" />
                 </View>
                 <View style={styles.payerSelectorInfo}>
                   <Text style={styles.payerSelectorName}>{category}</Text>
@@ -648,7 +648,7 @@ export default function AddExpenseScreen() {
 
               {loadingMembers ? (
                 <View style={styles.loadingCard}>
-                  <ActivityIndicator color="#0EA5A4" />
+                  <ActivityIndicator color="#00E5FF" />
                   <Text style={styles.loadingText}>Loading members…</Text>
                 </View>
               ) : members.length === 0 ? (
@@ -656,7 +656,7 @@ export default function AddExpenseScreen() {
                   <Ionicons
                     name="people-outline"
                     size={25}
-                    color="#0EA5A4"
+                    color="#00E5FF"
                   />
                   <Text style={styles.emptyTitle}>
                     No active members found
@@ -807,7 +807,7 @@ export default function AddExpenseScreen() {
                     disabled={saving}
                   >
                     <View style={styles.categorySelectorIcon}>
-                      <Ionicons name={EXPENSE_CATEGORY_ICONS[item]} size={19} color="#0EA5A4" />
+                      <Ionicons name={EXPENSE_CATEGORY_ICONS[item]} size={19} color="#00E5FF" />
                     </View>
                     <View style={styles.memberInfo}>
                       <Text style={styles.memberName}>{item}</Text>
@@ -972,7 +972,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   currency: {
-    color: '#0EA5A4',
+    color: '#00E5FF',
     fontSize: 28,
     fontWeight: '800',
     marginRight: 8,
@@ -1056,8 +1056,8 @@ const styles = StyleSheet.create({
     borderColor: '#0E1524',
   },
   splitOptionActive: {
-    backgroundColor: '#0EA5A4',
-    borderColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
+    borderColor: '#00E5FF',
   },
   splitOptionText: {
     color: '#94A3B8',
@@ -1082,7 +1082,7 @@ const styles = StyleSheet.create({
     height: 32,
     paddingHorizontal: 8,
     borderRadius: 12,
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1101,7 +1101,7 @@ const styles = StyleSheet.create({
   },
   memberRowSelected: {
     borderWidth: 1,
-    borderColor: '#0EA5A4',
+    borderColor: '#00E5FF',
   },
   memberMain: {
     minHeight: 46,
@@ -1152,8 +1152,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkCircleSelected: {
-    backgroundColor: '#0EA5A4',
-    borderColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
+    borderColor: '#00E5FF',
   },
   valueEditorContainer: {
     marginTop: 11,
@@ -1174,7 +1174,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
   },
   valuePrefix: {
-    color: '#0EA5A4',
+    color: '#00E5FF',
     fontSize: 15,
     fontWeight: '800',
     marginRight: 5,
@@ -1265,14 +1265,14 @@ const styles = StyleSheet.create({
     color: '#F87171',
   },
   summaryAmount: {
-    color: '#0EA5A4',
+    color: '#00E5FF',
     fontSize: 18,
     fontWeight: '800',
   },
   saveButton: {
     minHeight: 56,
     borderRadius: 17,
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1353,13 +1353,13 @@ const styles = StyleSheet.create({
   },
   payerRowSelected: {
     borderWidth: 1,
-    borderColor: '#0EA5A4',
+    borderColor: '#00E5FF',
   },
   payerCheck: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
