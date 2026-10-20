@@ -193,13 +193,14 @@ def list_group_expenses(
     limit: int | None = None,
     category: str | None = None,
     scope: str = "all",
+    paid_by: UUID | None = None,
 ) -> list[Expense]:
     get_group_and_role(session, group_id, user_id)
     if scope not in {"all", "mine"}:
         raise HTTPException(status_code=400, detail="Invalid expense scope.")
     if category and category != "All" and category not in SUPPORTED_EXPENSE_CATEGORIES:
         raise HTTPException(status_code=400, detail="Unsupported expense category.")
-    return list_expenses(session, group_id, limit, category, scope, user_id)
+    return list_expenses(session, group_id, limit, category, scope, user_id, paid_by=paid_by)
 
 
 def get_details(

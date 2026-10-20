@@ -16,6 +16,8 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 
 import ExpenseCard from '../../components/ExpenseCard';
 import UniversalScrollView from '../../components/UniversalScrollView';
+import PaidByPickerModal from '../../components/PaidByPickerModal';
+import { supabase } from '../../config/supabase';
 import { getGroupExpenses } from '../../services/expenseService';
 import { getGroupMembers, GroupMember } from '../../services/memberService';
 import { getGroupSettlements, GroupSettlement } from '../../services/settlementService';
@@ -60,13 +62,16 @@ export default function HistoryScreen() {
   };
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | 'All'>('All');
   const [expenseScope, setExpenseScope] = useState<'all' | 'mine'>('all');
+  const [paidByFilter, setPaidByFilter] = useState<string | null>(null);
+  const [showPaidByModal, setShowPaidByModal] = useState(false);
+  const [myUserId, setMyUserId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!groupId) return;
     setLoading(true);
     const [settings, expenseResult, settlementResult, memberResult] = await Promise.all([
       getGroupSettings(groupId),
-      getGroupExpenses(groupId, 200, expenseCategory, expenseScope),
+      getGroupExpenses(groupId, 200, expenseCategory, expenseScope, paidByFilter),
       getGroupSettlements(groupId),
       getGroupMembers(groupId),
     ]);
@@ -76,10 +81,13 @@ export default function HistoryScreen() {
     setSettlements(settlementResult.data || []);
     setMembers(memberResult.data || []);
     setLoading(false);
-  }, [groupId, expenseCategory, expenseScope]);
+  }, [groupId, expenseCategory, expenseScope, paidByFilter]);
 
   useFocusEffect(
     useCallback(() => {
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session?.user?.id) setMyUserId(data.session.user.id);
+      });
       load();
     }, [load]),
   );
@@ -102,6 +110,7 @@ export default function HistoryScreen() {
   const visibleExpenses = useMemo(
     () =>
       expenses.filter((expense) => {
+        if (paidByFilter && expense.paid_by !== paidByFilter) return false;
         if (!withinRange(expense.created_at, range)) return false;
         if (!normalizedQuery) return true;
         const payer = names.get(expense.paid_by) || '';
@@ -109,7 +118,7 @@ export default function HistoryScreen() {
           .toLowerCase()
           .includes(normalizedQuery);
       }),
-    [expenses, names, normalizedQuery, range],
+    [expenses, names, normalizedQuery, range, paidByFilter],
   );
 
   const visibleSettlements = useMemo(
@@ -190,13 +199,65 @@ export default function HistoryScreen() {
         {(filter === 'All' || filter === 'Expenses') && (
           <>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.row, { paddingTop: 0 }]}>
-              {(['all', 'mine'] as const).map((scope) => (
-                <Pressable key={scope} style={[styles.filterChip, expenseScope === scope && styles.filterChipActive]} onPress={() => setExpenseScope(scope)}>
-                  <Text style={[styles.filterChipText, expenseScope === scope && styles.filterChipTextActive]}>
-                    {scope === 'all' ? 'All group' : 'Mine'}
-                  </Text>
-                </Pressable>
-              ))}
+              <Pressable
+                style={[styles.filterChip, expenseScope === 'all' && !paidByFilter && styles.filterChipActive]}
+                onPress={() => {
+                  setExpenseScope('all');
+                  setPaidByFilter(null);
+                }}
+              >
+                <Text style={[styles.filterChipText, expenseScope === 'all' && !paidByFilter && styles.filterChipTextActive]}>
+                  All group
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.filterChip, expenseScope === 'mine' && !paidByFilter && styles.filterChipActive]}
+                onPress={() => {
+                  setExpenseScope('mine');
+                  setPaidByFilter(null);
+                }}
+              >
+                <Text style={[styles.filterChipText, expenseScope === 'mine' && !paidByFilter && styles.filterChipTextActive]}>
+                  Mine
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.filterChip,
+                  Boolean(paidByFilter) && styles.filterChipActive,
+                ]}
+                onPress={() => setShowPaidByModal(true)}
+              >
+                <Ionicons
+                  name="wallet-outline"
+                  size={13}
+                  color={Boolean(paidByFilter) ? '#FFFFFF' : '#94A3B8'}
+                />
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    Boolean(paidByFilter) && styles.filterChipTextActive,
+                  ]}
+                >
+                  {paidByFilter
+                    ? ` Paid by: ${paidByFilter === myUserId ? 'You' : (names.get(paidByFilter) || 'Member')} ▾`
+                    : ' Paid by ▾'}
+                </Text>
+                {Boolean(paidByFilter) && (
+                  <Pressable
+                    hitSlop={8}
+                    onPress={(e) => {
+                      e.stopPropagation?.();
+                      setPaidByFilter(null);
+                    }}
+                    style={{ marginLeft: 6 }}
+                  >
+                    <Ionicons name="close-circle" size={14} color="#FFFFFF" />
+                  </Pressable>
+                )}
+              </Pressable>
             </ScrollView>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.row, { paddingTop: 0 }]}>
               <Pressable style={[styles.filterChip, expenseCategory === 'All' && styles.filterChipActive]} onPress={() => setExpenseCategory('All')}>
@@ -305,6 +366,14 @@ export default function HistoryScreen() {
           </UniversalScrollView>
         )}
       </View>
+      <PaidByPickerModal
+        visible={showPaidByModal}
+        onClose={() => setShowPaidByModal(false)}
+        members={members}
+        currentUserId={myUserId}
+        selectedMemberId={paidByFilter}
+        onSelectMember={(memberId) => setPaidByFilter(memberId)}
+      />
     </SafeAreaView>
   );
 }

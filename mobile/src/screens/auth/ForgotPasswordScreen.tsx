@@ -14,24 +14,23 @@ import * as Linking from 'expo-linking';
 import { useNavigation } from '@react-navigation/native';
 
 import { supabase } from '../../config/supabase';
+import StatusBanner, { StatusBannerType } from '../../components/StatusBanner';
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation<any>();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<{ type: StatusBannerType; message: string } | null>(null);
 
   const sendReset = async () => {
+    setStatus(null);
     const normalizedEmail = email.trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
-      return Alert.alert('Invalid Email', 'Please enter a valid email.');
+      return setStatus({ type: 'error', message: 'Please enter a valid email address.' });
     }
 
     setLoading(true);
 
-    // Build the callback URL from the current Expo environment instead of
-    // hard-coding a LAN IP. This keeps Expo Go callbacks aligned with the
-    // current packager address and uses the registered FairShare scheme in
-    // development/production builds.
     const redirectTo = Platform.OS === 'web' && typeof window !== 'undefined'
       ? `${window.location.origin}/reset-password`
       : Linking.createURL('reset-password');
@@ -43,10 +42,16 @@ export default function ForgotPasswordScreen() {
     setLoading(false);
 
     if (error) {
-      return Alert.alert('Reset Failed', error.message);
+      return setStatus({
+        type: 'error',
+        message: error.message || 'Unable to send reset email.',
+      });
     }
 
-    Alert.alert('Email Sent', 'Check your inbox for the reset link.');
+    setStatus({
+      type: 'success',
+      message: 'Password reset link sent! Check your email inbox.',
+    });
   };
 
   return (
@@ -57,6 +62,12 @@ export default function ForgotPasswordScreen() {
           Enter your email to receive a reset link.
         </Text>
 
+        <StatusBanner
+          type={status?.type}
+          message={status?.message}
+          onDismiss={() => setStatus(null)}
+        />
+
         <TextInput
           style={styles.input}
           placeholder="Email"
@@ -65,7 +76,10 @@ export default function ForgotPasswordScreen() {
           autoCorrect={false}
           keyboardType="email-address"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(text) => {
+            setEmail(text);
+            if (status) setStatus(null);
+          }}
           editable={!loading}
         />
 
@@ -99,40 +113,53 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 60,
     justifyContent: 'center',
+    maxWidth: 420,
+    width: '100%',
+    alignSelf: 'center',
   },
   title: {
-    color: '#FFFFFF',
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
+    color: '#F8FAFC',
+    marginBottom: 8,
   },
   subtitle: {
+    fontSize: 15,
     color: '#94A3B8',
-    marginTop: 8,
     marginBottom: 24,
   },
   input: {
+    height: 52,
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 10,
     backgroundColor: '#1E293B',
-    color: '#FFFFFF',
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 20,
+    paddingHorizontal: 16,
+    color: '#F8FAFC',
+    fontSize: 16,
+    marginBottom: 16,
   },
   button: {
+    height: 52,
     backgroundColor: '#0EA5A4',
-    padding: 16,
-    borderRadius: 14,
+    borderRadius: 10,
+    justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   disabled: {
     opacity: 0.6,
   },
-  buttonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
   link: {
     color: '#0EA5A4',
     textAlign: 'center',
-    marginTop: 24,
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

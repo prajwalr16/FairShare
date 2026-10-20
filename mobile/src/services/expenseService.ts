@@ -243,14 +243,19 @@ export async function getGroupExpenses(
   limit?: number,
   category?: ExpenseCategory | 'All',
   scope: 'all' | 'mine' = 'all',
-  signal?: AbortSignal,
+  paidByOrSignal?: string | null | AbortSignal,
+  maybeSignal?: AbortSignal,
 ) {
   try {
+    const isSignal = paidByOrSignal && typeof paidByOrSignal === 'object' && 'aborted' in paidByOrSignal;
+    const paidBy = isSignal ? null : (paidByOrSignal as string | null | undefined);
+    const signal = isSignal ? (paidByOrSignal as AbortSignal) : maybeSignal;
     const params = new URLSearchParams();
 
     if (limit) params.set('limit', String(limit));
     if (category && category !== 'All') params.set('category', category);
     if (scope !== 'all') params.set('scope', scope);
+    if (paidBy) params.set('paid_by', paidBy);
 
     const query = params.toString() ? `?${params.toString()}` : '';
 

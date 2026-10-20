@@ -17,7 +17,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { WebView, WebViewMessageEvent } from 'react-native-webview';
+import UniversalWebView, { UniversalWebViewRef, WebViewMessageEvent } from '../../components/UniversalWebView';
 
 import {
   addTripStop,
@@ -231,7 +231,7 @@ export default function TripDetailsScreen() {
   const [pickerLoadingSearch, setPickerLoadingSearch] = useState(false);
   const [pickerMapTouching, setPickerMapTouching] = useState(false);
   const [pickerSession, setPickerSession] = useState(0);
-  const pickerWebViewRef = useRef<WebView>(null);
+  const pickerWebViewRef = useRef<UniversalWebViewRef>(null);
   const pickerInitialRef = useRef<{ latitude: number | null; longitude: number | null; label: string }>({ latitude: null, longitude: null, label: 'Selected location' });
   const pendingPickerFocusRef = useRef<{ latitude: number; longitude: number; label: string } | null>(null);
 
@@ -862,7 +862,7 @@ export default function TripDetailsScreen() {
               )}
 
               <View style={styles.locationMapWrap}>
-                <WebView
+                <UniversalWebView
                   ref={pickerWebViewRef}
                   source={{ html: pickerHtml, baseUrl: 'https://fairshare.local/' }}
                   style={styles.locationWebView}

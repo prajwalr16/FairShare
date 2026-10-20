@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { WebView, WebViewMessageEvent } from 'react-native-webview';
+import UniversalWebView, { UniversalWebViewRef, WebViewMessageEvent } from './UniversalWebView';
 
 import { PlaceSearchResult, searchPlaces } from '../services/placeService';
 
@@ -159,7 +159,7 @@ export default function TripLocationPickerModal({
   onClose,
   onConfirm,
 }: TripLocationPickerModalProps) {
-  const webViewRef = useRef<WebView>(null);
+  const webViewRef = useRef<UniversalWebViewRef>(null);
   const [latitude, setLatitude] = useState<number | null>(initialLatitude);
   const [longitude, setLongitude] = useState<number | null>(initialLongitude);
   const [selectionName, setSelectionName] = useState(initialName);
@@ -345,7 +345,7 @@ export default function TripLocationPickerModal({
             )}
 
             <View style={styles.mapCard}>
-              <WebView
+              <UniversalWebView
                 ref={webViewRef}
                 source={{ html: mapHtml }}
                 originWhitelist={['*']}
