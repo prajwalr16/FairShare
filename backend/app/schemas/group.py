@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -61,6 +62,11 @@ class GroupSummary(APIModel):
     description: str | None
     created_at: datetime
     updated_at: datetime | None = None
+    user_net_balance: Decimal | None = None
+    user_paid: Decimal | None = None
+    user_owed: Decimal | None = None
+    total_expenses: Decimal | None = None
+    member_count: int | None = None
 
 
 class GroupSettings(GroupSummary):

@@ -763,11 +763,11 @@ export default function GroupSettingsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
   },
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
   },
   header: {
     flexDirection: 'row',
@@ -780,7 +780,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
@@ -823,7 +823,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   card: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderRadius: 22,
     padding: 20,
   },
@@ -834,7 +834,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#334155',
@@ -850,7 +850,7 @@ const styles = StyleSheet.create({
   },
   selector: {
     minHeight: 64,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#334155',
@@ -880,7 +880,7 @@ const styles = StyleSheet.create({
   ownerOnlyNote: {
     minHeight: 48,
     borderRadius: 14,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     borderWidth: 1,
     borderColor: '#334155',
     paddingHorizontal: 13,
@@ -920,7 +920,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rolesCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderRadius: 22,
     padding: 16,
   },
@@ -977,7 +977,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 11,
@@ -1005,7 +1005,7 @@ const styles = StyleSheet.create({
     minWidth: 96,
     minHeight: 38,
     borderRadius: 12,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     borderWidth: 1,
     borderColor: '#334155',
     flexDirection: 'row',
@@ -1065,7 +1065,7 @@ const styles = StyleSheet.create({
   roleOptionCard: {
     minHeight: 68,
     borderRadius: 14,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     paddingHorizontal: 13,
     paddingVertical: 12,
     marginBottom: 8,
@@ -1095,7 +1095,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   shareInviteCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderRadius: 18,
     padding: 16,
     flexDirection: 'row',
@@ -1130,7 +1130,7 @@ const styles = StyleSheet.create({
     marginTop: 28,
   },
   dangerCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderRadius: 22,
     padding: 20,
     borderWidth: 1,
@@ -1168,7 +1168,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   pickerCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 10,
@@ -1200,7 +1200,7 @@ const styles = StyleSheet.create({
     minHeight: 54,
     paddingHorizontal: 12,
     borderRadius: 13,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',

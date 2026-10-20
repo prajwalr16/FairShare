@@ -24,6 +24,11 @@ export type GroupSummary = {
   currency: string;
   description?: string | null;
   created_at?: string | null;
+  user_net_balance?: number | string | null;
+  user_paid?: number | string | null;
+  user_owed?: number | string | null;
+  total_expenses?: number | string | null;
+  member_count?: number | null;
 };
 
 export type GroupMemberRole = {

@@ -5,6 +5,7 @@ from .group_member import GroupMember
 from .expense import Expense, ExpenseSplit
 from .settlement import Settlement
 from .trip import Trip, TripStop
+from .push_token import PushToken
 
 __all__ = [
     "Base",
@@ -16,4 +17,5 @@ __all__ = [
     "Settlement",
     "Trip",
     "TripStop",
+    "PushToken",
 ]

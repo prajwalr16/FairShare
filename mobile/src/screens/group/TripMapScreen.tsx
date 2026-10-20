@@ -576,7 +576,7 @@ export default function TripMapScreen() {
         trip,
         selectedDay,
       )
-    : '<html><body style="background:#0F172A"></body></html>';
+    : '<html><body style="background:#06090F"></body></html>';
 
   const displayStops =
     routeData?.stops ||
@@ -597,7 +597,7 @@ export default function TripMapScreen() {
     >
       <StatusBar
         barStyle="light-content"
-        backgroundColor="#0F172A"
+        backgroundColor="#06090F"
       />
 
       <View style={styles.container}>
@@ -1083,10 +1083,10 @@ export default function TripMapScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea:{flex:1,backgroundColor:'#0F172A'},
-  container:{flex:1,backgroundColor:'#0F172A'},
-  header:{minHeight:76,paddingHorizontal:16,flexDirection:'row',alignItems:'center',borderBottomWidth:1,borderBottomColor:'#1E293B'},
-  headerButton:{width:42,height:42,borderRadius:13,backgroundColor:'#1E293B',borderWidth:1,borderColor:'#263247',alignItems:'center',justifyContent:'center'},
+  safeArea:{flex:1,backgroundColor:'#06090F'},
+  container:{flex:1,backgroundColor:'#06090F'},
+  header:{minHeight:76,paddingHorizontal:16,flexDirection:'row',alignItems:'center',borderBottomWidth:1,borderBottomColor:'#0E1524'},
+  headerButton:{width:42,height:42,borderRadius:13,backgroundColor:'#0E1524',borderWidth:1,borderColor:'#263247',alignItems:'center',justifyContent:'center'},
   headerCenter:{flex:1,minWidth:0,paddingHorizontal:12},
   headerEyebrow:{color:'#0EA5A4',fontSize:9,fontWeight:'900',letterSpacing:1.1},
   headerTitle:{color:'#FFFFFF',fontSize:19,fontWeight:'900',marginTop:2},
@@ -1094,36 +1094,36 @@ const styles = StyleSheet.create({
   scroll:{flex:1},
   content:{padding:16,paddingBottom:50},
   flexOne:{flex:1,minWidth:0},
-  card:{backgroundColor:'#1E293B',borderRadius:20,padding:18,marginBottom:14},
-  daySelectorCard:{backgroundColor:'#1E293B',borderRadius:20,padding:16,marginBottom:14},
-  mapCard:{height:405,backgroundColor:'#1E293B',borderRadius:20,overflow:'hidden',marginBottom:14,borderWidth:1,borderColor:'#263247'},
+  card:{backgroundColor:'#0E1524',borderRadius:20,padding:18,marginBottom:14},
+  daySelectorCard:{backgroundColor:'#0E1524',borderRadius:20,padding:16,marginBottom:14},
+  mapCard:{height:405,backgroundColor:'#0E1524',borderRadius:20,overflow:'hidden',marginBottom:14,borderWidth:1,borderColor:'#263247'},
   map:{flex:1,backgroundColor:'#E8EEF4'},
-  webLoading:{flex:1,alignItems:'center',justifyContent:'center',backgroundColor:'#0F172A'},
+  webLoading:{flex:1,alignItems:'center',justifyContent:'center',backgroundColor:'#06090F'},
   sectionHeader:{flexDirection:'row',alignItems:'center',marginBottom:12},
   title:{color:'#FFFFFF',fontSize:21,fontWeight:'900',marginTop:10},
   titleSmall:{color:'#FFFFFF',fontSize:16,fontWeight:'900'},
   muted:{color:'#94A3B8',fontSize:11,lineHeight:17,marginTop:4},
   mutedCenter:{color:'#94A3B8',fontSize:11,textAlign:'center',lineHeight:17,marginTop:8},
-  scopeBadge:{width:34,height:34,borderRadius:11,backgroundColor:'#0F172A',borderWidth:1,borderColor:'#2A3A50',alignItems:'center',justifyContent:'center'},
+  scopeBadge:{width:34,height:34,borderRadius:11,backgroundColor:'#06090F',borderWidth:1,borderColor:'#2A3A50',alignItems:'center',justifyContent:'center'},
   dayChips:{paddingRight:8},
-  dayChip:{minWidth:86,paddingHorizontal:10,paddingVertical:9,borderRadius:13,backgroundColor:'#0F172A',borderWidth:1,borderColor:'#2A3A50',marginRight:8},
+  dayChip:{minWidth:86,paddingHorizontal:10,paddingVertical:9,borderRadius:13,backgroundColor:'#06090F',borderWidth:1,borderColor:'#2A3A50',marginRight:8},
   dayChipActive:{backgroundColor:'#0EA5A4',borderColor:'#0EA5A4'},
   dayChipTop:{color:'#94A3B8',fontSize:9,fontWeight:'900',letterSpacing:.5},
   dayChipBottom:{color:'#CBD5E1',fontSize:10,fontWeight:'800',marginTop:3},
   dayChipActiveText:{color:'#FFFFFF'},
   statsRow:{flexDirection:'row',gap:10,marginBottom:14},
-  statCard:{flex:1,backgroundColor:'#1E293B',borderRadius:16,padding:14},
+  statCard:{flex:1,backgroundColor:'#0E1524',borderRadius:16,padding:14},
   statLabel:{color:'#64748B',fontSize:9,fontWeight:'800'},
   statValue:{color:'#FFFFFF',fontSize:16,fontWeight:'900',marginTop:6},
-  secondaryButton:{backgroundColor:'#0F172A',borderRadius:12,paddingHorizontal:10,paddingVertical:8,borderWidth:1,borderColor:'#243147',flexDirection:'row',alignItems:'center',gap:5},
+  secondaryButton:{backgroundColor:'#06090F',borderRadius:12,paddingHorizontal:10,paddingVertical:8,borderWidth:1,borderColor:'#243147',flexDirection:'row',alignItems:'center',gap:5},
   secondaryButtonText:{color:'#CBD5E1',fontSize:10,fontWeight:'900'},
   routeSummaryRow:{flexDirection:'row',gap:10},
-  routeSummaryItem:{flex:1,backgroundColor:'#0F172A',borderRadius:14,padding:13},
+  routeSummaryItem:{flex:1,backgroundColor:'#06090F',borderRadius:14,padding:13},
   metaLabel:{color:'#64748B',fontSize:9,fontWeight:'800'},
   metaValue:{color:'#FFFFFF',fontSize:16,fontWeight:'900',marginTop:5},
   warningBox:{marginTop:12,backgroundColor:'#241E10',borderRadius:14,padding:12,flexDirection:'row',gap:9},
   warningText:{flex:1,color:'#FCD34D',fontSize:10,lineHeight:15,fontWeight:'700'},
-  infoBox:{backgroundColor:'#0F172A',borderRadius:14,padding:14,flexDirection:'row',gap:10},
+  infoBox:{backgroundColor:'#06090F',borderRadius:14,padding:14,flexDirection:'row',gap:10},
   infoTitle:{color:'#F8FAFC',fontSize:12,fontWeight:'800',lineHeight:18},
   dayDivider:{flexDirection:'row',alignItems:'center',paddingTop:16,paddingBottom:4,gap:10},
   dayDividerLine:{flex:1,height:1,backgroundColor:'#334155'},

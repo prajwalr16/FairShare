@@ -170,7 +170,7 @@ export default function SettlementDetailsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+        <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#0EA5A4" />
         </View>
@@ -194,7 +194,7 @@ export default function SettlementDetailsScreen() {
   return (
     <>
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+        <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.container}>
           <View style={styles.header}>
             <Pressable style={styles.headerButton} onPress={() => navigation.goBack()}>
@@ -327,21 +327,21 @@ export default function SettlementDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#0F172A' },
-  container: { flex: 1, backgroundColor: '#0F172A' },
+  safeArea: { flex: 1, backgroundColor: '#06090F' },
+  container: { flex: 1, backgroundColor: '#06090F' },
   header: {
     minHeight: 68,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: '#0E1524',
   },
   headerButton: {
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
   headerSubtitle: { color: '#64748B', fontSize: 12, marginTop: 3 },
   content: { padding: 18, paddingBottom: 50 },
   heroCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderRadius: 22,
     padding: 24,
     alignItems: 'center',
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
   },
   date: { color: '#64748B', marginTop: 7 },
   card: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderRadius: 18,
     padding: 18,
     marginBottom: 14,
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     padding: 22,
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
   modalSubtitle: { color: '#94A3B8', marginTop: 4 },
   inputLabel: { color: '#CBD5E1', fontWeight: '800', marginBottom: 8 },
   input: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     color: '#FFFFFF',
     borderRadius: 14,
     paddingHorizontal: 15,

@@ -137,7 +137,7 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+      <StatusBar barStyle="light-content" backgroundColor="#06090F" />
 
       <View style={styles.container}>
         <View style={styles.header}>
@@ -384,21 +384,21 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#0F172A' },
-  container: { flex: 1, backgroundColor: '#0F172A' },
+  safeArea: { flex: 1, backgroundColor: '#06090F' },
+  container: { flex: 1, backgroundColor: '#06090F' },
   header: {
     minHeight: 68,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: '#0E1524',
   },
   headerButton: {
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
   headerTitle: { color: '#FFFFFF', fontSize: 21, fontWeight: '900' },
   headerSubtitle: { color: '#64748B', fontSize: 12, marginTop: 2 },
   row: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  chip: { backgroundColor: '#1E293B', paddingHorizontal: 15, paddingVertical: 9, borderRadius: 999 },
+  chip: { backgroundColor: '#0E1524', paddingHorizontal: 15, paddingVertical: 9, borderRadius: 999 },
   chipActive: { backgroundColor: '#0EA5A4' },
   chipText: { color: '#CBD5E1', fontWeight: '800', fontSize: 13 },
   chipTextActive: { color: '#FFFFFF' },
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 10,
     minHeight: 48,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderRadius: 14,
     paddingHorizontal: 14,
     flexDirection: 'row',
@@ -427,10 +427,10 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, color: '#FFFFFF', marginLeft: 9, fontSize: 13 },
   content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 40 },
   sectionTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '900', marginBottom: 10 },
-  emptyCard: { backgroundColor: '#1E293B', borderRadius: 16, padding: 20, marginBottom: 8 },
+  emptyCard: { backgroundColor: '#0E1524', borderRadius: 16, padding: 20, marginBottom: 8 },
   emptyText: { color: '#94A3B8', textAlign: 'center' },
   settlementCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,

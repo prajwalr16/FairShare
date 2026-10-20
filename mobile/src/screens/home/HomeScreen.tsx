@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Platform,
   Pressable,
@@ -17,11 +18,13 @@ import { Ionicons } from '@expo/vector-icons';
 import GroupCard from '../../components/GroupCard';
 import CreateGroupModal from '../../components/CreateGroupModal';
 import UniversalScrollView from '../../components/UniversalScrollView';
+import { Theme } from '../../theme/theme';
+import { formatCurrency } from '../../utils/currency';
+import { registerPushNotificationToken } from '../../services/notificationService';
 import {
   createGroup,
   getCachedGroups,
   getGroups,
-  prefetchGroupOverview,
   GroupSummary,
 } from '../../services/groupService';
 
@@ -51,6 +54,11 @@ export default function HomeScreen() {
   const [showCreate, setShowCreate] = useState(false);
   const [filter, setFilter] = useState<Filter>('All');
 
+  // Animation values for smooth entrance and button springs
+  const heroFade = useRef(new Animated.Value(0)).current;
+  const heroTranslate = useRef(new Animated.Value(14)).current;
+  const createBtnScale = useRef(new Animated.Value(1)).current;
+
   const loadGroups = useCallback(async () => {
     const result = await getGroups();
 
@@ -69,20 +77,33 @@ export default function HomeScreen() {
   useEffect(() => {
     let active = true;
 
-    // Cache is an optimization only. Do not await it before starting the
-    // authoritative API request, otherwise a web storage/session issue can
-    // leave the screen stuck on "Loading groups…" without ever calling
-    // GET /groups.
+    // Trigger hero entrance animation
+    Animated.parallel([
+      Animated.timing(heroFade, {
+        toValue: 1,
+        duration: 450,
+        useNativeDriver: true,
+      }),
+      Animated.spring(heroTranslate, {
+        toValue: 0,
+        speed: 12,
+        bounciness: 4,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Register push notification token (free zero-cost notification setup)
+    void registerPushNotificationToken();
+
     const loadCachedGroups = async () => {
       try {
         const cached = await getCachedGroups();
         if (!active || !cached) return;
-
         setGroups(cached);
         setError(null);
         setLoading(false);
       } catch {
-        // Persistent cache is optional. The API request below is authoritative.
+        // Cache is optional
       }
     };
 
@@ -94,11 +115,40 @@ export default function HomeScreen() {
     };
   }, [loadGroups]);
 
+  // Aggregate user's overall financial position across all groups
+  const portfolioStats = useMemo(() => {
+    let totalNet = 0;
+    let totalYouGet = 0;
+    let totalYouOwe = 0;
+    let overallSpend = 0;
+
+    groups.forEach((g) => {
+      const net = Number(g.user_net_balance ?? 0);
+      const totalExp = Number(g.total_expenses ?? 0);
+
+      totalNet += net;
+      overallSpend += totalExp;
+
+      if (net > 0.005) {
+        totalYouGet += net;
+      } else if (net < -0.005) {
+        totalYouOwe += Math.abs(net);
+      }
+    });
+
+    return {
+      totalNet,
+      totalYouGet,
+      totalYouOwe,
+      overallSpend,
+      isPositive: totalNet > 0.005,
+      isNegative: totalNet < -0.005,
+      isSettled: Math.abs(totalNet) <= 0.005,
+    };
+  }, [groups]);
+
   const filteredGroups = useMemo(
-    () =>
-      filter === 'All'
-        ? groups
-        : groups.filter((group) => group.type === filter),
+    () => (filter === 'All' ? groups : groups.filter((group) => group.type === filter)),
     [filter, groups],
   );
 
@@ -142,230 +192,733 @@ export default function HomeScreen() {
     }
   };
 
+  const handleCreatePressIn = () => {
+    Animated.spring(createBtnScale, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      speed: 30,
+    }).start();
+  };
+
+  const handleCreatePressOut = () => {
+    Animated.spring(createBtnScale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 6,
+    }).start();
+  };
+
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
-      <SafeAreaView
-        style={styles.safeArea}
-        edges={['top', 'bottom', 'left', 'right']}
-      >
+      <StatusBar barStyle="light-content" backgroundColor="#06090F" />
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.container}>
+          {/* Top Luxury CRED Glass Navigation Bar */}
           <View style={styles.header}>
-            <View style={styles.headerCopy}>
-              <Text style={styles.eyebrow}>FairShare</Text>
-              <Text style={styles.title}>Your Groups</Text>
-              <Text style={styles.subtitle}>Split expenses. Share memories.</Text>
+            <View style={styles.brandRow}>
+              <View style={styles.logoBadge}>
+                <Ionicons name="sparkles" size={13} color="#00E5FF" />
+              </View>
+              <View>
+                <Text style={styles.brandTitle}>FAIRSHARE</Text>
+                <Text style={styles.brandSubtitle}>PORTFOLIO INTELLIGENCE</Text>
+              </View>
             </View>
+
             <View style={styles.headerActions}>
               <Pressable
-                style={styles.headerIcon}
-                onPress={() => navigation.navigate('Profile')}
-                hitSlop={8}
-              >
-                <Ionicons name="person-circle-outline" size={22} color="#CBD5E1" />
-              </Pressable>
-              <Pressable
-                style={styles.headerIcon}
+                style={styles.headerIconBtn}
                 onPress={() => void handleRefresh()}
                 hitSlop={8}
               >
-                <Ionicons name="refresh-outline" size={20} color="#CBD5E1" />
+                <Ionicons name="refresh-outline" size={18} color="#94A3B8" />
+              </Pressable>
+
+              <Pressable
+                style={styles.profileBtn}
+                onPress={() => navigation.navigate('Profile')}
+                hitSlop={8}
+              >
+                <Ionicons name="person" size={16} color="#00E5FF" />
               </Pressable>
             </View>
           </View>
 
-          <FlatList
-            data={filters}
-            horizontal
-            keyExtractor={(item) => item.key}
-            showsHorizontalScrollIndicator={false}
-            style={styles.filterList}
-            contentContainerStyle={styles.filterContent}
-            renderItem={({ item }) => {
-              const active = filter === item.key;
-              return (
-                <Pressable
-                  style={[styles.filterChip, active && styles.filterChipActive]}
-                  onPress={() => setFilter(item.key)}
-                >
-                  <Ionicons
-                    name={item.icon}
-                    size={14}
-                    color={active ? '#FFFFFF' : '#94A3B8'}
-                  />
-                  <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                    {item.label}
-                  </Text>
-                  <View style={[styles.countBadge, active && styles.countBadgeActive]}>
-                    <Text style={[styles.countText, active && styles.countTextActive]}>
-                      {filterCounts[item.key]}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            }}
-          />
-
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>
-                {filter === 'All' ? 'All groups' : `${filters.find((item) => item.key === filter)?.label || filter}`}
-              </Text>
-              <Text style={styles.sectionSubtitle}>
-                {filteredGroups.length} {filteredGroups.length === 1 ? 'group' : 'groups'}
-              </Text>
-            </View>
-          </View>
-
+          {/* Interactive FlatList with Custom Luxury Header Component */}
           <FlatList
             data={filteredGroups}
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={[styles.listContent, { paddingBottom: 150 }]}
+            contentContainerStyle={[styles.listContent, { paddingBottom: 120 }]}
             renderScrollComponent={Platform.OS === 'web' ? (props) => (
               <UniversalScrollView
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                refreshTintColor="#0EA5A4"
+                refreshTintColor="#00E5FF"
                 {...props}
               />
             ) : undefined}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
-                tintColor="#0EA5A4"
+                tintColor="#00E5FF"
                 onRefresh={handleRefresh}
               />
             }
-            ListEmptyComponent={
-              loading ? (
-                <View style={styles.emptyState}>
-                  <ActivityDots />
-                  <Text style={styles.emptyTitle}>Loading groups…</Text>
-                </View>
-              ) : error ? (
-                <View style={styles.emptyState}>
-                  <View style={styles.emptyIcon}>
-                    <Ionicons name="alert-circle-outline" size={30} color="#0EA5A4" />
+            ListHeaderComponent={
+              <Animated.View
+                style={[
+                  styles.heroContainer,
+                  {
+                    opacity: heroFade,
+                    transform: [{ translateY: heroTranslate }],
+                  },
+                ]}
+              >
+                {/* Hero Statement Card */}
+                <View style={styles.heroCard}>
+                  {/* Subtle Top Glowing Strip */}
+                  <View
+                    style={[
+                      styles.heroGlowStrip,
+                      {
+                        backgroundColor: portfolioStats.isPositive
+                          ? Theme.colors.positive
+                          : portfolioStats.isNegative
+                          ? Theme.colors.negative
+                          : Theme.colors.primary,
+                      },
+                    ]}
+                  />
+
+                  {/* Eyebrow Position Badge */}
+                  <View style={styles.heroEyebrowRow}>
+                    <View style={styles.heroStatusDot} />
+                    <Text style={styles.heroEyebrow}>GLOBAL NET POSITION</Text>
+                    <View style={styles.activePill}>
+                      <Text style={styles.activePillText}>{groups.length} CIRCLES</Text>
+                    </View>
                   </View>
-                  <Text style={styles.emptyTitle}>Unable to load groups</Text>
-                  <Text style={styles.emptySubtitle}>{error}</Text>
-                  <Pressable style={styles.retryButton} onPress={() => void loadGroups()}>
-                    <Ionicons name="refresh-outline" size={16} color="#FFFFFF" />
-                    <Text style={styles.retryButtonText}>Retry</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <View style={styles.emptyState}>
-                  <View style={styles.emptyIcon}>
-                    <Ionicons
-                      name={filter === 'Trip' ? 'airplane-outline' : 'people-outline'}
-                      size={30}
-                      color="#0EA5A4"
-                    />
+
+                  {/* Main Monetary Net Statement */}
+                  <View style={styles.amountDisplayRow}>
+                    <Text
+                      style={[
+                        styles.heroAmount,
+                        portfolioStats.isPositive && styles.heroAmountPositive,
+                        portfolioStats.isNegative && styles.heroAmountNegative,
+                        portfolioStats.isSettled && styles.heroAmountSettled,
+                      ]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                    >
+                      {portfolioStats.isPositive
+                        ? `+${formatCurrency(portfolioStats.totalNet, 'INR')}`
+                        : portfolioStats.isNegative
+                        ? `-${formatCurrency(Math.abs(portfolioStats.totalNet), 'INR')}`
+                        : formatCurrency(0, 'INR')}
+                    </Text>
                   </View>
-                  <Text style={styles.emptyTitle}>
-                    {filter === 'All' ? 'No groups yet' : `No ${filter.toLowerCase()} groups`}
+
+                  <Text style={styles.heroPositionDesc}>
+                    {portfolioStats.isPositive
+                      ? '✦ You are owed overall across your groups'
+                      : portfolioStats.isNegative
+                      ? '✦ You owe in total across your groups'
+                      : '✦ All balances settled up across all groups'}
                   </Text>
-                  <Text style={styles.emptySubtitle}>
-                    {filter === 'Trip'
-                      ? 'Create a Trip group. Journey planning is optional and lives inside that group.'
-                      : 'Create a group to start splitting expenses with your people.'}
+
+                  {/* Dual Stat Glass Pods */}
+                  <View style={styles.statPodsRow}>
+                    {/* Pod 1: You Get */}
+                    <View style={[styles.statPod, styles.statPodGet]}>
+                      <View style={styles.podHeader}>
+                        <View style={[styles.podIconCircle, { backgroundColor: 'rgba(0, 245, 160, 0.2)' }]}>
+                          <Ionicons name="arrow-up" size={13} color="#00F5A0" />
+                        </View>
+                        <Text style={styles.podLabelGet}>YOU GET</Text>
+                      </View>
+                      <Text style={styles.podAmountGet} numberOfLines={1}>
+                        {formatCurrency(portfolioStats.totalYouGet, 'INR')}
+                      </Text>
+                      <Text style={styles.podSubtext}>receivable</Text>
+                    </View>
+
+                    {/* Pod 2: You Owe */}
+                    <View style={[styles.statPod, styles.statPodOwe]}>
+                      <View style={styles.podHeader}>
+                        <View style={[styles.podIconCircle, { backgroundColor: 'rgba(255, 75, 114, 0.2)' }]}>
+                          <Ionicons name="arrow-down" size={13} color="#FF4B72" />
+                        </View>
+                        <Text style={styles.podLabelOwe}>YOU OWE</Text>
+                      </View>
+                      <Text style={styles.podAmountOwe} numberOfLines={1}>
+                        {formatCurrency(portfolioStats.totalYouOwe, 'INR')}
+                      </Text>
+                      <Text style={styles.podSubtext}>to pay back</Text>
+                    </View>
+                  </View>
+
+                  {/* Overall Group Volume Footer */}
+                  <View style={styles.volumeFooter}>
+                    <Ionicons name="pie-chart-outline" size={12} color="#64748B" />
+                    <Text style={styles.volumeText}>
+                      Combined volume across groups:{' '}
+                      <Text style={styles.volumeAmount}>
+                        {formatCurrency(portfolioStats.overallSpend, 'INR')}
+                      </Text>
+                    </Text>
+                  </View>
+
+                  {/* Quick Action Dock */}
+                  <View style={styles.actionDock}>
+                    <Animated.View style={{ flex: 1, transform: [{ scale: createBtnScale }] }}>
+                      <Pressable
+                        onPress={() => setShowCreate(true)}
+                        onPressIn={handleCreatePressIn}
+                        onPressOut={handleCreatePressOut}
+                        style={styles.primaryActionBtn}
+                      >
+                        <Ionicons name="add-circle" size={18} color="#06090F" />
+                        <Text style={styles.primaryActionText}>CREATE NEW GROUP</Text>
+                      </Pressable>
+                    </Animated.View>
+                  </View>
+                </View>
+
+                {/* Filter Capsule Dock */}
+                <View style={styles.filterSection}>
+                  <FlatList
+                    data={filters}
+                    horizontal
+                    keyExtractor={(item) => item.key}
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.filterScroll}
+                    renderItem={({ item }) => {
+                      const active = filter === item.key;
+                      return (
+                        <Pressable
+                          style={[styles.filterCapsule, active && styles.filterCapsuleActive]}
+                          onPress={() => setFilter(item.key)}
+                        >
+                          <Ionicons
+                            name={item.icon}
+                            size={13}
+                            color={active ? '#00E5FF' : '#64748B'}
+                          />
+                          <Text
+                            style={[styles.filterCapsuleText, active && styles.filterCapsuleTextActive]}
+                          >
+                            {item.label}
+                          </Text>
+                          <View
+                            style={[styles.filterCountBadge, active && styles.filterCountBadgeActive]}
+                          >
+                            <Text
+                              style={[
+                                styles.filterCountText,
+                                active && styles.filterCountTextActive,
+                              ]}
+                            >
+                              {filterCounts[item.key]}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    }}
+                  />
+                </View>
+
+                {/* Section Header */}
+                <View style={styles.sectionTitleRow}>
+                  <Text style={styles.sectionTitle}>
+                    {filter === 'All' ? 'YOUR ACTIVE CIRCLES' : `${filter.toUpperCase()} CIRCLES`}
+                  </Text>
+                  <Text style={styles.sectionCount}>
+                    {filteredGroups.length} {filteredGroups.length === 1 ? 'GROUP' : 'GROUPS'}
                   </Text>
                 </View>
-              )
+              </Animated.View>
             }
             renderItem={({ item }) => (
               <GroupCard
                 group={item}
-                onPress={() => {
-                  void prefetchGroupOverview(item.id);
-                  navigation.navigate('GroupDetails', {
-                    groupId: item.id,
-                    groupName: item.name,
-                  });
-                }}
+                onPress={() => navigation.navigate('GroupDetails', { groupId: item.id })}
               />
             )}
+            ListEmptyComponent={
+              loading ? (
+                <View style={styles.emptyState}>
+                  <ActivityIndicator size="small" color="#00E5FF" />
+                  <Text style={styles.emptyTitle}>Synchronizing portfolio…</Text>
+                </View>
+              ) : error ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="alert-circle-outline" size={32} color="#FF4B72" />
+                  <Text style={styles.emptyErrorTitle}>Sync Issue</Text>
+                  <Text style={styles.emptyDesc}>{error}</Text>
+                  <Pressable style={styles.retryBtn} onPress={() => void loadGroups()}>
+                    <Text style={styles.retryBtnText}>RETRY</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <View style={styles.emptyIconCircle}>
+                    <Ionicons name="layers-outline" size={30} color="#00E5FF" />
+                  </View>
+                  <Text style={styles.emptyTitle}>No groups in this filter</Text>
+                  <Text style={styles.emptyDesc}>
+                    Create a group to track shared trips, household rent, or group dinners effortlessly.
+                  </Text>
+                  <Pressable
+                    style={styles.emptyActionBtn}
+                    onPress={() => setShowCreate(true)}
+                  >
+                    <Ionicons name="add" size={16} color="#06090F" />
+                    <Text style={styles.emptyActionText}>CREATE GROUP</Text>
+                  </Pressable>
+                </View>
+              )
+            }
           />
 
-          <Pressable
-            style={[styles.fab, { bottom: Math.max(insets.bottom + 20, 26) }]}
-            onPress={() => setShowCreate(true)}
-          >
-            <Ionicons name="add" size={30} color="#FFFFFF" />
-          </Pressable>
+          {/* Floating Create Button */}
+          {filteredGroups.length > 3 && (
+            <Pressable
+              style={styles.floatingFab}
+              onPress={() => setShowCreate(true)}
+              hitSlop={12}
+            >
+              <Ionicons name="add" size={26} color="#06090F" />
+            </Pressable>
+          )}
 
-          <CreateGroupModal
-            visible={showCreate}
-            onClose={() => setShowCreate(false)}
-            onCreate={handleCreateGroup}
-          />
+          {showCreate && (
+            <CreateGroupModal
+              visible={showCreate}
+              onClose={() => setShowCreate(false)}
+              onCreate={handleCreateGroup}
+            />
+          )}
         </View>
       </SafeAreaView>
     </>
   );
 }
 
-function ActivityDots() {
-  return (
-    <View style={styles.activityDots}>
-      <View style={[styles.dot, styles.dotOne]} />
-      <View style={[styles.dot, styles.dotTwo]} />
-      <View style={[styles.dot, styles.dotThree]} />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#0F172A' },
-  container: { flex: 1, backgroundColor: '#0F172A', paddingHorizontal: 18 },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#06090F',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#06090F',
+  },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 14,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
-  headerCopy: { flex: 1, minWidth: 0 },
-  eyebrow: { color: '#0EA5A4', fontSize: 12, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
-  title: { color: '#FFFFFF', fontSize: 28, fontWeight: '900', marginTop: 4 },
-  subtitle: { color: '#64748B', fontSize: 12, marginTop: 5 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 10 },
-  headerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 13,
-    backgroundColor: '#1E293B',
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  logoBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 229, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  brandTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  brandSubtitle: {
+    color: '#64748B',
+    fontSize: 8.5,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    marginTop: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0, 229, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  heroContainer: {
+    marginBottom: 16,
+  },
+  heroCard: {
+    backgroundColor: '#0B101E',
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.45,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  heroGlowStrip: {
+    position: 'absolute',
+    top: 0,
+    left: 24,
+    right: 24,
+    height: 2,
+    opacity: 0.6,
+  },
+  heroEyebrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  heroStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#00E5FF',
+    marginRight: 6,
+  },
+  heroEyebrow: {
+    flex: 1,
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.3,
+  },
+  activePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  activePillText: {
+    color: '#CBD5E1',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  amountDisplayRow: {
+    marginVertical: 4,
+  },
+  heroAmount: {
+    fontSize: 32,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  heroAmountPositive: {
+    color: '#00F5A0',
+  },
+  heroAmountNegative: {
+    color: '#FF4B72',
+  },
+  heroAmountSettled: {
+    color: '#FFFFFF',
+  },
+  heroPositionDesc: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+    marginBottom: 16,
+  },
+  statPodsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  statPod: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  statPodGet: {
+    backgroundColor: 'rgba(0, 245, 160, 0.06)',
+    borderColor: 'rgba(0, 245, 160, 0.22)',
+  },
+  statPodOwe: {
+    backgroundColor: 'rgba(255, 75, 114, 0.06)',
+    borderColor: 'rgba(255, 75, 114, 0.22)',
+  },
+  podHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  podIconCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  podLabelGet: {
+    color: '#00F5A0',
+    fontSize: 9.5,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  podLabelOwe: {
+    color: '#FF4B72',
+    fontSize: 9.5,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  podAmountGet: {
+    color: '#00F5A0',
+    fontSize: 17,
+    fontWeight: '900',
+    letterSpacing: -0.2,
+  },
+  podAmountOwe: {
+    color: '#FF4B72',
+    fontSize: 17,
+    fontWeight: '900',
+    letterSpacing: -0.2,
+  },
+  podSubtext: {
+    color: '#64748B',
+    fontSize: 9,
+    fontWeight: '600',
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  volumeFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    marginBottom: 14,
+  },
+  volumeText: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  volumeAmount: {
+    color: '#CBD5E1',
+    fontWeight: '700',
+  },
+  actionDock: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  primaryActionBtn: {
+    backgroundColor: '#00E5FF',
+    borderRadius: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#263247',
+    gap: 6,
+    shadowColor: '#00E5FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  filterList: { flexGrow: 0, height: 48, marginBottom: 8 },
-  filterContent: { alignItems: 'center', paddingRight: 4 },
-  filterChip: { minHeight: 38, paddingLeft: 11, paddingRight: 8, borderRadius: 12, backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#263247', flexDirection: 'row', alignItems: 'center', marginRight: 8, gap: 6 },
-  filterChipActive: { backgroundColor: '#0EA5A4', borderColor: '#0EA5A4' },
-  filterText: { color: '#94A3B8', fontSize: 11, fontWeight: '800' },
-  filterTextActive: { color: '#FFFFFF' },
-  countBadge: { minWidth: 21, height: 21, borderRadius: 10, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  countBadgeActive: { backgroundColor: 'rgba(255,255,255,0.18)' },
-  countText: { color: '#64748B', fontSize: 9, fontWeight: '900' },
-  countTextActive: { color: '#FFFFFF' },
-  sectionHeader: { paddingTop: 4, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sectionTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '900' },
-  sectionSubtitle: { color: '#64748B', fontSize: 11, marginTop: 3 },
-  listContent: { paddingTop: 1 },
-  emptyState: { alignItems: 'center', marginTop: 90, paddingHorizontal: 24 },
-  emptyIcon: { width: 66, height: 66, borderRadius: 21, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#263247' },
-  emptyTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginTop: 14, textAlign: 'center' },
-  emptySubtitle: { color: '#94A3B8', textAlign: 'center', marginTop: 7, lineHeight: 20, fontSize: 12 },
-  activityDots: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#0EA5A4' },
-  dotOne: { opacity: 0.4 },
-  dotTwo: { opacity: 0.7 },
-  dotThree: { opacity: 1 },
-  retryButton: { marginTop: 16, minHeight: 44, paddingHorizontal: 16, borderRadius: 13, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 },
-  retryButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
-  fab: { position: 'absolute', right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: '#0EA5A4', justifyContent: 'center', alignItems: 'center', elevation: 12, shadowColor: '#000000', shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
+  primaryActionText: {
+    color: '#06090F',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  filterSection: {
+    marginTop: 18,
+    marginBottom: 14,
+  },
+  filterScroll: {
+    gap: 8,
+  },
+  filterCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#0B101E',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  filterCapsuleActive: {
+    backgroundColor: 'rgba(0, 229, 255, 0.1)',
+    borderColor: 'rgba(0, 229, 255, 0.4)',
+  },
+  filterCapsuleText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  filterCapsuleTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  filterCountBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  filterCountBadgeActive: {
+    backgroundColor: 'rgba(0, 229, 255, 0.25)',
+  },
+  filterCountText: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  filterCountTextActive: {
+    color: '#00E5FF',
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  sectionTitle: {
+    color: '#94A3B8',
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+  sectionCount: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+  },
+  emptyIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 229, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  emptyErrorTitle: {
+    color: '#FF4B72',
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  emptyDesc: {
+    color: '#64748B',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 18,
+  },
+  emptyActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#00E5FF',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  emptyActionText: {
+    color: '#06090F',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  retryBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 75, 114, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 75, 114, 0.35)',
+  },
+  retryBtnText: {
+    color: '#FF4B72',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  floatingFab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#00E5FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#00E5FF',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 8,
+  },
 });

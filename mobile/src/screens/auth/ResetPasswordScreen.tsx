@@ -121,7 +121,7 @@ export default function ResetPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     padding: 24,
     borderRadius: 16,
     borderWidth: 1,

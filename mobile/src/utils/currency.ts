@@ -21,5 +21,15 @@ export function formatCurrency(
 ) {
   const amount = Number(value ?? 0);
   const symbol = getCurrencySymbol(currency);
-  return `${symbol}${Number.isFinite(amount) ? amount.toFixed(2) : '0.00'}`;
+  if (!Number.isFinite(amount)) return `${symbol}0.00`;
+  try {
+    const formatted = Math.abs(amount).toLocaleString('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const prefix = amount < 0 ? '-' : '';
+    return `${prefix}${symbol}${formatted}`;
+  } catch {
+    return `${symbol}${Math.abs(amount).toFixed(2)}`;
+  }
 }

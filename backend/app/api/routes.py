@@ -15,6 +15,7 @@ from ..schemas.group import (
     AcceptInvitation, GroupCreate, GroupFinancialResponse, GroupOverview, GroupSettings,
     GroupSummary, GroupUpdate, InviteMember, MemberResponse, PendingInvitation, RoleUpdate,
 )
+from ..schemas.notification import PushTokenRegister
 from ..schemas.place import PlaceSearchResponse
 from ..schemas.settlement import SettlementCreate, SettlementResponse, SettlementUpdate
 from ..schemas.user import UserProfileUpdate, UserResponse
@@ -22,6 +23,7 @@ from ..services.balance_service import compute_balances, compute_financial_snaps
 from ..services.debt_service import get_group_debts
 from ..services.expense_service import create_expense, delete_expense, get_details, list_group_expenses, update_expense
 from ..services.group_service import create_group, delete_group, get_overview, get_settings, leave_group, list_groups, list_members, remove_member, update_role, update_settings
+from ..services.notification_service import notify_group_expense, notify_settlement, register_push_token
 from ..services.permissions import get_group_and_role
 from ..services.invite_service import accept_invitation, get_pending_invitation, invite_member
 from ..services.place_service import search_places
@@ -172,7 +174,9 @@ def expenses(group_id: UUID, limit: int | None = Query(default=None, ge=1, le=20
 
 @router.post("/groups/{group_id}/expenses", response_model=ExpenseSummary, status_code=status.HTTP_201_CREATED)
 def create_expense_route(group_id: UUID, payload: ExpenseCreate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
-    return create_expense(session, group_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user, payload.location_name, payload.journey_stop_id, payload.latitude, payload.longitude, payload.expense_date)
+    exp = create_expense(session, group_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user, payload.location_name, payload.journey_stop_id, payload.latitude, payload.longitude, payload.expense_date)
+    notify_group_expense(session, group_id, exp.paid_by, user.full_name or user.email, exp.title, exp.amount)
+    return exp
 
 
 @router.get("/expenses/{expense_id}", response_model=ExpenseDetails)
@@ -209,7 +213,9 @@ def settlements(group_id: UUID, limit: int | None = Query(default=None, ge=1, le
 
 @router.post("/groups/{group_id}/settlements", response_model=SettlementResponse, status_code=status.HTTP_201_CREATED)
 def record_settlement_route(group_id: UUID, payload: SettlementCreate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
-    return create_settlement(session, group_id, payload.from_user_id, payload.to_user_id, payload.amount, payload.note, user.id)
+    st = create_settlement(session, group_id, payload.from_user_id, payload.to_user_id, payload.amount, payload.note, user.id)
+    notify_settlement(session, group_id, payload.from_user_id, user.full_name or user.email, payload.to_user_id, payload.amount)
+    return st
 
 
 @router.put("/groups/{group_id}/settlements/{settlement_id}", response_model=SettlementResponse)
@@ -234,3 +240,13 @@ def history(group_id: UUID, limit: int = Query(default=100, ge=1, le=200), categ
         "expenses": list_group_expenses(session, group_id, user.id, limit, category if category != "All" else None, scope),
         "settlements": list_settlements(session, group_id, limit),
     }
+
+
+@router.post("/notifications/register-token", status_code=status.HTTP_200_OK)
+def register_token_route(
+    payload: PushTokenRegister,
+    user: CurrentUser = Depends(write_context),
+    session: Session = Depends(get_db),
+):
+    register_push_token(session, user.id, payload.token, payload.platform)
+    return {"status": "ok"}

@@ -106,7 +106,7 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
   },
   content: {
     flexGrow: 1,
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#334155',
     borderRadius: 10,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     paddingHorizontal: 16,
     color: '#F8FAFC',
     fontSize: 16,

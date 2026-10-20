@@ -189,7 +189,7 @@ export default function AcceptInviteScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+        <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#0EA5A4" />
           <Text style={styles.loadingText}>Preparing invitation…</Text>
@@ -201,7 +201,7 @@ export default function AcceptInviteScreen() {
   if (!groupId) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+        <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.container}>
           <View style={styles.icon}>
             <Ionicons name="link-outline" size={28} color="#0EA5A4" />
@@ -225,7 +225,7 @@ export default function AcceptInviteScreen() {
   if (status?.type === 'info') {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+        <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.container}>
           <View style={styles.icon}>
             <Ionicons name="people-outline" size={28} color="#0EA5A4" />
@@ -270,7 +270,7 @@ export default function AcceptInviteScreen() {
   if (isAlreadyMember) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+        <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.container}>
           <View style={styles.icon}>
             <Ionicons name="checkmark-circle-outline" size={28} color="#0EA5A4" />
@@ -308,7 +308,7 @@ export default function AcceptInviteScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+      <StatusBar barStyle="light-content" backgroundColor="#06090F" />
       <View style={styles.container}>
         <View style={styles.icon}>
           <Ionicons name="people-outline" size={28} color="#0EA5A4" />
@@ -374,7 +374,7 @@ export default function AcceptInviteScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
   },
   container: {
     flex: 1,
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 18,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     color: '#FFFFFF',
     borderRadius: 14,
     paddingHorizontal: 15,
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   secondaryButton: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: 'center',
