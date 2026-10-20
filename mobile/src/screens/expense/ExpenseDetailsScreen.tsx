@@ -219,7 +219,7 @@ export default function ExpenseDetailsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
-        <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+        <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#0EA5A4" />
           <Text style={styles.loadingText}>Loading expense…</Text>
@@ -231,7 +231,7 @@ export default function ExpenseDetailsScreen() {
   if (!expense) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
-        <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+        <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.centered}>
           <Ionicons name="receipt-outline" size={38} color="#64748B" />
           <Text style={styles.emptyTitle}>Expense unavailable</Text>
@@ -245,7 +245,7 @@ export default function ExpenseDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+      <StatusBar barStyle="light-content" backgroundColor="#06090F" />
 
       <View style={styles.container}>
         <View style={styles.header}>
@@ -382,24 +382,24 @@ export default function ExpenseDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#0F172A' },
-  container: { flex: 1, backgroundColor: '#0F172A' },
+  safeArea: { flex: 1, backgroundColor: '#06090F' },
+  container: { flex: 1, backgroundColor: '#06090F' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   loadingText: { color: '#94A3B8', marginTop: 12, fontSize: 13 },
   emptyTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginTop: 14, marginBottom: 18 },
   header: { minHeight: 70, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center' },
-  backButton: { width: 40, height: 40, borderRadius: 13, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center' },
+  backButton: { width: 40, height: 40, borderRadius: 13, backgroundColor: '#0E1524', alignItems: 'center', justifyContent: 'center' },
   headerText: { flex: 1, paddingHorizontal: 12 },
   headerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   headerSubtitle: { color: '#64748B', fontSize: 11, marginTop: 3 },
-  moreButton: { width: 40, height: 40, borderRadius: 13, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center' },
+  moreButton: { width: 40, height: 40, borderRadius: 13, backgroundColor: '#0E1524', alignItems: 'center', justifyContent: 'center' },
   content: { padding: 18, paddingBottom: 36 },
-  heroCard: { backgroundColor: '#1E293B', borderRadius: 22, padding: 22, alignItems: 'center' },
-  heroIcon: { width: 54, height: 54, borderRadius: 17, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  heroCard: { backgroundColor: '#0E1524', borderRadius: 22, padding: 22, alignItems: 'center' },
+  heroIcon: { width: 54, height: 54, borderRadius: 17, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   title: { color: '#FFFFFF', fontSize: 22, fontWeight: '900', textAlign: 'center' },
   heroAmount: { color: '#FFFFFF', fontSize: 30, fontWeight: '900', marginTop: 9 },
   heroMeta: { color: '#94A3B8', fontSize: 11, marginTop: 8, textAlign: 'center' },
-  infoCard: { backgroundColor: '#1E293B', borderRadius: 18, paddingHorizontal: 16, marginTop: 14 },
+  infoCard: { backgroundColor: '#0E1524', borderRadius: 18, paddingHorizontal: 16, marginTop: 14 },
   infoRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   infoLabelContainer: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   infoLabel: { color: '#94A3B8', fontSize: 13, fontWeight: '700' },
@@ -408,9 +408,9 @@ const styles = StyleSheet.create({
   sectionTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   sectionSubtitle: { color: '#64748B', fontSize: 11, marginTop: 4 },
   sectionTotal: { color: '#CBD5E1', fontSize: 14, fontWeight: '800' },
-  splitCard: { backgroundColor: '#1E293B', borderRadius: 18, padding: 6 },
+  splitCard: { backgroundColor: '#0E1524', borderRadius: 18, padding: 6 },
   splitRow: { minHeight: 58, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center' },
-  avatar: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', marginRight: 11 },
+  avatar: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginRight: 11 },
   avatarText: { color: '#0EA5A4', fontSize: 13, fontWeight: '900' },
   splitName: { flex: 1, color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   splitAmount: { color: '#FFFFFF', fontSize: 13, fontWeight: '800', marginLeft: 12 },

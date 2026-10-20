@@ -103,11 +103,11 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A', justifyContent: 'center', padding: 24, alignItems: 'center' },
-  card: { backgroundColor: '#1E293B', borderRadius: 24, padding: 24, width: '100%', maxWidth: 420 },
+  container: { flex: 1, backgroundColor: '#06090F', justifyContent: 'center', padding: 24, alignItems: 'center' },
+  card: { backgroundColor: '#0E1524', borderRadius: 24, padding: 24, width: '100%', maxWidth: 420 },
   title: { color: '#FFFFFF', fontSize: 30, fontWeight: '700', textAlign: 'center' },
   subtitle: { color: '#94A3B8', textAlign: 'center', marginTop: 10, marginBottom: 24, lineHeight: 22 },
-  input: { backgroundColor: '#0F172A', color: '#FFFFFF', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 16, fontSize: 16 },
+  input: { backgroundColor: '#06090F', color: '#FFFFFF', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 16, fontSize: 16 },
   spacing: { height: 14 },
   forgotButton: { alignSelf: 'flex-end', marginTop: 12 },
   forgotText: { color: '#0EA5A4', fontWeight: '600' },

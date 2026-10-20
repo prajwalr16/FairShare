@@ -12,7 +12,7 @@ def test_single_alembic_head_and_ordered_migrations():
     config.set_main_option("script_location", str(root / "alembic"))
     scripts = ScriptDirectory.from_config(config)
 
-    assert scripts.get_heads() == ["0008_expense_date_and_updated_at"]
+    assert scripts.get_heads() == ["0009_push_tokens"]
 
     revisions = list(scripts.walk_revisions(base="base", head="heads"))
     assert {item.revision for item in revisions} >= {
@@ -24,12 +24,14 @@ def test_single_alembic_head_and_ordered_migrations():
         "0006_cascade_trigger_delete",
         "0007_expense_locations",
         "0008_expense_date_and_updated_at",
+        "0009_push_tokens",
     }
 
     # Keep the new migration attached to the existing linear chain.
     revision_map = {item.revision: item for item in revisions}
     assert revision_map["0007_expense_locations"].down_revision == "0006_cascade_trigger_delete"
     assert revision_map["0008_expense_date_and_updated_at"].down_revision == "0007_expense_locations"
+    assert revision_map["0009_push_tokens"].down_revision == "0008_expense_date_and_updated_at"
 
 
 def test_postgres_migration_smoke_marker():

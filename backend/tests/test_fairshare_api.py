@@ -509,3 +509,40 @@ def test_expense_filter_by_paid_by(client, seed_users):
     assert len(b_res) == 1
     assert b_res[0]['title'] == 'Paid by User B'
 
+
+
+def test_group_list_contains_user_net_balance_and_financials(client, seed_users):
+    group = create_group(client)
+    gid = group['id']
+    add_members(gid)
+
+    client.post(f'/api/v1/groups/{gid}/expenses', json={
+        'title': 'Dinner',
+        'amount': '900',
+        'paid_by': str(USER_A),
+        'split_type': 'Exact',
+        'splits': [
+            {'user_id': str(USER_A), 'value': '300'},
+            {'user_id': str(USER_B), 'value': '300'},
+            {'user_id': str(USER_C), 'value': '300'},
+        ],
+    })
+
+    res = client.get('/api/v1/groups')
+    assert res.status_code == 200
+    groups_data = res.json()
+    match = next(g for g in groups_data if g['id'] == gid)
+    assert match['total_expenses'] == '900.00'
+    assert match['user_paid'] == '900.00'
+    assert match['user_owed'] == '300.00'
+    assert match['user_net_balance'] == '600.00'
+    assert match['member_count'] >= 3
+
+
+def test_register_push_token(client, seed_users):
+    res = client.post('/api/v1/notifications/register-token', json={
+        'token': 'ExponentPushToken[test-token-12345]',
+        'platform': 'android'
+    })
+    assert res.status_code == 200
+    assert res.json() == {'status': 'ok'}

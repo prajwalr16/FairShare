@@ -5,11 +5,11 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import exists, select, text
+from sqlalchemy import exists, func, select, text
 from sqlalchemy.orm import Session
 
 from ..core.security import set_database_user_context
-from ..models import Group, GroupMember, User
+from ..models import Expense, ExpenseSplit, Group, GroupMember, Settlement, User
 from ..repositories.group_repository import list_groups_for_user
 from .balance_service import compute_balances, compute_group_overview_financial, money, simplify_balances
 from .permissions import get_group_and_role, require_permission
@@ -43,7 +43,87 @@ def create_group(session: Session, caller: User, name: str, group_type: str, cur
 
 
 def list_groups(session: Session, user_id: UUID) -> list[Group]:
-    return list_groups_for_user(session, user_id)
+    groups = list_groups_for_user(session, user_id)
+    if not groups:
+        return []
+
+    group_ids = [g.id for g in groups]
+
+    # Member counts
+    member_counts = {
+        row.group_id: row.count
+        for row in session.execute(
+            select(GroupMember.group_id, func.count(GroupMember.id).label("count"))
+            .where(GroupMember.group_id.in_(group_ids), GroupMember.status == "active")
+            .group_by(GroupMember.group_id)
+        )
+    }
+
+    # Total expenses per group
+    total_expenses = {
+        row.group_id: money(row.total)
+        for row in session.execute(
+            select(Expense.group_id, func.sum(Expense.amount).label("total"))
+            .where(Expense.group_id.in_(group_ids))
+            .group_by(Expense.group_id)
+        )
+    }
+
+    # User paid expenses per group
+    user_paid_map = {
+        row.group_id: money(row.paid)
+        for row in session.execute(
+            select(Expense.group_id, func.sum(Expense.amount).label("paid"))
+            .where(Expense.group_id.in_(group_ids), Expense.paid_by == user_id)
+            .group_by(Expense.group_id)
+        )
+    }
+
+    # User owed splits per group
+    user_owed_map = {
+        row.group_id: money(row.owed)
+        for row in session.execute(
+            select(Expense.group_id, func.sum(ExpenseSplit.amount).label("owed"))
+            .join(Expense, Expense.id == ExpenseSplit.expense_id)
+            .where(Expense.group_id.in_(group_ids), ExpenseSplit.user_id == user_id)
+            .group_by(Expense.group_id)
+        )
+    }
+
+    # User sent settlements per group
+    user_sent_map = {
+        row.group_id: money(row.sent)
+        for row in session.execute(
+            select(Settlement.group_id, func.sum(Settlement.amount).label("sent"))
+            .where(Settlement.group_id.in_(group_ids), Settlement.from_user_id == user_id)
+            .group_by(Settlement.group_id)
+        )
+    }
+
+    # User received settlements per group
+    user_received_map = {
+        row.group_id: money(row.received)
+        for row in session.execute(
+            select(Settlement.group_id, func.sum(Settlement.amount).label("received"))
+            .where(Settlement.group_id.in_(group_ids), Settlement.to_user_id == user_id)
+            .group_by(Settlement.group_id)
+        )
+    }
+
+    for g in groups:
+        paid = user_paid_map.get(g.id, Decimal("0.00"))
+        owed = user_owed_map.get(g.id, Decimal("0.00"))
+        sent = user_sent_map.get(g.id, Decimal("0.00"))
+        received = user_received_map.get(g.id, Decimal("0.00"))
+        net = (paid - owed) + (sent - received)
+
+        g.user_net_balance = net
+        g.user_paid = paid
+        g.user_owed = owed
+        g.total_expenses = total_expenses.get(g.id, Decimal("0.00"))
+        g.member_count = member_counts.get(g.id, 1)
+
+    return groups
 
 
 def get_settings(session: Session, group_id: UUID, user_id: UUID) -> dict:

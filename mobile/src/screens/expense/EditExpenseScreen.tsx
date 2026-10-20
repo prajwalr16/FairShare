@@ -495,7 +495,7 @@ export default function EditExpenseScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
-        <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+        <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#0EA5A4" />
           <Text style={styles.loadingText}>Loading expense…</Text>
@@ -506,7 +506,7 @@ export default function EditExpenseScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+      <StatusBar barStyle="light-content" backgroundColor="#06090F" />
 
       <View style={styles.container}>
         <View style={styles.header}>
@@ -883,12 +883,12 @@ export default function EditExpenseScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#0F172A' },
-  container: { flex: 1, backgroundColor: '#0F172A' },
+  safeArea: { flex: 1, backgroundColor: '#06090F' },
+  container: { flex: 1, backgroundColor: '#06090F' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   loadingText: { color: '#94A3B8', marginTop: 12, fontSize: 13 },
   header: { minHeight: 70, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center' },
-  backButton: { width: 40, height: 40, borderRadius: 13, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center' },
+  backButton: { width: 40, height: 40, borderRadius: 13, backgroundColor: '#0E1524', alignItems: 'center', justifyContent: 'center' },
   headerText: { flex: 1, paddingHorizontal: 12 },
   headerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   headerSubtitle: { color: '#64748B', fontSize: 11, marginTop: 3 },
@@ -896,12 +896,12 @@ const styles = StyleSheet.create({
   section: { marginBottom: 18 },
   label: { color: '#CBD5E1', fontSize: 12, fontWeight: '800', marginBottom: 8 },
   helperText: { color: '#64748B', fontSize: 11, marginTop: 5 },
-  input: { backgroundColor: '#1E293B', borderRadius: 14, minHeight: 50, paddingHorizontal: 14, color: '#FFFFFF', fontSize: 15, borderWidth: 1, borderColor: '#334155' },
-  amountInputWrapper: { backgroundColor: '#1E293B', borderRadius: 14, minHeight: 52, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#334155' },
+  input: { backgroundColor: '#0E1524', borderRadius: 14, minHeight: 50, paddingHorizontal: 14, color: '#FFFFFF', fontSize: 15, borderWidth: 1, borderColor: '#334155' },
+  amountInputWrapper: { backgroundColor: '#0E1524', borderRadius: 14, minHeight: 52, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#334155' },
   currency: { color: '#94A3B8', fontSize: 20, fontWeight: '800', marginRight: 8 },
   amountInput: { flex: 1, color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   categorySelector: {
-    minHeight: 64, backgroundColor: '#1E293B', borderRadius: 16, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center',
+    minHeight: 64, backgroundColor: '#0E1524', borderRadius: 16, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center',
   },
   categorySelectorIcon: {
     width: 42, height: 42, borderRadius: 13, backgroundColor: '#0F3333', alignItems: 'center', justifyContent: 'center', marginRight: 11,
@@ -909,7 +909,7 @@ const styles = StyleSheet.create({
   payerSelector: {
     minHeight: 72,
     borderRadius: 18,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     paddingHorizontal: 14,
     paddingVertical: 12,
     flexDirection: 'row',
@@ -919,7 +919,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 11,
@@ -940,24 +940,24 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   splitSelector: { gap: 8, paddingVertical: 2 },
-  splitOption: { minHeight: 42, borderRadius: 13, borderWidth: 1, borderColor: '#334155', paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#1E293B' },
+  splitOption: { minHeight: 42, borderRadius: 13, borderWidth: 1, borderColor: '#334155', paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#0E1524' },
   splitOptionActive: { backgroundColor: '#0EA5A4', borderColor: '#0EA5A4' },
   splitOptionText: { color: '#94A3B8', fontSize: 12, fontWeight: '700' },
   splitOptionTextActive: { color: '#FFFFFF' },
   sectionLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   countText: { color: '#0EA5A4', fontSize: 13, fontWeight: '900' },
-  participantCard: { backgroundColor: '#1E293B', borderRadius: 18, padding: 7, marginTop: 10 },
+  participantCard: { backgroundColor: '#0E1524', borderRadius: 18, padding: 7, marginTop: 10 },
   memberRow: { minHeight: 63, borderRadius: 13, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center' },
   memberRowSelected: { backgroundColor: '#172438' },
   checkbox: { width: 23, height: 23, borderRadius: 8, borderWidth: 1.5, borderColor: '#475569', alignItems: 'center', justifyContent: 'center', marginRight: 9 },
   checkboxSelected: { backgroundColor: '#0EA5A4', borderColor: '#0EA5A4' },
-  memberAvatar: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  memberAvatar: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   memberAvatarText: { color: '#0EA5A4', fontSize: 12, fontWeight: '900' },
   memberInfo: { flex: 1, minWidth: 0 },
   memberName: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   calculatedText: { color: '#94A3B8', fontSize: 10, marginTop: 3 },
   valueEditorContainer: { alignItems: 'flex-end', marginLeft: 7 },
-  valueInputRow: { minWidth: 92, minHeight: 34, borderRadius: 10, backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#334155', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
+  valueInputRow: { minWidth: 92, minHeight: 34, borderRadius: 10, backgroundColor: '#06090F', borderWidth: 1, borderColor: '#334155', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
   valuePrefix: { color: '#64748B', fontSize: 11, fontWeight: '700' },
   valueInput: { color: '#FFFFFF', minWidth: 52, textAlign: 'right', fontSize: 12, fontWeight: '800', paddingVertical: 0 },
   valueSuffix: { color: '#64748B', fontSize: 10, marginLeft: 4 },
@@ -977,7 +977,7 @@ const styles = StyleSheet.create({
   modalDismissArea: { flex: 1 },
   payerModalCard: {
     maxHeight: '75%',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,
     paddingHorizontal: 20,
@@ -1001,16 +1001,16 @@ const styles = StyleSheet.create({
   modalTitle: { color: '#FFFFFF', fontSize: 21, fontWeight: '800' },
   modalSubtitle: { color: '#64748B', fontSize: 12, lineHeight: 18, marginTop: 4, maxWidth: 280 },
   modalCloseButton: {
-    width: 38, height: 38, borderRadius: 13, backgroundColor: '#1E293B',
+    width: 38, height: 38, borderRadius: 13, backgroundColor: '#0E1524',
     alignItems: 'center', justifyContent: 'center',
   },
   payerList: { gap: 9, paddingTop: 4, paddingBottom: 8 },
   payerRow: {
-    minHeight: 62, borderRadius: 17, backgroundColor: '#1E293B',
+    minHeight: 62, borderRadius: 17, backgroundColor: '#0E1524',
     paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center',
   },
   payerRowSelected: { borderWidth: 1, borderColor: '#0EA5A4' },
-  avatar: { width: 38, height: 38, borderRadius: 13, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', marginRight: 11 },
+  avatar: { width: 38, height: 38, borderRadius: 13, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginRight: 11 },
   avatarText: { color: '#0EA5A4', fontSize: 13, fontWeight: '900' },
   memberMeta: { color: '#64748B', fontSize: 11, marginTop: 3 },
   payerCheck: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center' },

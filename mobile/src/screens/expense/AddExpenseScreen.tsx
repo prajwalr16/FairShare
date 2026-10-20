@@ -449,7 +449,7 @@ export default function AddExpenseScreen() {
 
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+      <StatusBar barStyle="light-content" backgroundColor="#06090F" />
 
       <SafeAreaView
         style={styles.safeArea}
@@ -907,11 +907,11 @@ export default function AddExpenseScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
   },
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
   },
   header: {
     flexDirection: 'row',
@@ -924,7 +924,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
@@ -957,7 +957,7 @@ const styles = StyleSheet.create({
   },
   input: {
     minHeight: 54,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderRadius: 16,
     paddingHorizontal: 16,
     color: '#FFFFFF',
@@ -965,7 +965,7 @@ const styles = StyleSheet.create({
   },
   amountInputWrapper: {
     minHeight: 64,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
@@ -992,7 +992,7 @@ const styles = StyleSheet.create({
   },
   categorySelector: {
     minHeight: 64,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderRadius: 16,
     paddingHorizontal: 13,
     flexDirection: 'row',
@@ -1010,7 +1010,7 @@ const styles = StyleSheet.create({
   payerSelector: {
     minHeight: 72,
     borderRadius: 18,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     paddingHorizontal: 14,
     paddingVertical: 12,
     flexDirection: 'row',
@@ -1020,7 +1020,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 11,
@@ -1047,13 +1047,13 @@ const styles = StyleSheet.create({
   splitOption: {
     minHeight: 44,
     borderRadius: 14,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#0E1524',
   },
   splitOptionActive: {
     backgroundColor: '#0EA5A4',
@@ -1096,7 +1096,7 @@ const styles = StyleSheet.create({
   },
   memberRow: {
     borderRadius: 18,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     padding: 12,
   },
   memberRowSelected: {
@@ -1112,7 +1112,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 11,
@@ -1168,7 +1168,7 @@ const styles = StyleSheet.create({
     minHeight: 42,
     minWidth: 120,
     borderRadius: 12,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 11,
@@ -1202,7 +1202,7 @@ const styles = StyleSheet.create({
   loadingCard: {
     minHeight: 94,
     borderRadius: 18,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 9,
@@ -1213,7 +1213,7 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     borderRadius: 18,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     padding: 22,
     alignItems: 'center',
   },
@@ -1233,7 +1233,7 @@ const styles = StyleSheet.create({
   summaryCard: {
     minHeight: 94,
     borderRadius: 18,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     paddingHorizontal: 16,
     paddingVertical: 15,
     flexDirection: 'row',
@@ -1296,7 +1296,7 @@ const styles = StyleSheet.create({
   },
   payerModalCard: {
     maxHeight: '75%',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,
     paddingHorizontal: 20,
@@ -1333,7 +1333,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 13,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1345,7 +1345,7 @@ const styles = StyleSheet.create({
   payerRow: {
     minHeight: 62,
     borderRadius: 17,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     paddingHorizontal: 12,
     paddingVertical: 10,
     flexDirection: 'row',

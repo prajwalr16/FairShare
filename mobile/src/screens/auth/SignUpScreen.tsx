@@ -205,18 +205,18 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
   },
 
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
 
   card: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0E1524',
     borderRadius: 24,
     padding: 24,
   },
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#06090F',
     color: '#FFFFFF',
     borderRadius: 14,
     paddingHorizontal: 16,
