@@ -64,7 +64,16 @@ switch ($choice) {
     }
     "3" {
         Write-Host "`n[BUILDING WEB] Exporting production bundle to mobile/dist/..." -ForegroundColor Green
-        npx expo export --platform web --clear
+        npx expo export --platform web
+
+        if (Test-Path dist/index.html) {
+            $html = Get-Content dist/index.html -Raw
+            if ($html -notmatch "Cache-Control") {
+                $meta = '<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" /><meta http-equiv="Pragma" content="no-cache" /><meta http-equiv="Expires" content="0" />'
+                $html = $html.Replace("<head>", "<head>`n    $meta")
+                Set-Content -Path dist/index.html -Value $html -NoNewline
+            }
+        }
         Write-Host "`n[OK] Web bundle successfully exported to mobile/dist/." -ForegroundColor Green
         Write-Host "NOTE: To publish to https://fairshare-url.expo.app, run option 4 (Deploy Web)." -ForegroundColor Yellow
     }
@@ -75,6 +84,15 @@ switch ($choice) {
         Write-Host "`n--- Step 2/3: Cleaning and exporting web bundle ---" -ForegroundColor Cyan
         Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue
         npx expo export --platform web
+
+        if (Test-Path dist/index.html) {
+            $html = Get-Content dist/index.html -Raw
+            if ($html -notmatch "Cache-Control") {
+                $meta = '<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" /><meta http-equiv="Pragma" content="no-cache" /><meta http-equiv="Expires" content="0" />'
+                $html = $html.Replace("<head>", "<head>`n    $meta")
+                Set-Content -Path dist/index.html -Value $html -NoNewline
+            }
+        }
 
         Write-Host "`n--- Step 3/3: Deploying to EAS Hosting ---" -ForegroundColor Cyan
         npx eas deploy --prod --environment production

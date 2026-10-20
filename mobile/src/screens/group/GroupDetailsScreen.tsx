@@ -422,14 +422,7 @@ export default function GroupDetailsScreen() {
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>Group unavailable</Text>
         </View>
-        <PaidByPickerModal
-        visible={showPaidByModal}
-        onClose={() => setShowPaidByModal(false)}
-        members={members}
-        currentUserId={currentUserId}
-        selectedMemberId={paidByFilter}
-        onSelectMember={(memberId) => setPaidByFilter(memberId)}
-      />
+
     </SafeAreaView>
     );
   }
@@ -945,6 +938,15 @@ export default function GroupDetailsScreen() {
         onAdd={async (email: string) => { await handleAddMember(email); setShowAddMember(false); }}
         groupId={groupId}
         groupName={groupName}
+      />
+
+      <PaidByPickerModal
+        visible={showPaidByModal}
+        onClose={() => setShowPaidByModal(false)}
+        members={members}
+        currentUserId={currentUserId}
+        selectedMemberId={paidByFilter}
+        onSelectMember={(memberId) => setPaidByFilter(memberId)}
       />
 
       <Modal visible={showSettle} transparent animationType="slide" onRequestClose={closeSettlement}>
