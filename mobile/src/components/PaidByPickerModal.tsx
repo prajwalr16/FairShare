@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ActivityIndicator,
   Modal,
   Platform,
   Pressable,
@@ -32,6 +33,11 @@ export default function PaidByPickerModal({
     onSelectMember(id);
     onClose();
   };
+
+  // Find if current user is already in members list
+  const hasCurrentUserInList = Boolean(
+    currentUserId && members.some((m) => m.user_id === currentUserId),
+  );
 
   return (
     <Modal
@@ -91,6 +97,31 @@ export default function PaidByPickerModal({
               )}
             </Pressable>
 
+            {/* Fallback Option: You (if currentUserId known and members still loading) */}
+            {currentUserId && !hasCurrentUserInList && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.memberRow,
+                  selectedMemberId === currentUserId && styles.memberRowSelected,
+                  pressed && styles.memberRowPressed,
+                ]}
+                onPress={() => handleSelect(currentUserId)}
+              >
+                <View style={[styles.avatar, styles.meAvatar]}>
+                  <Text style={styles.avatarText}>Y</Text>
+                </View>
+                <View style={styles.memberInfo}>
+                  <Text style={[styles.memberName, selectedMemberId === currentUserId && styles.nameSelected]}>
+                    You
+                  </Text>
+                  <Text style={styles.memberEmail}>Expenses you paid</Text>
+                </View>
+                {selectedMemberId === currentUserId && (
+                  <Ionicons name="checkmark-circle" size={20} color="#0EA5A4" />
+                )}
+              </Pressable>
+            )}
+
             {/* Members List */}
             {members.map((member) => {
               if (!member.user_id) return null;
@@ -128,6 +159,14 @@ export default function PaidByPickerModal({
                 </Pressable>
               );
             })}
+
+            {/* Loading indicator if members are being fetched */}
+            {members.length === 0 && (
+              <View style={styles.loadingBox}>
+                <ActivityIndicator size="small" color="#0EA5A4" />
+                <Text style={styles.loadingText}>Loading members...</Text>
+              </View>
+            )}
           </ScrollView>
         </View>
       </View>
@@ -244,5 +283,16 @@ const styles = StyleSheet.create({
   memberEmail: {
     color: '#64748B',
     fontSize: 12,
+  },
+  loadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 10,
+  },
+  loadingText: {
+    color: '#94A3B8',
+    fontSize: 13,
   },
 });
