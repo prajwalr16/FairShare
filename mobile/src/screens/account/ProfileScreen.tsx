@@ -266,7 +266,7 @@ export default function ProfileScreen() {
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#0EA5A4" />
+          <ActivityIndicator size="large" color="#00E5FF" />
         </View>
       </SafeAreaView>
     );
@@ -317,7 +317,7 @@ export default function ProfileScreen() {
                 {profile?.email || 'No email available'}
               </Text>
               <View style={styles.memberSinceBadge}>
-                <Ionicons name="calendar-outline" size={14} color="#0EA5A4" />
+                <Ionicons name="calendar-outline" size={14} color="#00E5FF" />
                 <Text style={styles.memberSinceText}>
                   Member since {formatMemberSince(profile?.created_at || null)}
                 </Text>
@@ -420,7 +420,7 @@ export default function ProfileScreen() {
                 disabled={saving || passwordBusy}
               >
                 <View style={styles.actionIcon}>
-                  <Ionicons name="lock-closed-outline" size={19} color="#0EA5A4" />
+                  <Ionicons name="lock-closed-outline" size={19} color="#00E5FF" />
                 </View>
                 <View style={styles.actionCopy}>
                   <Text style={styles.actionTitle}>Change password</Text>
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
   headerButton: {
     width: 42,
@@ -585,12 +585,12 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: '#263247',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerCenter: { flex: 1, minWidth: 0, paddingHorizontal: 12 },
-  eyebrow: { color: '#0EA5A4', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  eyebrow: { color: '#00E5FF', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
   headerTitle: { color: '#FFFFFF', fontSize: 19, fontWeight: '900', marginTop: 2 },
   content: { padding: 16, paddingBottom: 46 },
   heroCard: {
@@ -600,13 +600,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#263247',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   avatar: {
     width: 86,
     height: 86,
     borderRadius: 43,
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderWidth: 1,
-    borderColor: '#263247',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   memberSinceText: { color: '#CBD5E1', fontSize: 10, fontWeight: '800' },
   card: {
@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
     padding: 17,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#263247',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   sectionTitleRow: { marginBottom: 10 },
   sectionTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
@@ -644,14 +644,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F172A',
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: '#2A3A50',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     color: '#FFFFFF',
     paddingHorizontal: 14,
     paddingVertical: 13,
     fontSize: 13,
   },
   infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13 },
-  infoRowBorder: { borderBottomWidth: 1, borderBottomColor: '#243147' },
+  infoRowBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(255, 255, 255, 0.06)' },
   infoIcon: {
     width: 36,
     height: 36,
@@ -680,14 +680,14 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 48,
     borderRadius: 13,
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 7,
     paddingHorizontal: 14,
   },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  primaryButtonText: { color: '#06090F', fontSize: 12, fontWeight: '900' },
   disabled: { opacity: 0.65 },
   actionRow: { flexDirection: 'row', alignItems: 'center', minHeight: 66, paddingVertical: 8 },
   actionIcon: {
@@ -705,15 +705,15 @@ const styles = StyleSheet.create({
   signOutButton: {
     minHeight: 48,
     borderRadius: 13,
-    backgroundColor: '#201A1F',
+    backgroundColor: 'rgba(255, 75, 114, 0.10)',
     borderWidth: 1,
-    borderColor: '#3D252C',
+    borderColor: 'rgba(255, 75, 114, 0.35)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
   },
-  signOutText: { color: '#FCA5A5', fontSize: 12, fontWeight: '900' },
+  signOutText: { color: '#FF4B72', fontSize: 12, fontWeight: '900', letterSpacing: 0.8 },
   footerNote: { color: '#64748B', fontSize: 9, lineHeight: 15, textAlign: 'center', paddingHorizontal: 7, marginTop: 2 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(2,6,23,0.72)', justifyContent: 'flex-end' },
@@ -723,7 +723,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#263247',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
   modalTitle: { color: '#FFFFFF', fontSize: 19, fontWeight: '900' },

@@ -458,7 +458,7 @@ export default function GroupDetailsScreen() {
                   disabled={refreshing}
                   hitSlop={10}
                 >
-                  <Ionicons name="refresh" size={20} color={refreshing ? '#64748B' : '#0EA5A4'} />
+                  <Ionicons name="refresh" size={20} color={refreshing ? '#64748B' : '#00E5FF'} />
                 </Pressable>
               )}
               <Pressable
@@ -503,7 +503,7 @@ export default function GroupDetailsScreen() {
               <>
                 <View style={styles.journeyHero}>
                   <View style={styles.journeyHeroIcon}>
-                    <Ionicons name="map-outline" size={24} color="#0EA5A4" />
+                    <Ionicons name="map-outline" size={24} color="#00E5FF" />
                   </View>
                   <View style={styles.flexOne}>
                     <Text style={styles.journeyEyebrow}>TRIP PLANNING</Text>
@@ -516,13 +516,13 @@ export default function GroupDetailsScreen() {
 
                 {tripLoading ? (
                   <View style={styles.emptyCard}>
-                    <ActivityIndicator size="small" color="#0EA5A4" />
+                    <ActivityIndicator size="small" color="#00E5FF" />
                     <Text style={styles.emptyCardTitle}>Loading journey…</Text>
                   </View>
                 ) : !trip ? (
                   <View style={styles.emptyCard}>
                     <View style={styles.journeyEmptyIcon}>
-                      <Ionicons name="map-outline" size={27} color="#0EA5A4" />
+                      <Ionicons name="map-outline" size={27} color="#00E5FF" />
                     </View>
                     <Text style={styles.emptyCardTitle}>Journey is not set up yet</Text>
                     <Text style={styles.emptyCardText}>
@@ -653,7 +653,7 @@ export default function GroupDetailsScreen() {
 
                     <Pressable style={styles.expensesShortcutCard} onPress={() => setTab('Expenses')}>
                       <View style={styles.expensesShortcutIcon}>
-                        <Ionicons name="receipt-outline" size={20} color="#0EA5A4" />
+                        <Ionicons name="receipt-outline" size={20} color="#00E5FF" />
                       </View>
                       <View style={styles.flexOne}>
                         <Text style={styles.expensesShortcutTitle}>Trip expenses live with the group</Text>
@@ -673,7 +673,7 @@ export default function GroupDetailsScreen() {
                   {overview ? (
                     <Text style={styles.heroAmount}>{money(currentBalance?.net_balance || 0, currency)}</Text>
                   ) : (
-                    <ActivityIndicator size="small" color="#0EA5A4" style={styles.heroLoader} />
+                    <ActivityIndicator size="small" color="#00E5FF" style={styles.heroLoader} />
                   )}
                   <Text style={styles.heroHint}>
                     {overview && currentBalance
@@ -707,12 +707,12 @@ export default function GroupDetailsScreen() {
 
                 {!overview ? (
                   <View style={styles.emptyCard}>
-                    <ActivityIndicator size="small" color="#0EA5A4" />
+                    <ActivityIndicator size="small" color="#00E5FF" />
                     <Text style={styles.emptyCardTitle}>Loading balances…</Text>
                   </View>
                 ) : visibleDebts.length === 0 ? (
                   <View style={styles.emptyCard}>
-                    <Ionicons name="checkmark-circle-outline" size={30} color="#0EA5A4" />
+                    <Ionicons name="checkmark-circle-outline" size={30} color="#00E5FF" />
                     <Text style={styles.emptyCardTitle}>Everyone is settled</Text>
                   </View>
                 ) : visibleDebts.map((debt) => (
@@ -735,7 +735,7 @@ export default function GroupDetailsScreen() {
 
                 {!overview ? (
                   <View style={styles.emptyCard}>
-                    <ActivityIndicator size="small" color="#0EA5A4" />
+                    <ActivityIndicator size="small" color="#00E5FF" />
                     <Text style={styles.emptyCardTitle}>Loading recent expenses…</Text>
                   </View>
                 ) : overview.recent_expenses.length === 0 ? (
@@ -855,7 +855,7 @@ export default function GroupDetailsScreen() {
               <>
                 <View style={styles.balanceModeCard}>
                   <View style={styles.balanceModeText}><Text style={styles.sectionTitle}>Simplify Debts</Text><Text style={styles.sectionSubtitle}>{simplifyDebts ? 'Show the minimum set of payments' : 'Show direct payer-to-member relationships'}</Text></View>
-                  <Switch value={simplifyDebts} onValueChange={setSimplifyDebts} trackColor={{ false: '#334155', true: '#0EA5A4' }} thumbColor="#FFFFFF" />
+                  <Switch value={simplifyDebts} onValueChange={setSimplifyDebts} trackColor={{ false: '#334155', true: '#00E5FF' }} thumbColor="#FFFFFF" />
                 </View>
                 <Text style={styles.sectionTitle}>Member balances</Text>
                 <View style={styles.balanceList}>
@@ -876,7 +876,7 @@ export default function GroupDetailsScreen() {
                   })}
                 </View>
                 <View style={styles.sectionHeader}><View><Text style={styles.sectionTitle}>Who owes whom</Text><Text style={styles.sectionSubtitle}>{visibleDebts.length} relationship{visibleDebts.length === 1 ? '' : 's'}</Text></View></View>
-                {visibleDebts.length === 0 ? <View style={styles.emptyCard}><Ionicons name="checkmark-circle-outline" size={30} color="#0EA5A4" /><Text style={styles.emptyCardTitle}>No outstanding debts</Text></View> : visibleDebts.map((debt) => (
+                {visibleDebts.length === 0 ? <View style={styles.emptyCard}><Ionicons name="checkmark-circle-outline" size={30} color="#00E5FF" /><Text style={styles.emptyCardTitle}>No outstanding debts</Text></View> : visibleDebts.map((debt) => (
                   <View key={`${debt.from_user_id}-${debt.to_user_id}`} style={styles.debtCard}><View style={styles.debtInfo}><Text style={styles.debtNames}>{debt.from_name} → {debt.to_name}</Text><Text style={styles.debtAmount}>{money(debt.amount, currency)}</Text></View>{canWriteMoney && <Pressable style={styles.smallButton} onPress={() => openSettlement(debt)}><Text style={styles.smallButtonText}>Settle Up</Text></Pressable>}</View>
                 ))}
               </>
@@ -891,7 +891,7 @@ export default function GroupDetailsScreen() {
                       style={styles.shareLinkButton}
                       onPress={() => void shareGroupInvite(groupId, groupName)}
                     >
-                      <Ionicons name="link-outline" size={16} color="#0EA5A4" />
+                      <Ionicons name="link-outline" size={16} color="#00E5FF" />
                       <Text style={styles.shareLinkButtonText}>Share Link</Text>
                     </Pressable>
                     {canManageMembers && (
@@ -925,7 +925,7 @@ export default function GroupDetailsScreen() {
                     const toName = settlement.to_name || memberMap.get(settlement.to_user_id) || 'Member';
                     return (
                       <View key={`settlement-${settlement.id}`} style={styles.activityCard}>
-                        <View style={styles.activityIcon}><Ionicons name="swap-horizontal-outline" size={20} color="#0EA5A4" /></View>
+                        <View style={styles.activityIcon}><Ionicons name="swap-horizontal-outline" size={20} color="#00E5FF" /></View>
                         <View style={styles.flexOne}>
                           <Text style={styles.activityTitle}>{fromName} paid {toName}</Text>
                           <Text style={styles.activityMeta}>{settlement.note || 'Settlement'}</Text>

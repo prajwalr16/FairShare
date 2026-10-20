@@ -93,7 +93,7 @@ export default function PaidByPickerModal({
                 <Text style={styles.memberEmail}>Show expenses paid by anyone</Text>
               </View>
               {selectedMemberId === null && (
-                <Ionicons name="checkmark-circle" size={20} color="#0EA5A4" />
+                <Ionicons name="checkmark-circle" size={20} color="#00E5FF" />
               )}
             </Pressable>
 
@@ -117,7 +117,7 @@ export default function PaidByPickerModal({
                   <Text style={styles.memberEmail}>Expenses you paid</Text>
                 </View>
                 {selectedMemberId === currentUserId && (
-                  <Ionicons name="checkmark-circle" size={20} color="#0EA5A4" />
+                  <Ionicons name="checkmark-circle" size={20} color="#00E5FF" />
                 )}
               </Pressable>
             )}
@@ -154,7 +154,7 @@ export default function PaidByPickerModal({
                     ) : null}
                   </View>
                   {isSelected && (
-                    <Ionicons name="checkmark-circle" size={20} color="#0EA5A4" />
+                    <Ionicons name="checkmark-circle" size={20} color="#00E5FF" />
                   )}
                 </Pressable>
               );
@@ -163,7 +163,7 @@ export default function PaidByPickerModal({
             {/* Loading indicator if members are being fetched */}
             {members.length === 0 && (
               <View style={styles.loadingBox}>
-                <ActivityIndicator size="small" color="#0EA5A4" />
+                <ActivityIndicator size="small" color="#00E5FF" />
                 <Text style={styles.loadingText}>Loading members...</Text>
               </View>
             )}
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.35,
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     backgroundColor: '#0F172A',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : {}),
   },
   memberRowPressed: {
@@ -244,8 +244,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#162235',
   },
   memberRowSelected: {
-    borderColor: '#0EA5A4',
-    backgroundColor: 'rgba(14, 165, 164, 0.12)',
+    borderColor: '#00E5FF',
+    backgroundColor: 'rgba(0, 229, 255, 0.12)',
   },
   avatar: {
     width: 38,
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   allAvatar: {
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
   },
   meAvatar: {
     backgroundColor: '#2563EB',
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   nameSelected: {
-    color: '#0EA5A4',
+    color: '#00E5FF',
     fontWeight: '700',
   },
   memberEmail: {

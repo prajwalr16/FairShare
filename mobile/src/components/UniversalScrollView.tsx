@@ -25,7 +25,7 @@ export const UniversalScrollView = forwardRef<ScrollView, UniversalScrollViewPro
       children,
       onRefresh,
       refreshing = false,
-      refreshTintColor = '#0EA5A4',
+      refreshTintColor = '#00E5FF',
       refreshTitle,
       style,
       contentContainerStyle,

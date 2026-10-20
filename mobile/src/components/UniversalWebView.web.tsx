@@ -200,7 +200,7 @@ export const UniversalWebView = forwardRef<UniversalWebViewRef, UniversalWebView
             {renderLoading ? (
               renderLoading()
             ) : (
-              <ActivityIndicator size="small" color="#0EA5A4" />
+              <ActivityIndicator size="small" color="#00E5FF" />
             )}
           </View>
         )}

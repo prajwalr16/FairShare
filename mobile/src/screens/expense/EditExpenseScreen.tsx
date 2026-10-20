@@ -497,7 +497,7 @@ export default function EditExpenseScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
         <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#0EA5A4" />
+          <ActivityIndicator size="large" color="#00E5FF" />
           <Text style={styles.loadingText}>Loading expense…</Text>
         </View>
       </SafeAreaView>
@@ -570,7 +570,7 @@ export default function EditExpenseScreen() {
               disabled={saving || members.length === 0}
             >
               <View style={styles.payerSelectorIcon}>
-                <Ionicons name="wallet-outline" size={20} color="#0EA5A4" />
+                <Ionicons name="wallet-outline" size={20} color="#00E5FF" />
               </View>
               <View style={styles.payerSelectorInfo}>
                 <Text style={styles.payerSelectorName} numberOfLines={1}>
@@ -593,7 +593,7 @@ export default function EditExpenseScreen() {
             <Text style={styles.label}>Category</Text>
             <Pressable style={styles.categorySelector} onPress={() => setCategoryPickerVisible(true)} disabled={saving}>
               <View style={styles.categorySelectorIcon}>
-                <Ionicons name={EXPENSE_CATEGORY_ICONS[category]} size={19} color="#0EA5A4" />
+                <Ionicons name={EXPENSE_CATEGORY_ICONS[category]} size={19} color="#00E5FF" />
               </View>
               <View style={styles.payerSelectorInfo}>
                 <Text style={styles.payerSelectorName}>{category}</Text>
@@ -778,7 +778,7 @@ export default function EditExpenseScreen() {
                   return (
                     <Pressable key={item} style={[styles.payerRow, selected && styles.payerRowSelected]} onPress={() => { setCategory(item); setCategoryPickerVisible(false); }} disabled={saving}>
                       <View style={styles.categorySelectorIcon}>
-                        <Ionicons name={EXPENSE_CATEGORY_ICONS[item]} size={19} color="#0EA5A4" />
+                        <Ionicons name={EXPENSE_CATEGORY_ICONS[item]} size={19} color="#00E5FF" />
                       </View>
                       <View style={styles.memberInfo}>
                         <Text style={styles.memberName}>{item}</Text>
@@ -896,8 +896,8 @@ const styles = StyleSheet.create({
   section: { marginBottom: 18 },
   label: { color: '#CBD5E1', fontSize: 12, fontWeight: '800', marginBottom: 8 },
   helperText: { color: '#64748B', fontSize: 11, marginTop: 5 },
-  input: { backgroundColor: '#0E1524', borderRadius: 14, minHeight: 50, paddingHorizontal: 14, color: '#FFFFFF', fontSize: 15, borderWidth: 1, borderColor: '#334155' },
-  amountInputWrapper: { backgroundColor: '#0E1524', borderRadius: 14, minHeight: 52, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#334155' },
+  input: { backgroundColor: '#0E1524', borderRadius: 14, minHeight: 50, paddingHorizontal: 14, color: '#FFFFFF', fontSize: 15, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
+  amountInputWrapper: { backgroundColor: '#0E1524', borderRadius: 14, minHeight: 52, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
   currency: { color: '#94A3B8', fontSize: 20, fontWeight: '800', marginRight: 8 },
   amountInput: { flex: 1, color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   categorySelector: {
@@ -940,24 +940,24 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   splitSelector: { gap: 8, paddingVertical: 2 },
-  splitOption: { minHeight: 42, borderRadius: 13, borderWidth: 1, borderColor: '#334155', paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#0E1524' },
-  splitOptionActive: { backgroundColor: '#0EA5A4', borderColor: '#0EA5A4' },
+  splitOption: { minHeight: 42, borderRadius: 13, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#0E1524' },
+  splitOptionActive: { backgroundColor: '#00E5FF', borderColor: '#00E5FF' },
   splitOptionText: { color: '#94A3B8', fontSize: 12, fontWeight: '700' },
-  splitOptionTextActive: { color: '#FFFFFF' },
+  splitOptionTextActive: { color: '#06090F' },
   sectionLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  countText: { color: '#0EA5A4', fontSize: 13, fontWeight: '900' },
+  countText: { color: '#00E5FF', fontSize: 13, fontWeight: '900' },
   participantCard: { backgroundColor: '#0E1524', borderRadius: 18, padding: 7, marginTop: 10 },
   memberRow: { minHeight: 63, borderRadius: 13, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center' },
   memberRowSelected: { backgroundColor: '#172438' },
   checkbox: { width: 23, height: 23, borderRadius: 8, borderWidth: 1.5, borderColor: '#475569', alignItems: 'center', justifyContent: 'center', marginRight: 9 },
-  checkboxSelected: { backgroundColor: '#0EA5A4', borderColor: '#0EA5A4' },
+  checkboxSelected: { backgroundColor: '#00E5FF', borderColor: '#00E5FF' },
   memberAvatar: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  memberAvatarText: { color: '#0EA5A4', fontSize: 12, fontWeight: '900' },
+  memberAvatarText: { color: '#00E5FF', fontSize: 12, fontWeight: '900' },
   memberInfo: { flex: 1, minWidth: 0 },
   memberName: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   calculatedText: { color: '#94A3B8', fontSize: 10, marginTop: 3 },
   valueEditorContainer: { alignItems: 'flex-end', marginLeft: 7 },
-  valueInputRow: { minWidth: 92, minHeight: 34, borderRadius: 10, backgroundColor: '#06090F', borderWidth: 1, borderColor: '#334155', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
+  valueInputRow: { minWidth: 92, minHeight: 34, borderRadius: 10, backgroundColor: '#06090F', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
   valuePrefix: { color: '#64748B', fontSize: 11, fontWeight: '700' },
   valueInput: { color: '#FFFFFF', minWidth: 52, textAlign: 'right', fontSize: 12, fontWeight: '800', paddingVertical: 0 },
   valueSuffix: { color: '#64748B', fontSize: 10, marginLeft: 4 },
@@ -966,8 +966,8 @@ const styles = StyleSheet.create({
   totalValue: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   warningCard: { backgroundColor: '#111C2F', borderRadius: 15, padding: 14, flexDirection: 'row', gap: 9, marginBottom: 16 },
   warningText: { flex: 1, color: '#64748B', fontSize: 11, lineHeight: 16 },
-  saveButton: { minHeight: 52, borderRadius: 15, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
-  saveButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+  saveButton: { minHeight: 52, borderRadius: 15, backgroundColor: '#00E5FF', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
+  saveButtonText: { color: '#06090F', fontSize: 14, fontWeight: '900' },
   disabledButton: { opacity: 0.65 },
   modalBackdrop: {
     flex: 1,
@@ -1009,11 +1009,11 @@ const styles = StyleSheet.create({
     minHeight: 62, borderRadius: 17, backgroundColor: '#0E1524',
     paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center',
   },
-  payerRowSelected: { borderWidth: 1, borderColor: '#0EA5A4' },
+  payerRowSelected: { borderWidth: 1, borderColor: '#00E5FF' },
   avatar: { width: 38, height: 38, borderRadius: 13, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginRight: 11 },
-  avatarText: { color: '#0EA5A4', fontSize: 13, fontWeight: '900' },
+  avatarText: { color: '#00E5FF', fontSize: 13, fontWeight: '900' },
   memberMeta: { color: '#64748B', fontSize: 11, marginTop: 3 },
-  payerCheck: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#0EA5A4', alignItems: 'center', justifyContent: 'center' },
+  payerCheck: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#00E5FF', alignItems: 'center', justifyContent: 'center' },
   payerEmptyCheck: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: '#475569' },
 
 });

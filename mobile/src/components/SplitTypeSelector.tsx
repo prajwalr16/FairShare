@@ -29,7 +29,7 @@ export default function SplitTypeSelector({ value, onChange }: Props) {
 const s = StyleSheet.create({
   r: { flexDirection: 'row', gap: 8 },
   b: { padding: 10, borderRadius: 20, backgroundColor: '#1E293B' },
-  a: { backgroundColor: '#0EA5A4' },
+  a: { backgroundColor: '#00E5FF' },
   t: { color: '#CBD5E1' },
   at: { color: 'white', fontWeight: '700' },
 });

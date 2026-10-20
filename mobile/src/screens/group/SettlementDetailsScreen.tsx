@@ -172,7 +172,7 @@ export default function SettlementDetailsScreen() {
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="light-content" backgroundColor="#06090F" />
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#0EA5A4" />
+          <ActivityIndicator size="large" color="#00E5FF" />
         </View>
       </SafeAreaView>
     );
@@ -224,7 +224,7 @@ export default function SettlementDetailsScreen() {
                 <Ionicons
                   name="swap-horizontal-outline"
                   size={27}
-                  color="#0EA5A4"
+                  color="#00E5FF"
                 />
               </View>
               <Text style={styles.heroTitle}>
@@ -438,14 +438,14 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   primaryButton: {
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 50,
   },
-  primaryButtonText: { color: '#FFFFFF', fontWeight: '900' },
+  primaryButtonText: { color: '#06090F', fontWeight: '900' },
   disabled: { opacity: 0.6 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   emptyTitle: { color: '#FFFFFF', fontWeight: '900', fontSize: 20, marginBottom: 18 },

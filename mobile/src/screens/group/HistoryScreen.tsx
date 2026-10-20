@@ -150,7 +150,7 @@ export default function HistoryScreen() {
           </View>
           {Platform.OS === 'web' && (
             <Pressable style={styles.headerButton} onPress={() => void handleRefresh()} disabled={refreshing}>
-              <Ionicons name="refresh" size={20} color={refreshing ? '#64748B' : '#0EA5A4'} />
+              <Ionicons name="refresh" size={20} color={refreshing ? '#64748B' : '#00E5FF'} />
             </Pressable>
           )}
         </View>
@@ -296,7 +296,7 @@ export default function HistoryScreen() {
 
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color="#0EA5A4" />
+            <ActivityIndicator size="large" color="#00E5FF" />
           </View>
         ) : (
           <UniversalScrollView
@@ -304,7 +304,7 @@ export default function HistoryScreen() {
             showsVerticalScrollIndicator={false}
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            refreshTintColor="#0EA5A4"
+            refreshTintColor="#00E5FF"
           >
             {(filter === 'All' || filter === 'Expenses') && (
               <>
@@ -346,7 +346,7 @@ export default function HistoryScreen() {
                         <Ionicons
                           name="swap-horizontal-outline"
                           size={19}
-                          color="#0EA5A4"
+                          color="#00E5FF"
                         />
                       </View>
                       <View style={styles.flexOne}>
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
   headerSubtitle: { color: '#64748B', fontSize: 12, marginTop: 2 },
   row: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
   chip: { backgroundColor: '#0E1524', paddingHorizontal: 15, paddingVertical: 9, borderRadius: 999 },
-  chipActive: { backgroundColor: '#0EA5A4' },
+  chipActive: { backgroundColor: '#00E5FF' },
   chipText: { color: '#CBD5E1', fontWeight: '800', fontSize: 13 },
   chipTextActive: { color: '#FFFFFF' },
   filterChip: { backgroundColor: '#172236', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 999 },

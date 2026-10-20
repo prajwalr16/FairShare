@@ -13,6 +13,7 @@ import {
   SafeAreaView,
 } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import BrandLogo from '../../components/BrandLogo';
 import PasswordInput from '../../components/PasswordInput';
 import { signUp } from '../../services/authService';
 
@@ -243,6 +244,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     fontSize: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
 
   statusBox: {
@@ -280,7 +283,7 @@ const styles = StyleSheet.create({
   },
 
   button: {
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     minHeight: 54,
     borderRadius: 15,
     alignItems: 'center',
@@ -295,9 +298,10 @@ const styles = StyleSheet.create({
   },
 
   buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+    color: '#06090F',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
 
   loadingText: {
@@ -313,7 +317,7 @@ const styles = StyleSheet.create({
   },
 
   link: {
-    color: '#0EA5A4',
+    color: '#00E5FF',
     fontWeight: '700',
   },
 });

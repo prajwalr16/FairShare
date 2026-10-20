@@ -110,7 +110,7 @@ export default function MemberCard({
         <Ionicons
           name="checkmark-circle"
           size={21}
-          color="#0EA5A4"
+          color="#00E5FF"
         />
       )}
     </View>
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
   },
 
   avatarText: {
-    color: '#0EA5A4',
+    color: '#00E5FF',
     fontSize: 15,
     fontWeight: '800',
   },

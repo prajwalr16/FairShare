@@ -124,7 +124,7 @@ html, body, #map {
   height:100%;
   margin:0;
   overflow:hidden;
-  background:#E8EEF4;
+  background:#06090F;
 }
 .stop-marker {
   width:32px;
@@ -138,9 +138,9 @@ html, body, #map {
   border:2px solid #fff;
   box-shadow:0 2px 8px rgba(15,23,42,.30);
 }
-.start { background:#0EA5A4; }
-.stop { background:#2563EB; }
-.destination { background:#F97316; }
+.start { background:#00F5A0; color:#06090F; }
+.stop { background:#00E5FF; color:#06090F; }
+.destination { background:#FF4B72; color:#FFFFFF; }
 </style>
 </head>
 <body>
@@ -155,7 +155,7 @@ let pendingRoute = null;
 
 const map = new maplibregl.Map({
   container:'map',
-  style:'https://tiles.openfreemap.org/styles/liberty',
+  style:'https://tiles.openfreemap.org/styles/dark',
   center:[78.9629, 20.5937],
   zoom:${dayNumber == null ? 4.5 : 8},
   attributionControl:false,
@@ -184,7 +184,7 @@ function ensureRouteSources() {
       type:'line',
       source:'road-legs',
       layout:{'line-cap':'round','line-join':'round'},
-      paint:{'line-color':'#0EA5A4','line-width':5,'line-opacity':0.92},
+      paint:{'line-color':'#00E5FF','line-width':5,'line-opacity':0.92},
     });
   }
 
@@ -665,7 +665,7 @@ export default function TripMapScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor="#0EA5A4"
+              tintColor="#00E5FF"
             />
           }
         >
@@ -673,7 +673,7 @@ export default function TripMapScreen() {
             <View style={styles.card}>
               <ActivityIndicator
                 size="small"
-                color="#0EA5A4"
+                color="#00E5FF"
               />
               <Text style={styles.mutedCenter}>
                 Loading journey…
@@ -720,7 +720,7 @@ export default function TripMapScreen() {
                     <Ionicons
                       name="layers-outline"
                       size={14}
-                      color="#0EA5A4"
+                      color="#00E5FF"
                     />
                   </View>
                 </View>
@@ -824,7 +824,7 @@ export default function TripMapScreen() {
                     <View style={styles.webLoading}>
                       <ActivityIndicator
                         size="small"
-                        color="#0EA5A4"
+                        color="#00E5FF"
                       />
                       <Text style={styles.muted}>
                         Loading map…
@@ -1085,10 +1085,10 @@ export default function TripMapScreen() {
 const styles = StyleSheet.create({
   safeArea:{flex:1,backgroundColor:'#06090F'},
   container:{flex:1,backgroundColor:'#06090F'},
-  header:{minHeight:76,paddingHorizontal:16,flexDirection:'row',alignItems:'center',borderBottomWidth:1,borderBottomColor:'#0E1524'},
-  headerButton:{width:42,height:42,borderRadius:13,backgroundColor:'#0E1524',borderWidth:1,borderColor:'#263247',alignItems:'center',justifyContent:'center'},
+  header:{minHeight:76,paddingHorizontal:16,flexDirection:'row',alignItems:'center',borderBottomWidth:1,borderBottomColor:'rgba(255, 255, 255, 0.06)'},
+  headerButton:{width:42,height:42,borderRadius:13,backgroundColor:'#0E1524',borderWidth:1,borderColor:'rgba(255, 255, 255, 0.08)',alignItems:'center',justifyContent:'center'},
   headerCenter:{flex:1,minWidth:0,paddingHorizontal:12},
-  headerEyebrow:{color:'#0EA5A4',fontSize:9,fontWeight:'900',letterSpacing:1.1},
+  headerEyebrow:{color:'#00E5FF',fontSize:9,fontWeight:'900',letterSpacing:1.1},
   headerTitle:{color:'#FFFFFF',fontSize:19,fontWeight:'900',marginTop:2},
   headerSubtitle:{color:'#64748B',fontSize:11,marginTop:3},
   scroll:{flex:1},
@@ -1096,21 +1096,21 @@ const styles = StyleSheet.create({
   flexOne:{flex:1,minWidth:0},
   card:{backgroundColor:'#0E1524',borderRadius:20,padding:18,marginBottom:14},
   daySelectorCard:{backgroundColor:'#0E1524',borderRadius:20,padding:16,marginBottom:14},
-  mapCard:{height:405,backgroundColor:'#0E1524',borderRadius:20,overflow:'hidden',marginBottom:14,borderWidth:1,borderColor:'#263247'},
-  map:{flex:1,backgroundColor:'#E8EEF4'},
+  mapCard:{height:405,backgroundColor:'#0E1524',borderRadius:20,overflow:'hidden',marginBottom:14,borderWidth:1,borderColor:'rgba(255, 255, 255, 0.08)'},
+  map:{flex:1,backgroundColor:'#06090F'},
   webLoading:{flex:1,alignItems:'center',justifyContent:'center',backgroundColor:'#06090F'},
   sectionHeader:{flexDirection:'row',alignItems:'center',marginBottom:12},
   title:{color:'#FFFFFF',fontSize:21,fontWeight:'900',marginTop:10},
   titleSmall:{color:'#FFFFFF',fontSize:16,fontWeight:'900'},
   muted:{color:'#94A3B8',fontSize:11,lineHeight:17,marginTop:4},
   mutedCenter:{color:'#94A3B8',fontSize:11,textAlign:'center',lineHeight:17,marginTop:8},
-  scopeBadge:{width:34,height:34,borderRadius:11,backgroundColor:'#06090F',borderWidth:1,borderColor:'#2A3A50',alignItems:'center',justifyContent:'center'},
+  scopeBadge:{width:34,height:34,borderRadius:11,backgroundColor:'#06090F',borderWidth:1,borderColor:'rgba(255, 255, 255, 0.08)',alignItems:'center',justifyContent:'center'},
   dayChips:{paddingRight:8},
-  dayChip:{minWidth:86,paddingHorizontal:10,paddingVertical:9,borderRadius:13,backgroundColor:'#06090F',borderWidth:1,borderColor:'#2A3A50',marginRight:8},
-  dayChipActive:{backgroundColor:'#0EA5A4',borderColor:'#0EA5A4'},
+  dayChip:{minWidth:86,paddingHorizontal:10,paddingVertical:9,borderRadius:13,backgroundColor:'#06090F',borderWidth:1,borderColor:'rgba(255, 255, 255, 0.08)',marginRight:8},
+  dayChipActive:{backgroundColor:'#00E5FF',borderColor:'#00E5FF'},
   dayChipTop:{color:'#94A3B8',fontSize:9,fontWeight:'900',letterSpacing:.5},
   dayChipBottom:{color:'#CBD5E1',fontSize:10,fontWeight:'800',marginTop:3},
-  dayChipActiveText:{color:'#FFFFFF'},
+  dayChipActiveText:{color:'#06090F'},
   statsRow:{flexDirection:'row',gap:10,marginBottom:14},
   statCard:{flex:1,backgroundColor:'#0E1524',borderRadius:16,padding:14},
   statLabel:{color:'#64748B',fontSize:9,fontWeight:'800'},
@@ -1128,17 +1128,17 @@ const styles = StyleSheet.create({
   dayDivider:{flexDirection:'row',alignItems:'center',paddingTop:16,paddingBottom:4,gap:10},
   dayDividerLine:{flex:1,height:1,backgroundColor:'#334155'},
   dayDividerCenter:{alignItems:'center',minWidth:82},
-  dayDividerText:{color:'#0EA5A4',fontSize:10,fontWeight:'900',letterSpacing:.8},
+  dayDividerText:{color:'#00E5FF',fontSize:10,fontWeight:'900',letterSpacing:.8},
   dayDividerDate:{color:'#64748B',fontSize:9,fontWeight:'800',marginTop:2},
   stopRow:{flexDirection:'row',alignItems:'center',paddingVertical:10,borderTopWidth:1,borderTopColor:'#243147'},
-  stopNumber:{width:30,height:30,borderRadius:10,backgroundColor:'#0EA5A4',alignItems:'center',justifyContent:'center',marginRight:11},
-  stopNumberText:{color:'#FFFFFF',fontSize:11,fontWeight:'900'},
+  stopNumber:{width:30,height:30,borderRadius:10,backgroundColor:'#00E5FF',alignItems:'center',justifyContent:'center',marginRight:11},
+  stopNumberText:{color:'#06090F',fontSize:11,fontWeight:'900'},
   stopName:{color:'#FFFFFF',fontSize:13,fontWeight:'800'},
   stopMeta:{color:'#64748B',fontSize:9,marginTop:3},
   noteCard:{flexDirection:'row',alignItems:'flex-start',gap:8,paddingHorizontal:3,paddingBottom:5},
   noteText:{flex:1,color:'#64748B',fontSize:9,lineHeight:14},
-  primaryButton:{backgroundColor:'#0EA5A4',borderRadius:14,paddingVertical:14,alignItems:'center',marginTop:15},
-  primaryButtonText:{color:'#FFFFFF',fontWeight:'900',fontSize:13},
+  primaryButton:{backgroundColor:'#00E5FF',borderRadius:14,paddingVertical:14,alignItems:'center',marginTop:15},
+  primaryButtonText:{color:'#06090F',fontWeight:'900',fontSize:13},
   center:{flex:1,alignItems:'center',justifyContent:'center'},
   emptyTitle:{color:'#FFFFFF',fontSize:20,fontWeight:'900'},
 });

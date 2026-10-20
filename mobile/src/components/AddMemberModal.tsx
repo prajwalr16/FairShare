@@ -128,7 +128,7 @@ export default function AddMemberModal({
                 }}
                 disabled={loading}
               >
-                <Ionicons name="link-outline" size={19} color="#0EA5A4" style={{ marginRight: 8 }} />
+                <Ionicons name="link-outline" size={19} color="#00E5FF" style={{ marginRight: 8 }} />
                 <Text style={styles.shareButtonText}>Share Group Invite Link</Text>
               </Pressable>
             </>
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   },
 
   addButton: {
-    backgroundColor: '#0EA5A4',
+    backgroundColor: '#00E5FF',
     borderRadius: 14,
     minHeight: 54,
     alignItems: 'center',
@@ -251,14 +251,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#0EA5A4',
+    borderColor: '#00E5FF',
     borderRadius: 14,
     minHeight: 50,
-    backgroundColor: 'rgba(14, 165, 164, 0.08)',
+    backgroundColor: 'rgba(0, 229, 255, 0.08)',
   },
 
   shareButtonText: {
-    color: '#0EA5A4',
+    color: '#00E5FF',
     fontSize: 15,
     fontWeight: '700',
   },
