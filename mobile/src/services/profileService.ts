@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase';
+import { apiRequest } from './apiClient';
 
 export type UserProfile = {
   id: string;
@@ -41,6 +42,9 @@ export async function getUserProfile(): Promise<{
     return { data: null, error };
   }
 
+  // Synchronize user into PostgreSQL users table in background
+  void apiRequest('/me').catch(() => {});
+
   return { data: toProfile(data.user), error: null };
 }
 
@@ -51,15 +55,28 @@ export async function updateUserProfile(input: {
   data: UserProfile | null;
   error: any;
 }> {
+  const trimmedName = input.fullName.trim();
+  const trimmedPhone = input.phoneNumber.trim();
+
   const { data, error } = await supabase.auth.updateUser({
     data: {
-      full_name: input.fullName.trim(),
-      phone_number: input.phoneNumber.trim(),
+      full_name: trimmedName,
+      phone_number: trimmedPhone,
     },
   });
 
   if (error) {
     return { data: null, error };
+  }
+
+  // Also synchronize directly with backend PostgreSQL users table
+  try {
+    await apiRequest('/me', {
+      method: 'PATCH',
+      body: { full_name: trimmedName },
+    });
+  } catch (backendError) {
+    console.warn('[FairShare] Failed to sync updated profile to backend DB:', backendError);
   }
 
   return { data: toProfile(data.user), error: null };

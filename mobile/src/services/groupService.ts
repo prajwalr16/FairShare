@@ -63,7 +63,10 @@ export type GroupOverviewExpense = {
   split_type: string;
   category: string;
   paid_by: string;
+  location_name?: string | null;
   created_at: string;
+  expense_date?: string | null;
+  updated_at?: string | null;
 };
 
 export type GroupOverview = {
@@ -90,6 +93,9 @@ export type GroupHistorySettlement = {
   note: string | null;
   created_by: string | null;
   created_at: string;
+  updated_at?: string | null;
+  from_name?: string | null;
+  to_name?: string | null;
 };
 
 export type GroupHistory = {

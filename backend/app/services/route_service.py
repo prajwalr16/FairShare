@@ -1,6 +1,7 @@
 
 from __future__ import annotations
 
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from math import atan2, cos, radians, sin, sqrt
@@ -23,6 +24,30 @@ ROUTE_TIMEOUT_SECONDS = 8.0
 MAX_PARALLEL_LEGS = 4
 ENDPOINT_VALIDATION_METERS = 2_000.0
 SNAP_CONNECTOR_METERS = 20.0
+
+_route_client: httpx.Client | None = None
+_client_lock = threading.Lock()
+
+
+def _get_route_client() -> httpx.Client:
+    global _route_client
+    if _route_client is None or _route_client.is_closed:
+        with _client_lock:
+            if _route_client is None or _route_client.is_closed:
+                settings = get_settings()
+                _route_client = httpx.Client(
+                    timeout=ROUTE_TIMEOUT_SECONDS,
+                    headers={
+                        "User-Agent": (
+                            f"FairShare/"
+                            f"{settings.app_version} "
+                            "route-planner"
+                        )
+                    },
+                    follow_redirects=True,
+                    limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),
+                )
+    return _route_client
 
 
 def _cache_key(
@@ -402,22 +427,11 @@ def _request_nearest(
     )
 
     try:
-        with httpx.Client(
-            timeout=ROUTE_TIMEOUT_SECONDS,
-            headers={
-                "User-Agent": (
-                    f"FairShare/"
-                    f"{settings.app_version} "
-                    "route-planner"
-                )
-            },
-            follow_redirects=True,
-        ) as client:
-            payload = _request_http(
-                client,
-                url,
-                {"number": 1},
-            )
+        payload = _request_http(
+            _get_route_client(),
+            url,
+            {"number": 1},
+        )
     except httpx.HTTPError:
         payload = None
 
@@ -541,32 +555,21 @@ def _request_pair_route(
     }
 
     try:
-        with httpx.Client(
-            timeout=ROUTE_TIMEOUT_SECONDS,
-            headers={
-                "User-Agent": (
-                    f"FairShare/"
-                    f"{settings.app_version} "
-                    "route-planner"
-                )
-            },
-            follow_redirects=True,
-        ) as client:
-            payload = _request_http(
-                client,
-                route_url,
-                route_params,
-            )
+        payload = _request_http(
+            _get_route_client(),
+            route_url,
+            route_params,
+        )
 
-            direct = _route_candidate(
-                payload,
-                requested_start,
-                requested_end,
-                fallback=False,
-            )
+        direct = _route_candidate(
+            payload,
+            requested_start,
+            requested_end,
+            fallback=False,
+        )
 
-            if direct["routed"]:
-                return direct
+        if direct["routed"]:
+            return direct
 
     except httpx.HTTPError:
         pass
@@ -622,22 +625,11 @@ def _request_pair_route(
     )
 
     try:
-        with httpx.Client(
-            timeout=ROUTE_TIMEOUT_SECONDS,
-            headers={
-                "User-Agent": (
-                    f"FairShare/"
-                    f"{settings.app_version} "
-                    "route-planner"
-                )
-            },
-            follow_redirects=True,
-        ) as client:
-            snapped_payload = _request_http(
-                client,
-                snapped_url,
-                route_params,
-            )
+        snapped_payload = _request_http(
+            _get_route_client(),
+            snapped_url,
+            route_params,
+        )
     except httpx.HTTPError:
         snapped_payload = None
 

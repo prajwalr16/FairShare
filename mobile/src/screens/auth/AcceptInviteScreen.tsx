@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -33,6 +34,7 @@ export default function AcceptInviteScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<Status>(null);
+  const [isAlreadyMember, setIsAlreadyMember] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -52,8 +54,14 @@ export default function AcceptInviteScreen() {
         return;
       }
 
+      let webGroupId: string | null = null;
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+        const searchParams = new URLSearchParams(window.location.search);
+        webGroupId = searchParams.get('group') || searchParams.get('groupId');
+      }
+
       const metadataGroupId = session?.user.user_metadata?.invited_group_id;
-      const resolvedGroupId = groupId || metadataGroupId;
+      const resolvedGroupId = groupId || route.params?.groupId || webGroupId || metadataGroupId;
 
       if (!session?.user) {
         if (active) {
@@ -95,6 +103,9 @@ export default function AcceptInviteScreen() {
       if (result.data?.group_name) {
         setGroupName(result.data.group_name);
         groupNameRef.current = result.data.group_name;
+        if (result.data.status === 'active') {
+          setIsAlreadyMember(true);
+        }
       } else if (result.error) {
         setStatus({
           type: 'error',
@@ -250,6 +261,45 @@ export default function AcceptInviteScreen() {
             onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] })}
           >
             <Text style={styles.cancelText}>Not now</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isAlreadyMember) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+        <View style={styles.container}>
+          <View style={styles.icon}>
+            <Ionicons name="checkmark-circle-outline" size={28} color="#0EA5A4" />
+          </View>
+
+          <Text style={styles.title}>Already a member</Text>
+          <Text style={styles.subtitle}>
+            You are already an active member of {groupName}.
+          </Text>
+
+          <Pressable
+            style={styles.button}
+            onPress={() =>
+              navigation.reset({
+                index: 1,
+                routes: [
+                  { name: 'Home' },
+                  {
+                    name: 'GroupDetails',
+                    params: {
+                      groupId,
+                      groupName: groupNameRef.current,
+                    },
+                  },
+                ],
+              })
+            }
+          >
+            <Text style={styles.buttonText}>Open Group</Text>
           </Pressable>
         </View>
       </SafeAreaView>

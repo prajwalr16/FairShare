@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,7 +32,9 @@ export default function ForgotPasswordScreen() {
     // hard-coding a LAN IP. This keeps Expo Go callbacks aligned with the
     // current packager address and uses the registered FairShare scheme in
     // development/production builds.
-    const redirectTo = Linking.createURL('reset-password');
+    const redirectTo = Platform.OS === 'web' && typeof window !== 'undefined'
+      ? `${window.location.origin}/reset-password`
+      : Linking.createURL('reset-password');
 
     const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
       redirectTo,

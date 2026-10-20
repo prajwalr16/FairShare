@@ -10,6 +10,9 @@ export type GroupSettlement = {
   note: string | null;
   created_by: string | null;
   created_at: string;
+  updated_at?: string | null;
+  from_name?: string | null;
+  to_name?: string | null;
 };
 
 export type RecordSettlementInput = {

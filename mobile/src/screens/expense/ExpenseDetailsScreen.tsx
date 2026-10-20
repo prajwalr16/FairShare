@@ -280,11 +280,20 @@ export default function ExpenseDetailsScreen() {
             <Text style={styles.title}>{expense.title}</Text>
             <Text style={styles.heroAmount}>{money(expense.amount, currency)}</Text>
             <Text style={styles.heroMeta}>
-              {expense.split_type} split  •  {formatDateTime(expense.created_at)}
+              {expense.split_type} split  •  {formatDateTime(expense.expense_date || expense.created_at)}
             </Text>
           </View>
 
           <View style={styles.infoCard}>
+            <View style={styles.infoRow}>
+              <View style={styles.infoLabelContainer}>
+                <Ionicons name="calendar-outline" size={18} color="#0EA5A4" />
+                <Text style={styles.infoLabel}>Date & Time</Text>
+              </View>
+              <Text style={styles.infoValue} numberOfLines={1}>
+                {formatDateTime(expense.expense_date || expense.created_at)}
+              </Text>
+            </View>
             <View style={styles.infoRow}>
               <View style={styles.infoLabelContainer}>
                 <Ionicons name="wallet-outline" size={18} color="#0EA5A4" />

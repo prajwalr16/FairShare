@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { shareGroupInvite } from '../utils/shareInvite';
 import {
   Modal,
   View,
@@ -14,12 +16,16 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onAdd: (email: string) => Promise<void>;
+  groupId?: string;
+  groupName?: string;
 };
 
 export default function AddMemberModal({
   visible,
   onClose,
   onAdd,
+  groupId,
+  groupName,
 }: Props) {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -106,6 +112,27 @@ export default function AddMemberModal({
               </Text>
             )}
           </Pressable>
+
+          {groupId ? (
+            <>
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <Pressable
+                style={styles.shareButton}
+                onPress={() => {
+                  void shareGroupInvite(groupId, groupName || 'Group');
+                }}
+                disabled={loading}
+              >
+                <Ionicons name="link-outline" size={19} color="#0EA5A4" style={{ marginRight: 8 }} />
+                <Text style={styles.shareButtonText}>Share Group Invite Link</Text>
+              </Pressable>
+            </>
+          ) : null}
 
           <Pressable
             style={styles.cancelButton}
@@ -198,5 +225,41 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 15,
     fontWeight: '600',
+  },
+
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 14,
+  },
+
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#334155',
+  },
+
+  dividerText: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '700',
+    marginHorizontal: 12,
+  },
+
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#0EA5A4',
+    borderRadius: 14,
+    minHeight: 50,
+    backgroundColor: 'rgba(14, 165, 164, 0.08)',
+  },
+
+  shareButtonText: {
+    color: '#0EA5A4',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

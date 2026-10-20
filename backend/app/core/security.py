@@ -175,7 +175,7 @@ def ensure_user(session: Session, current_user: CurrentUser) -> User:
     if normalized_email and user.email != normalized_email:
         user.email = normalized_email
         changed = True
-    if current_user.full_name and user.full_name != current_user.full_name:
+    if current_user.full_name and not user.full_name:
         user.full_name = current_user.full_name
         changed = True
 

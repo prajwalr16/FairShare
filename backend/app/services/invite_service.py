@@ -58,7 +58,8 @@ def _find_auth_user_by_email(email: str) -> dict | None:
     settings = get_settings()
     url = f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users"
     page = 1
-    while True:
+    max_pages = 20
+    while page <= max_pages:
         try:
             response = httpx.get(
                 url,
@@ -89,6 +90,7 @@ def _find_auth_user_by_email(email: str) -> dict | None:
             return None
 
         page += 1
+    return None
 
 
 def _send_invitation(email: str, group_id: UUID) -> dict:
@@ -150,22 +152,24 @@ def get_pending_invitation(session: Session, group_id: UUID, caller: User) -> di
         select(GroupMember).where(
             GroupMember.group_id == group_id,
             GroupMember.user_id == caller.id,
-            GroupMember.status == "pending",
         )
     )
 
-    if member is None:
-        raise HTTPException(
-            status_code=403,
-            detail="There is no pending invitation for this account.",
-        )
+    if member is not None:
+        return {
+            "group_id": group.id,
+            "group_name": group.name,
+            "email": member.email,
+            "member_id": member.id,
+            "status": member.status,
+        }
 
     return {
         "group_id": group.id,
         "group_name": group.name,
-        "email": member.email,
-        "member_id": member.id,
-        "status": member.status,
+        "email": caller.email or "",
+        "member_id": None,
+        "status": "can_join",
     }
 
 
@@ -204,6 +208,33 @@ def invite_member(
                 if existing_member.status == "pending"
                 else "This person is already a member of the group."
             ),
+        }
+
+    local_user = session.scalar(select(User).where(User.email == normalized))
+    if local_user is not None:
+        member = GroupMember(
+            group_id=group_id,
+            user_id=local_user.id,
+            email=normalized,
+            role="member",
+            status="active",
+        )
+        session.add(member)
+        try:
+            session.commit()
+            session.refresh(member)
+        except Exception as exc:
+            session.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="This user is already a member of the group.",
+            ) from exc
+
+        return {
+            "ok": True,
+            "status": "active",
+            "member": member,
+            "message": "Member added.",
         }
 
     auth_user = _find_auth_user_by_email(normalized)
@@ -303,30 +334,33 @@ def accept_invitation(
     full_name: str | None,
     caller: User,
 ) -> dict:
-    member = session.scalar(
-        select(GroupMember).where(
-            GroupMember.group_id == group_id,
-            GroupMember.user_id == caller.id,
-            GroupMember.status == "pending",
-        )
-    )
-
-    if member is None:
-        raise HTTPException(
-            status_code=404,
-            detail="No pending invitation was found.",
-        )
-
     group = session.get(Group, group_id)
     if group is None:
         raise HTTPException(status_code=404, detail="Group not found.")
 
-    member.status = "active"
-    member.email = normalize_email(caller.email or member.email)
+    member = session.scalar(
+        select(GroupMember).where(
+            GroupMember.group_id == group_id,
+            GroupMember.user_id == caller.id,
+        )
+    )
 
     cleaned_name = (full_name or "").strip()
     if cleaned_name:
         caller.full_name = cleaned_name
+
+    if member is None:
+        member = GroupMember(
+            group_id=group_id,
+            user_id=caller.id,
+            email=normalize_email(caller.email or ""),
+            role="member",
+            status="active",
+        )
+        session.add(member)
+    else:
+        member.status = "active"
+        member.email = normalize_email(caller.email or member.email)
 
     session.commit()
 

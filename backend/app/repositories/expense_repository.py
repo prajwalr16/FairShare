@@ -36,7 +36,7 @@ def list_expenses(
             )
         )
 
-    statement = statement.order_by(Expense.created_at.desc())
+    statement = statement.order_by(Expense.expense_date.desc(), Expense.created_at.desc())
     if limit is not None:
         statement = statement.limit(limit)
     return list(session.scalars(statement).all())

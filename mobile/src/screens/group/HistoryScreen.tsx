@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -14,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
 import ExpenseCard from '../../components/ExpenseCard';
+import UniversalScrollView from '../../components/UniversalScrollView';
 import { getGroupExpenses } from '../../services/expenseService';
 import { getGroupMembers, GroupMember } from '../../services/memberService';
 import { getGroupSettlements, GroupSettlement } from '../../services/settlementService';
@@ -49,6 +51,13 @@ export default function HistoryScreen() {
   const [settlements, setSettlements] = useState<GroupSettlement[]>([]);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | 'All'>('All');
   const [expenseScope, setExpenseScope] = useState<'all' | 'mine'>('all');
 
@@ -130,6 +139,11 @@ export default function HistoryScreen() {
             <Text style={styles.headerTitle}>History</Text>
             <Text style={styles.headerSubtitle}>Expenses and settlements</Text>
           </View>
+          {Platform.OS === 'web' && (
+            <Pressable style={styles.headerButton} onPress={() => void handleRefresh()} disabled={refreshing}>
+              <Ionicons name="refresh" size={20} color={refreshing ? '#64748B' : '#0EA5A4'} />
+            </Pressable>
+          )}
         </View>
 
         <ScrollView
@@ -219,9 +233,12 @@ export default function HistoryScreen() {
             <ActivityIndicator size="large" color="#0EA5A4" />
           </View>
         ) : (
-          <ScrollView
+          <UniversalScrollView
             contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            refreshTintColor="#0EA5A4"
           >
             {(filter === 'All' || filter === 'Expenses') && (
               <>
@@ -285,7 +302,7 @@ export default function HistoryScreen() {
             )}
 
             <View style={{ height: 40 }} />
-          </ScrollView>
+          </UniversalScrollView>
         )}
       </View>
     </SafeAreaView>

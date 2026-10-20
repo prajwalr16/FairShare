@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   StatusBar,
@@ -15,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import GroupCard from '../../components/GroupCard';
 import CreateGroupModal from '../../components/CreateGroupModal';
+import UniversalScrollView from '../../components/UniversalScrollView';
 import {
   createGroup,
   getCachedGroups,
@@ -220,6 +222,14 @@ export default function HomeScreen() {
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[styles.listContent, { paddingBottom: 150 }]}
+            renderScrollComponent={Platform.OS === 'web' ? (props) => (
+              <UniversalScrollView
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                refreshTintColor="#0EA5A4"
+                {...props}
+              />
+            ) : undefined}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}

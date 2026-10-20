@@ -60,6 +60,7 @@ class GroupSummary(APIModel):
     currency: str
     description: str | None
     created_at: datetime
+    updated_at: datetime | None = None
 
 
 class GroupSettings(GroupSummary):
@@ -76,6 +77,7 @@ class MemberResponse(APIModel):
     role: str
     status: str
     created_at: datetime
+    updated_at: datetime | None = None
 
 
 class RoleUpdate(BaseModel):
@@ -118,7 +120,7 @@ class PendingInvitation(APIModel):
     group_id: UUID
     group_name: str
     email: str
-    member_id: UUID
+    member_id: UUID | None = None
     status: str
 
 

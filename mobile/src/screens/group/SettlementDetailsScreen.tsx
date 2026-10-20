@@ -106,10 +106,10 @@ export default function SettlementDetailsScreen() {
   }, [members]);
 
   const fromName = settlement
-    ? memberMap.get(settlement.from_user_id) || 'Member'
+    ? settlement.from_name || memberMap.get(settlement.from_user_id) || 'Member'
     : 'Member';
   const toName = settlement
-    ? memberMap.get(settlement.to_user_id) || 'Member'
+    ? settlement.to_name || memberMap.get(settlement.to_user_id) || 'Member'
     : 'Member';
 
   const saveEdit = async () => {

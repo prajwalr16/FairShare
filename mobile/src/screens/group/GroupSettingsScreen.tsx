@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
+import { shareGroupInvite } from '../../utils/shareInvite';
 import {
   deleteGroup,
   getGroupSettings,
@@ -557,6 +558,29 @@ export default function GroupSettingsScreen() {
               )}
             </View>
 
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Invite members</Text>
+              <Text style={styles.sectionSubtitle}>
+                Invite your friends and travel companions to join this group.
+              </Text>
+            </View>
+
+            <Pressable
+              style={styles.shareInviteCard}
+              onPress={() => { if (groupId) void shareGroupInvite(groupId, group?.name || 'Group'); }}
+            >
+              <View style={styles.shareInviteIcon}>
+                <Ionicons name="link-outline" size={20} color="#0EA5A4" />
+              </View>
+              <View style={styles.shareInviteText}>
+                <Text style={styles.shareInviteTitle}>Share Group Invite Link</Text>
+                <Text style={styles.shareInviteSubtitle}>
+                  {Platform.OS === 'web' ? 'Copy join link to clipboard' : 'Share join link via WhatsApp, Messages, or AirDrop'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#64748B" />
+            </Pressable>
+
             <View style={[styles.section, styles.dangerSection]}>
               <Text style={styles.sectionTitle}>Danger zone</Text>
               <Text style={styles.sectionSubtitle}>
@@ -1069,6 +1093,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     marginBottom: 10,
+  },
+  shareInviteCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 8,
+  },
+  shareInviteIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(14, 165, 164, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  shareInviteText: {
+    flex: 1,
+  },
+  shareInviteTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  shareInviteSubtitle: {
+    color: '#94A3B8',
+    fontSize: 12,
+    marginTop: 2,
   },
   dangerSection: {
     marginTop: 28,

@@ -49,7 +49,7 @@ def create_settlement(session: Session, group_id: UUID, from_user_id: UUID, to_u
     settlement = Settlement(group_id=group_id, from_user_id=from_user_id, to_user_id=to_user_id, amount=amount, note=note.strip() if note else None, created_by=caller_id)
     session.add(settlement)
     session.commit()
-    return settlement
+    return get_settlement(session, group_id, settlement.id) or settlement
 
 
 def update_settlement(session: Session, group_id: UUID, settlement_id: UUID, amount: Decimal, note: str | None, caller_id: UUID) -> Settlement:
@@ -67,7 +67,7 @@ def update_settlement(session: Session, group_id: UUID, settlement_id: UUID, amo
     settlement.amount = amount
     settlement.note = note.strip() if note else None
     session.commit()
-    return settlement
+    return get_settlement(session, group_id, settlement.id) or settlement
 
 
 def delete_settlement(session: Session, group_id: UUID, settlement_id: UUID, caller_id: UUID) -> None:

@@ -18,6 +18,7 @@ export type CreateExpenseInput = ExpenseLocationInput & {
   splitType: SplitType;
   category: ExpenseCategory;
   splits: SplitInput[];
+  expenseDate?: string | null;
 };
 
 export type CreateEqualExpenseInput = ExpenseLocationInput & {
@@ -27,6 +28,7 @@ export type CreateEqualExpenseInput = ExpenseLocationInput & {
   paidBy: string;
   participantIds: string[];
   category?: ExpenseCategory;
+  expenseDate?: string | null;
 };
 
 export type UpdateExpenseInput = CreateExpenseInput & { expenseId: string };
@@ -44,6 +46,8 @@ export type ExpenseDetailsRecord = {
   latitude: number | null;
   longitude: number | null;
   created_at: string;
+  expense_date?: string | null;
+  updated_at?: string | null;
 };
 
 export type ExpenseSplitRecord = {
@@ -103,6 +107,7 @@ export async function createExpense(input: CreateExpenseInput) {
             user_id: split.userId,
             value: split.value,
           })),
+          expense_date: input.expenseDate || undefined,
           ...locationPayload(input),
         },
       },
@@ -130,6 +135,7 @@ export async function createEqualExpense(input: CreateEqualExpenseInput) {
     journeyStopId: input.journeyStopId,
     latitude: input.latitude,
     longitude: input.longitude,
+    expenseDate: input.expenseDate,
   });
 }
 
@@ -205,6 +211,7 @@ export async function updateExpense(input: UpdateExpenseInput) {
             user_id: split.userId,
             value: split.value,
           })),
+          expense_date: input.expenseDate || undefined,
           ...locationPayload(input),
         },
       },

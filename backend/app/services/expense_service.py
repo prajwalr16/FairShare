@@ -130,6 +130,7 @@ def create_expense(
     journey_stop_id: UUID | None = None,
     latitude: float | None = None,
     longitude: float | None = None,
+    expense_date: datetime | None = None,
 ) -> Expense:
     group, role = get_group_and_role(session, group_id, caller.id)
     require_permission(role, "money", "Viewers cannot create expenses.")
@@ -168,6 +169,7 @@ def create_expense(
         journey_stop_id=resolved_stop_id,
         latitude=resolved_lat,
         longitude=resolved_lon,
+        expense_date=expense_date or datetime.now(timezone.utc),
     )
     session.add(expense)
     session.add_all(
@@ -264,6 +266,7 @@ def update_expense(
     journey_stop_id: UUID | None = None,
     latitude: float | None = None,
     longitude: float | None = None,
+    expense_date: datetime | None = None,
 ) -> Expense:
     clean_title = title.strip()
     if not clean_title:
@@ -319,6 +322,9 @@ def update_expense(
     expense.journey_stop_id = resolved_stop_id
     expense.latitude = resolved_lat
     expense.longitude = resolved_lon
+    if expense_date is not None:
+        expense.expense_date = expense_date
+    expense.updated_at = datetime.now(timezone.utc)
 
     _replace_splits(session, expense.id, calculated)
     session.commit()
