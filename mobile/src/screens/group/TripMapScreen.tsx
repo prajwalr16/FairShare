@@ -124,7 +124,7 @@ html, body, #map {
   height:100%;
   margin:0;
   overflow:hidden;
-  background:#06090F;
+  background:#E8EEF4;
 }
 .stop-marker {
   width:32px;
@@ -138,9 +138,9 @@ html, body, #map {
   border:2px solid #fff;
   box-shadow:0 2px 8px rgba(15,23,42,.30);
 }
-.start { background:#00F5A0; color:#06090F; }
-.stop { background:#00E5FF; color:#06090F; }
-.destination { background:#FF4B72; color:#FFFFFF; }
+.start { background:#0EA5A4; color:#FFFFFF; }
+.stop { background:#2563EB; color:#FFFFFF; }
+.destination { background:#F97316; color:#FFFFFF; }
 </style>
 </head>
 <body>
@@ -155,7 +155,7 @@ let pendingRoute = null;
 
 const map = new maplibregl.Map({
   container:'map',
-  style:'https://tiles.openfreemap.org/styles/dark',
+  style:'https://tiles.openfreemap.org/styles/liberty',
   center:[78.9629, 20.5937],
   zoom:${dayNumber == null ? 4.5 : 8},
   attributionControl:false,
@@ -184,7 +184,7 @@ function ensureRouteSources() {
       type:'line',
       source:'road-legs',
       layout:{'line-cap':'round','line-join':'round'},
-      paint:{'line-color':'#00E5FF','line-width':5,'line-opacity':0.92},
+      paint:{'line-color':'#0284C7','line-width':5,'line-opacity':0.92},
     });
   }
 
@@ -1097,7 +1097,7 @@ const styles = StyleSheet.create({
   card:{backgroundColor:'#0E1524',borderRadius:20,padding:18,marginBottom:14},
   daySelectorCard:{backgroundColor:'#0E1524',borderRadius:20,padding:16,marginBottom:14},
   mapCard:{height:405,backgroundColor:'#0E1524',borderRadius:20,overflow:'hidden',marginBottom:14,borderWidth:1,borderColor:'rgba(255, 255, 255, 0.08)'},
-  map:{flex:1,backgroundColor:'#06090F'},
+  map:{flex:1,backgroundColor:'#E8EEF4'},
   webLoading:{flex:1,alignItems:'center',justifyContent:'center',backgroundColor:'#06090F'},
   sectionHeader:{flexDirection:'row',alignItems:'center',marginBottom:12},
   title:{color:'#FFFFFF',fontSize:21,fontWeight:'900',marginTop:10},
