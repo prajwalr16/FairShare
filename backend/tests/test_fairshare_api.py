@@ -470,3 +470,42 @@ def test_open_invite_link_join(client, seed_users):
     members = client.get(f'/api/v1/groups/{gid}/members').json()
     owner_member = next(m for m in members if m['user_id'] == str(USER_A))
     assert owner_member['full_name'] == 'Alice in Wonderland'
+
+
+def test_expense_filter_by_paid_by(client, seed_users):
+    group = create_group(client)
+    gid = group['id']
+    add_members(gid)
+
+    # USER_A paid
+    client.post(f'/api/v1/groups/{gid}/expenses', json={
+        'title': 'Paid by User A',
+        'amount': '100',
+        'paid_by': str(USER_A),
+        'split_type': 'Equal',
+        'splits': [{'user_id': str(USER_A), 'value': '0'}],
+    })
+
+    # USER_B paid
+    client.post(f'/api/v1/groups/{gid}/expenses', json={
+        'title': 'Paid by User B',
+        'amount': '200',
+        'paid_by': str(USER_B),
+        'split_type': 'Equal',
+        'splits': [{'user_id': str(USER_B), 'value': '0'}],
+    })
+
+    # Query all
+    all_res = client.get(f'/api/v1/groups/{gid}/expenses').json()
+    assert len(all_res) == 2
+
+    # Query filtered by USER_A
+    a_res = client.get(f'/api/v1/groups/{gid}/expenses?paid_by={USER_A}').json()
+    assert len(a_res) == 1
+    assert a_res[0]['title'] == 'Paid by User A'
+
+    # Query filtered by USER_B
+    b_res = client.get(f'/api/v1/groups/{gid}/expenses?paid_by={USER_B}').json()
+    assert len(b_res) == 1
+    assert b_res[0]['title'] == 'Paid by User B'
+

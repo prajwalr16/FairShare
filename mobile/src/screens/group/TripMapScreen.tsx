@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { WebView } from 'react-native-webview';
+import UniversalWebView, { UniversalWebViewRef } from '../../components/UniversalWebView';
 
 import { getCachedTrip, getTrip, Trip } from '../../services/tripService';
 import {
@@ -359,7 +359,7 @@ export default function TripMapScreen() {
   const [routing, setRouting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const mapWebViewRef = useRef<WebView>(null);
+  const mapWebViewRef = useRef<UniversalWebViewRef>(null);
 
   const pushRouteDataToMap = useCallback(
     (data: TripRoute | null) => {
@@ -808,7 +808,7 @@ export default function TripMapScreen() {
               </View>
 
               <View style={styles.mapCard}>
-                <WebView
+                <UniversalWebView
                   ref={mapWebViewRef}
                   key={`${selectedDay ?? 'all'}`}
                   originWhitelist={['*']}

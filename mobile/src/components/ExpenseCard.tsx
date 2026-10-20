@@ -27,6 +27,7 @@ type Expense = {
 type Props = {
   expense: Expense;
   currency?: string | null;
+  payerName?: string | null;
 };
 
 function formatDate(value?: string | null) {
@@ -46,7 +47,7 @@ function splitLabel(splitType?: string | null) {
   return splitType?.trim() || 'Equal';
 }
 
-export default function ExpenseCard({ expense, currency = 'INR' }: Props) {
+export default function ExpenseCard({ expense, currency = 'INR', payerName }: Props) {
   const navigation = useNavigation<any>();
   const dateLabel = formatDate(expense.expense_date || expense.created_at);
   const locationLabel = expense.location_name?.trim() || '';
@@ -75,7 +76,7 @@ export default function ExpenseCard({ expense, currency = 'INR' }: Props) {
         </Text>
 
         <Text style={styles.meta} numberOfLines={1}>
-          {expense.category || 'Other'}  •  {splitLabel(expense.split_type)}
+          {expense.category || 'Other'}{payerName ? `  •  Paid by ${payerName}` : `  •  ${splitLabel(expense.split_type)}`}
           {dateLabel ? `  •  ${dateLabel}` : ''}
         </Text>
 

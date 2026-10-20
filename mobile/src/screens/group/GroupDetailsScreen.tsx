@@ -21,6 +21,8 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import ExpenseCard from '../../components/ExpenseCard';
 import MemberCard from '../../components/MemberCard';
 import AddMemberModal from '../../components/AddMemberModal';
+import PaidByPickerModal from '../../components/PaidByPickerModal';
+import { supabase } from '../../config/supabase';
 import UniversalScrollView from '../../components/UniversalScrollView';
 import { shareGroupInvite } from '../../utils/shareInvite';
 import { addGroupMember, getGroupMembers, GroupMember, removeGroupMemberFromGroup } from '../../services/memberService';
@@ -117,6 +119,9 @@ export default function GroupDetailsScreen() {
   const [settling, setSettling] = useState(false);
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | 'All'>('All');
   const [expenseScope, setExpenseScope] = useState<'all' | 'mine'>('all');
+  const [paidByFilter, setPaidByFilter] = useState<string | null>(null);
+  const [showPaidByModal, setShowPaidByModal] = useState(false);
+  const [myUserId, setMyUserId] = useState<string | null>(null);
 
   const overviewControllerRef = useRef<AbortController | null>(null);
   const tabControllerRef = useRef<AbortController | null>(null);
@@ -161,11 +166,11 @@ export default function GroupDetailsScreen() {
     const controller = new AbortController();
     tabControllerRef.current = controller;
 
-    const result = await getGroupExpenses(groupId, 200, expenseCategory, expenseScope, controller.signal);
+    const result = await getGroupExpenses(groupId, 200, expenseCategory, expenseScope, paidByFilter, controller.signal);
     if (isAbortError(result.error) || controller.signal.aborted || result.error) return;
     setExpenses(result.data || []);
     loadedTabsRef.current.add('Expenses');
-  }, [expenseCategory, expenseScope, groupId]);
+  }, [expenseCategory, expenseScope, groupId, paidByFilter]);
 
   const loadFinancial = useCallback(async (force = false) => {
     if (!groupId || (!force && loadedTabsRef.current.has('Balances'))) return;
@@ -240,6 +245,10 @@ export default function GroupDetailsScreen() {
         loadOverview(false);
       }
       void loadTrip(false);
+      void loadMembers(false);
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session?.user?.id) setMyUserId(data.session.user.id);
+      });
 
       return () => {
         overviewControllerRef.current?.abort();
@@ -297,6 +306,13 @@ export default function GroupDetailsScreen() {
       setRefreshing(false);
     }
   }, [refreshActiveData]);
+
+  const currentUserId = myUserId || overview?.current_user_balance?.user_id || null;
+
+  const visibleExpenses = useMemo(() => {
+    if (!paidByFilter) return expenses;
+    return expenses.filter((e) => e.paid_by === paidByFilter);
+  }, [expenses, paidByFilter]);
 
   const currentBalance = overview?.current_user_balance || null;
   const visibleDebts: Debt[] = tab === 'Overview'
@@ -406,7 +422,15 @@ export default function GroupDetailsScreen() {
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>Group unavailable</Text>
         </View>
-      </SafeAreaView>
+        <PaidByPickerModal
+        visible={showPaidByModal}
+        onClose={() => setShowPaidByModal(false)}
+        members={members}
+        currentUserId={currentUserId}
+        selectedMemberId={paidByFilter}
+        onSelectMember={(memberId) => setPaidByFilter(memberId)}
+      />
+    </SafeAreaView>
     );
   }
 
@@ -730,11 +754,65 @@ export default function GroupDetailsScreen() {
               <>
                 <View style={styles.sectionHeader}><View><Text style={styles.sectionTitle}>Expenses</Text><Text style={styles.sectionSubtitle}>Group or personal expenses</Text></View></View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-                  {(['all', 'mine'] as const).map((scope) => (
-                    <Pressable key={scope} style={[styles.filterChip, expenseScope === scope && styles.filterChipActive]} onPress={() => setExpenseScope(scope)}>
-                      <Text style={[styles.filterChipText, expenseScope === scope && styles.filterChipTextActive]}>{scope === 'all' ? 'All group' : 'Mine'}</Text>
-                    </Pressable>
-                  ))}
+                  <Pressable
+                    style={[styles.filterChip, expenseScope === 'all' && !paidByFilter && styles.filterChipActive]}
+                    onPress={() => {
+                      setExpenseScope('all');
+                      setPaidByFilter(null);
+                    }}
+                  >
+                    <Text style={[styles.filterChipText, expenseScope === 'all' && !paidByFilter && styles.filterChipTextActive]}>
+                      All group
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.filterChip, expenseScope === 'mine' && !paidByFilter && styles.filterChipActive]}
+                    onPress={() => {
+                      setExpenseScope('mine');
+                      setPaidByFilter(null);
+                    }}
+                  >
+                    <Text style={[styles.filterChipText, expenseScope === 'mine' && !paidByFilter && styles.filterChipTextActive]}>
+                      Mine
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[
+                      styles.filterChip,
+                      Boolean(paidByFilter) && styles.filterChipActive,
+                    ]}
+                    onPress={() => setShowPaidByModal(true)}
+                  >
+                    <Ionicons
+                      name="wallet-outline"
+                      size={13}
+                      color={Boolean(paidByFilter) ? '#FFFFFF' : '#94A3B8'}
+                    />
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        Boolean(paidByFilter) && styles.filterChipTextActive,
+                      ]}
+                    >
+                      {paidByFilter
+                        ? ` Paid by: ${paidByFilter === currentUserId ? 'You' : (memberMap.get(paidByFilter) || 'Member')} ▾`
+                        : ' Paid by ▾'}
+                    </Text>
+                    {Boolean(paidByFilter) && (
+                      <Pressable
+                        hitSlop={8}
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          setPaidByFilter(null);
+                        }}
+                        style={{ marginLeft: 6 }}
+                      >
+                        <Ionicons name="close-circle" size={14} color="#FFFFFF" />
+                      </Pressable>
+                    )}
+                  </Pressable>
                 </ScrollView>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
                   <Pressable style={[styles.filterChip, expenseCategory === 'All' && styles.filterChipActive]} onPress={() => setExpenseCategory('All')}>
@@ -747,9 +825,21 @@ export default function GroupDetailsScreen() {
                     </Pressable>
                   ))}
                 </ScrollView>
-                {expenses.length === 0 ? (
-                  <View style={styles.emptyCard}><Ionicons name="receipt-outline" size={30} color="#64748B" /><Text style={styles.emptyCardTitle}>No expenses yet</Text></View>
-                ) : expenses.map((expense) => <ExpenseCard key={expense.id} expense={expense} currency={currency} />)}
+                {visibleExpenses.length === 0 ? (
+                  <View style={styles.emptyCard}><Ionicons name="receipt-outline" size={30} color="#64748B" /><Text style={styles.emptyCardTitle}>No expenses found</Text></View>
+                ) : visibleExpenses.map((expense) => {
+                  const payerName = expense.paid_by === currentUserId
+                    ? 'You'
+                    : (expense.paid_by ? memberMap.get(expense.paid_by) : null);
+                  return (
+                    <ExpenseCard
+                      key={expense.id}
+                      expense={expense}
+                      currency={currency}
+                      payerName={payerName}
+                    />
+                  );
+                })}
               </>
             )}
 

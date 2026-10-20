@@ -166,8 +166,8 @@ def patch_member_role(group_id: UUID, user_id: UUID, payload: RoleUpdate, user: 
 
 
 @router.get("/groups/{group_id}/expenses", response_model=list[ExpenseSummary])
-def expenses(group_id: UUID, limit: int | None = Query(default=None, ge=1, le=200), category: str | None = Query(default=None), scope: str = Query(default="all"), user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
-    return list_group_expenses(session, group_id, user.id, limit, category, scope)
+def expenses(group_id: UUID, limit: int | None = Query(default=None, ge=1, le=200), category: str | None = Query(default=None), scope: str = Query(default="all"), paid_by: UUID | None = Query(default=None), user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
+    return list_group_expenses(session, group_id, user.id, limit, category, scope, paid_by=paid_by)
 
 
 @router.post("/groups/{group_id}/expenses", response_model=ExpenseSummary, status_code=status.HTTP_201_CREATED)

@@ -19,11 +19,14 @@ def list_expenses(
     category: str | None = None,
     scope: str = "all",
     current_user_id: UUID | None = None,
+    paid_by: UUID | None = None,
 ) -> list[Expense]:
     statement = select(Expense).where(Expense.group_id == group_id)
 
     if category and category != "All":
         statement = statement.where(Expense.category == category)
+    if paid_by is not None:
+        statement = statement.where(Expense.paid_by == paid_by)
 
     if scope == "mine" and current_user_id is not None:
         statement = statement.where(
