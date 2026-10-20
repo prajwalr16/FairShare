@@ -20,6 +20,10 @@ export function invalidateGroupMembers(groupId: string) {
   groupMemberCache.delete(groupId);
 }
 
+export function getCachedGroupMembers(groupId: string): GroupMember[] | null {
+  return groupMemberCache.get(groupId)?.data || null;
+}
+
 export function clearGroupMemberCache() {
   groupMemberCache.clear();
   groupMemberRequests.clear();

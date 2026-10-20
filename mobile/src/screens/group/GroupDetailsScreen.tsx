@@ -25,7 +25,7 @@ import PaidByPickerModal from '../../components/PaidByPickerModal';
 import { supabase } from '../../config/supabase';
 import UniversalScrollView from '../../components/UniversalScrollView';
 import { shareGroupInvite } from '../../utils/shareInvite';
-import { addGroupMember, getGroupMembers, GroupMember, removeGroupMemberFromGroup } from '../../services/memberService';
+import { addGroupMember, getCachedGroupMembers, getGroupMembers, GroupMember, removeGroupMemberFromGroup } from '../../services/memberService';
 import {
   getCachedGroupOverview,
   getGroupHistory,
@@ -126,6 +126,7 @@ export default function GroupDetailsScreen() {
   const overviewControllerRef = useRef<AbortController | null>(null);
   const tabControllerRef = useRef<AbortController | null>(null);
   const loadedTabsRef = useRef(new Set<Tab>());
+  const membersControllerRef = useRef<AbortController | null>(null);
 
   const groupName = overview?.name || route.params?.groupName || 'Group';
   const currency = overview?.currency || 'INR';
@@ -186,10 +187,18 @@ export default function GroupDetailsScreen() {
   }, [groupId]);
 
   const loadMembers = useCallback(async (force = false) => {
-    if (!groupId || (!force && loadedTabsRef.current.has('Members'))) return;
-    tabControllerRef.current?.abort();
+    if (!groupId) return;
+
+    const cached = getCachedGroupMembers(groupId);
+    if (cached && cached.length > 0) {
+      setMembers(cached);
+    }
+
+    if (!force && loadedTabsRef.current.has('Members') && cached && cached.length > 0) return;
+
+    membersControllerRef.current?.abort();
     const controller = new AbortController();
-    tabControllerRef.current = controller;
+    membersControllerRef.current = controller;
 
     const result = await getGroupMembers(groupId, controller.signal, force);
     if (isAbortError(result.error) || controller.signal.aborted || result.error) return;
@@ -253,6 +262,7 @@ export default function GroupDetailsScreen() {
       return () => {
         overviewControllerRef.current?.abort();
         tabControllerRef.current?.abort();
+        membersControllerRef.current?.abort();
       };
     }, [groupId, loadOverview, loadTrip]),
   );
@@ -776,7 +786,12 @@ export default function GroupDetailsScreen() {
                       styles.filterChip,
                       Boolean(paidByFilter) && styles.filterChipActive,
                     ]}
-                    onPress={() => setShowPaidByModal(true)}
+                    onPress={() => {
+                      if (members.length === 0) {
+                        void loadMembers(true);
+                      }
+                      setShowPaidByModal(true);
+                    }}
                   >
                     <Ionicons
                       name="wallet-outline"

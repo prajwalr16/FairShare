@@ -228,7 +228,12 @@ export default function HistoryScreen() {
                   styles.filterChip,
                   Boolean(paidByFilter) && styles.filterChipActive,
                 ]}
-                onPress={() => setShowPaidByModal(true)}
+                onPress={() => {
+                  if (members.length === 0) {
+                    void load();
+                  }
+                  setShowPaidByModal(true);
+                }}
               >
                 <Ionicons
                   name="wallet-outline"
