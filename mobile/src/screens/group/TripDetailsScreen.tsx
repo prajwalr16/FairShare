@@ -134,7 +134,7 @@ function buildPickerMapHtml(
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-gl.css">
 <style>
-html,body,#map{height:100%;width:100%;margin:0;background:#dfe8f1;overflow:hidden;touch-action:none}
+html,body,#map{height:100%;width:100%;margin:0;background:#E8EEF4;overflow:hidden;touch-action:none}
 .marker{width:38px;height:38px;border-radius:19px;background:#00E5FF;border:3px solid #fff;box-shadow:0 3px 10px rgba(15,23,42,.35);display:flex;align-items:center;justify-content:center;color:#fff;font:900 13px system-ui,-apple-system,sans-serif}
 .maplibregl-ctrl-group{border-radius:13px;overflow:hidden}
 </style>
@@ -148,7 +148,7 @@ let currentMarker=null;
 let selected={lat:initial.latitude,lon:initial.longitude,label:initial.label||'Selected location'};
 const map=new maplibregl.Map({
  container:'map',
- style:'https://tiles.openfreemap.org/styles/dark',
+ style:'https://tiles.openfreemap.org/styles/liberty',
  center:initial.longitude!=null&&initial.latitude!=null?[initial.longitude,initial.latitude]:fallback,
  zoom:initial.longitude!=null&&initial.latitude!=null?13:4.4,
  attributionControl:false,
