@@ -67,12 +67,14 @@ export const UniversalScrollView = forwardRef<ScrollView, UniversalScrollViewPro
     const pullAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-      Animated.spring(pullAnim, {
-        toValue: refreshing ? 52 : pullDistance,
-        useNativeDriver: false,
-        friction: 8,
-      }).start();
-    }, [pullDistance, refreshing, pullAnim]);
+      if (!isDragging) {
+        Animated.spring(pullAnim, {
+          toValue: refreshing ? 52 : 0,
+          useNativeDriver: false,
+          friction: 8,
+        }).start();
+      }
+    }, [refreshing, isDragging, pullAnim]);
 
     const handleTouchStart = (e: any) => {
       if (refreshing || !onRefresh) return;
@@ -83,26 +85,42 @@ export const UniversalScrollView = forwardRef<ScrollView, UniversalScrollViewPro
 
     const handleTouchMove = (e: any) => {
       if (!isDragging || refreshing || !onRefresh) return;
-      if (scrollOffsetRef.current > 2) return;
+      const currentScrollTop =
+        scrollOffsetRef.current ||
+        (typeof window !== 'undefined'
+          ? window.scrollY || document.documentElement.scrollTop || 0
+          : 0);
+      if (currentScrollTop > 2) return;
 
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       const delta = clientY - startYRef.current;
       if (delta > 0) {
         // Apply resistance curve
-        const pull = Math.min(delta * 0.45, 90);
+        const pull = Math.min(delta * 0.48, 90);
         setPullDistance(pull);
+        pullAnim.setValue(pull);
       } else {
         setPullDistance(0);
+        pullAnim.setValue(0);
       }
     };
 
     const handleTouchEnd = () => {
       if (!isDragging) return;
       setIsDragging(false);
-      if (pullDistance >= 55 && !refreshing && onRefresh) {
-        void onRefresh();
-      }
+      const shouldRefresh = pullDistance >= 50;
       setPullDistance(0);
+
+      if (shouldRefresh && !refreshing && onRefresh) {
+        pullAnim.setValue(52);
+        void onRefresh();
+      } else {
+        Animated.spring(pullAnim, {
+          toValue: refreshing ? 52 : 0,
+          useNativeDriver: false,
+          friction: 8,
+        }).start();
+      }
     };
 
     const handleScroll = (e: any) => {
@@ -132,7 +150,7 @@ export const UniversalScrollView = forwardRef<ScrollView, UniversalScrollViewPro
             {
               height: pullAnim,
               opacity: pullAnim.interpolate({
-                inputRange: [0, 20, 52],
+                inputRange: [0, 15, 50],
                 outputRange: [0, 0.4, 1],
                 extrapolate: 'clamp',
               }),
@@ -144,7 +162,7 @@ export const UniversalScrollView = forwardRef<ScrollView, UniversalScrollViewPro
               <ActivityIndicator size="small" color={refreshTintColor} />
             ) : (
               <Ionicons
-                name={pullDistance >= 55 ? 'arrow-up' : 'arrow-down'}
+                name={pullDistance >= 50 ? 'arrow-up' : 'arrow-down'}
                 size={18}
                 color={refreshTintColor}
               />
@@ -152,7 +170,7 @@ export const UniversalScrollView = forwardRef<ScrollView, UniversalScrollViewPro
             <Text style={[styles.indicatorText, { color: refreshTintColor }]}>
               {refreshing
                 ? 'Refreshing…'
-                : pullDistance >= 55
+                : pullDistance >= 50
                 ? 'Release to refresh'
                 : 'Pull down to refresh'}
             </Text>
@@ -211,4 +229,3 @@ const styles = StyleSheet.create({
 });
 
 export default UniversalScrollView;
-
