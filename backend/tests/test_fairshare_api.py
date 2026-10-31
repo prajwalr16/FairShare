@@ -183,6 +183,10 @@ def test_balances_debts_and_settlement_lifecycle(client, seed_users):
     assert settlement_data.get('from_name') is not None
     assert settlement_data.get('to_name') is not None
 
+    overview = client.get(f'/api/v1/groups/{gid}/overview').json()
+    assert len(overview.get('recent_settlements', [])) == 1
+    assert overview['recent_settlements'][0]['id'] == sid
+
     current = client.get(f'/api/v1/groups/{gid}/balances')
     assert current.status_code == 200
 
