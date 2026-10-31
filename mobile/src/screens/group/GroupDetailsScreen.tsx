@@ -44,6 +44,9 @@ import { recordSettlement, GroupSettlement } from '../../services/settlementServ
 import { formatCurrency } from '../../utils/currency';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_ICONS, ExpenseCategory } from '../../constants/expenseCategories';
 import { getCachedTrip, getTrip, Trip } from '../../services/tripService';
+import { SettleUpModal } from '../../components/SettleUpModal';
+import { ExportStatementModal } from '../../components/ExportStatementModal';
+import { hapticSelection, hapticSuccess, hapticMedium, hapticWarning } from '../../utils/haptics';
 
 type Tab = 'Overview' | 'Journey' | 'Expenses' | 'Balances' | 'Members' | 'Activity';
 
@@ -132,6 +135,7 @@ export default function GroupDetailsScreen() {
   const [simplifyDebts, setSimplifyDebts] = useState(true);
   const [showAddMember, setShowAddMember] = useState(false);
   const [showSettle, setShowSettle] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const [settleAmount, setSettleAmount] = useState('');
   const [settleNote, setSettleNote] = useState('');
@@ -372,6 +376,7 @@ export default function GroupDetailsScreen() {
       : debts.direct;
 
   const openSettlement = (debt: Debt) => {
+    hapticMedium();
     setSelectedDebt(debt);
     setSettleAmount(Number(debt.amount).toFixed(2));
     setSettleNote('');
@@ -386,9 +391,8 @@ export default function GroupDetailsScreen() {
     setSettleNote('');
   };
 
-  const submitSettlement = async () => {
+  const submitSettlementWithValues = async (amount: number, note: string) => {
     if (!groupId || !selectedDebt) return;
-    const amount = Number(settleAmount.replace(/,/g, '').trim());
     if (!Number.isFinite(amount) || amount <= 0) {
       Alert.alert('Invalid amount', 'Enter a valid settlement amount.');
       return;
@@ -404,14 +408,17 @@ export default function GroupDetailsScreen() {
       fromUserId: selectedDebt.from_user_id,
       toUserId: selectedDebt.to_user_id,
       amount,
-      note: settleNote,
+      note,
     });
     setSettling(false);
 
     if (result.error) {
+      await hapticWarning();
       Alert.alert('Unable to record payment', result.error.message);
       return;
     }
+
+    await hapticSuccess();
 
     // Immediately push new settlement into state so Activity and Overview show it with zero delay
     if (result.data) {
@@ -649,6 +656,17 @@ export default function GroupDetailsScreen() {
               <Text style={styles.headerSubtitle}>{currency} • {role}</Text>
             </View>
             <View style={styles.headerActions}>
+              <Pressable
+                style={styles.headerButton}
+                onPress={() => {
+                  hapticSelection();
+                  setShowExportModal(true);
+                }}
+                hitSlop={10}
+                accessibilityLabel="Export Statement"
+              >
+                <Ionicons name="download-outline" size={20} color="#00E5FF" />
+              </Pressable>
               {Platform.OS === 'web' && (
                 <Pressable
                   style={[styles.headerButton, refreshing && styles.disabledButton]}
@@ -683,7 +701,10 @@ export default function GroupDetailsScreen() {
               <Pressable
                 key={item}
                 style={[styles.tab, index < items.length - 1 && styles.tabSpacing, tab === item && styles.tabActive]}
-                onPress={() => setTab(item)}
+                onPress={() => {
+                  hapticSelection();
+                  setTab(item);
+                }}
               >
                 <Ionicons name={icon} size={15} color={tab === item ? '#00E5FF' : '#94A3B8'} />
                 <Text style={[styles.tabText, tab === item && styles.tabTextActive]}>{item}</Text>
@@ -1207,25 +1228,22 @@ export default function GroupDetailsScreen() {
         onSelectMember={(memberId) => setPaidByFilter(memberId)}
       />
 
-      <Modal visible={showSettle} transparent animationType="slide" onRequestClose={closeSettlement}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.settleSheet}>
-            <View style={styles.modalHeader}>
-              <View><Text style={styles.modalTitle}>Settle Up</Text><Text style={styles.modalSubtitle}>{settlementName}</Text></View>
-              <Pressable onPress={closeSettlement} hitSlop={10}><Ionicons name="close" size={24} color="#FFFFFF" /></Pressable>
-            </View>
-            <Text style={styles.inputLabel}>Amount</Text>
-            <TextInput value={settleAmount} onChangeText={setSettleAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor="#64748B" style={styles.input} />
-            <Text style={styles.outstandingText}>Outstanding: {selectedDebt ? money(selectedDebt.amount, currency) : money(0, currency)}</Text>
-            <Text style={styles.inputLabel}>Note (optional)</Text>
-            <TextInput value={settleNote} onChangeText={setSettleNote} placeholder="UPI payment" placeholderTextColor="#64748B" style={styles.input} maxLength={200} />
-            <Pressable style={[styles.primaryButton, settling && styles.disabledButton]} onPress={submitSettlement} disabled={settling}>
-              {settling ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>Record Payment</Text>}
-            </Pressable>
-            <Pressable style={styles.cancelButton} onPress={closeSettlement}><Text style={styles.cancelButtonText}>Cancel</Text></Pressable>
-          </View>
-        </View>
-      </Modal>
+      <SettleUpModal
+        visible={showSettle}
+        onClose={closeSettlement}
+        debt={selectedDebt}
+        currency={currency}
+        submitting={settling}
+        onSubmit={submitSettlementWithValues}
+      />
+
+      <ExportStatementModal
+        visible={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        group={overview}
+        expenses={expenses}
+        settlements={settlements}
+      />
     </>
   );
 }
