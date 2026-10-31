@@ -17,6 +17,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_ICONS, ExpenseCategory } from '../../constants/expenseCategories';
+import { hapticSelection, hapticSuccess, hapticWarning } from '../../utils/haptics';
 import {
   getGroupMembers,
   GroupMember,
@@ -75,6 +76,11 @@ export default function AddExpenseScreen() {
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [saving, setSaving] = useState(false);
   const [valuesCustomized, setValuesCustomized] = useState(false);
+  const [showTaxTip, setShowTaxTip] = useState(false);
+  const [tipPercent, setTipPercent] = useState<number | null>(null);
+  const [taxPercent, setTaxPercent] = useState<number | null>(null);
+  const [receiptAttached, setReceiptAttached] = useState(false);
+  const [receiptName, setReceiptName] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,6 +166,13 @@ export default function AddExpenseScreen() {
       cancelled = true;
     };
   }, [groupId]);
+
+  const applyTaxTip = (baseAmount: number, tipPct: number | null, taxPct: number | null) => {
+    let finalAmt = baseAmount;
+    if (tipPct && tipPct > 0) finalAmt += (baseAmount * tipPct) / 100;
+    if (taxPct && taxPct > 0) finalAmt += (baseAmount * taxPct) / 100;
+    return Number(finalAmt.toFixed(2));
+  };
 
   const amount = useMemo(() => {
     const normalized = amountText.replace(/,/g, '').trim();
@@ -311,6 +324,7 @@ export default function AddExpenseScreen() {
     }
 
     if (!cleanTitle) {
+      hapticWarning();
       Alert.alert('Expense title required', 'Enter a title for this expense.');
       return;
     }
@@ -393,6 +407,7 @@ export default function AddExpenseScreen() {
       return;
     }
 
+    hapticSuccess();
     navigation.goBack();
   };
 
