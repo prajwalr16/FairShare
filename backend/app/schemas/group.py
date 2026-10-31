@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 from .balance import BalanceResponse, DebtRelationship
 from .common import APIModel
 from .expense import ExpenseSummary
+from .settlement import SettlementResponse
 
 SUPPORTED_GROUP_TYPES = {"Trip", "Home", "Friends", "Office", "Other"}
 SUPPORTED_ROLES = {"admin", "member", "viewer"}
@@ -143,6 +144,7 @@ class GroupOverview(APIModel):
     current_user_balance: BalanceResponse | None
     top_debts: list[DebtRelationship]
     recent_expenses: list[ExpenseSummary]
+    recent_settlements: list[SettlementResponse] = Field(default_factory=list)
 
 
 class GroupFinancialResponse(APIModel):

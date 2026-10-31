@@ -135,6 +135,28 @@ export default function HistoryScreen() {
     [settlements, names, normalizedQuery, range],
   );
 
+  type HistoryItem =
+    | { kind: 'expense'; id: string; timestamp: number; expense: any }
+    | { kind: 'settlement'; id: string; timestamp: number; settlement: GroupSettlement };
+
+  const timelineItems = useMemo(() => {
+    const items: HistoryItem[] = [];
+    if (filter === 'All' || filter === 'Expenses') {
+      visibleExpenses.forEach((exp) => {
+        const d = exp.expense_date || exp.created_at;
+        const ts = d ? new Date(d).getTime() : 0;
+        items.push({ kind: 'expense', id: exp.id, timestamp: Number.isNaN(ts) ? 0 : ts, expense: exp });
+      });
+    }
+    if (filter === 'All' || filter === 'Settlements') {
+      visibleSettlements.forEach((st) => {
+        const ts = st.created_at ? new Date(st.created_at).getTime() : 0;
+        items.push({ kind: 'settlement', id: st.id, timestamp: Number.isNaN(ts) ? 0 : ts, settlement: st });
+      });
+    }
+    return items.sort((a, b) => b.timestamp - a.timestamp);
+  }, [filter, visibleExpenses, visibleSettlements]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#06090F" />
@@ -306,65 +328,92 @@ export default function HistoryScreen() {
             onRefresh={handleRefresh}
             refreshTintColor="#00E5FF"
           >
-            {(filter === 'All' || filter === 'Expenses') && (
-              <>
-                <Text style={styles.sectionTitle}>Expenses</Text>
-                {visibleExpenses.length === 0 ? (
-                  <View style={styles.emptyCard}>
-                    <Text style={styles.emptyText}>No matching expenses.</Text>
-                  </View>
-                ) : (
-                  visibleExpenses.map((expense) => (
-                    <ExpenseCard key={expense.id} expense={expense} currency={currency} />
-                  ))
-                )}
-              </>
-            )}
-
-            {(filter === 'All' || filter === 'Settlements') && (
-              <>
-                <Text style={[styles.sectionTitle, { marginTop: 18 }]}>
-                  Settlements
+            {timelineItems.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>
+                  {filter === 'Expenses'
+                    ? 'No matching expenses.'
+                    : filter === 'Settlements'
+                      ? 'No matching settlements.'
+                      : 'No matching history found.'}
                 </Text>
-                {visibleSettlements.length === 0 ? (
-                  <View style={styles.emptyCard}>
-                    <Text style={styles.emptyText}>No matching settlements.</Text>
-                  </View>
-                ) : (
-                  visibleSettlements.map((settlement) => (
-                    <Pressable
-                      key={settlement.id}
-                      style={styles.settlementCard}
-                      onPress={() =>
-                        navigation.navigate('SettlementDetails', {
-                          groupId,
-                          settlementId: settlement.id,
-                        })
-                      }
-                    >
-                      <View style={styles.settlementIcon}>
-                        <Ionicons
-                          name="swap-horizontal-outline"
-                          size={19}
-                          color="#00E5FF"
-                        />
-                      </View>
-                      <View style={styles.flexOne}>
+              </View>
+            ) : (
+              timelineItems.map((item) => {
+                if (item.kind === 'expense') {
+                  const expense = item.expense;
+                  const payerName = expense.paid_by === myUserId
+                    ? 'You'
+                    : (expense.paid_by ? names.get(expense.paid_by) : null);
+                  return (
+                    <ExpenseCard
+                      key={`expense-${expense.id}`}
+                      expense={expense}
+                      currency={currency}
+                      payerName={payerName}
+                    />
+                  );
+                }
+                const settlement = item.settlement;
+                const isPayer = settlement.from_user_id === myUserId;
+                const isRecipient = settlement.to_user_id === myUserId;
+                const rawFromName = names.get(settlement.from_user_id) || 'Member';
+                const rawToName = names.get(settlement.to_user_id) || 'Member';
+
+                let title = `${rawFromName} paid ${rawToName}`;
+                if (isPayer && isRecipient) {
+                  title = 'Self payment';
+                } else if (isPayer) {
+                  title = `You paid ${rawToName}`;
+                } else if (isRecipient) {
+                  title = `${rawFromName} paid you`;
+                }
+
+                return (
+                  <Pressable
+                    key={`settlement-${settlement.id}`}
+                    style={styles.settlementCard}
+                    onPress={() =>
+                      navigation.navigate('SettlementDetails', {
+                        groupId,
+                        settlementId: settlement.id,
+                      })
+                    }
+                  >
+                    <View style={styles.settlementIcon}>
+                      <Ionicons
+                        name="swap-horizontal"
+                        size={19}
+                        color="#10B981"
+                      />
+                    </View>
+                    <View style={styles.flexOne}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Text style={styles.settlementTitle}>
-                          {names.get(settlement.from_user_id) || 'Member'} paid{' '}
-                          {names.get(settlement.to_user_id) || 'Member'}
+                          {title}
                         </Text>
-                        <Text style={styles.settlementMeta}>
-                          {settlement.note || 'Settlement'}
-                        </Text>
+                        <View style={{
+                          backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                          paddingHorizontal: 6,
+                          paddingVertical: 1,
+                          borderRadius: 5,
+                          marginLeft: 6,
+                          borderWidth: 1,
+                          borderColor: 'rgba(16, 185, 129, 0.3)',
+                        }}>
+                          <Text style={{ color: '#10B981', fontSize: 9, fontWeight: '900' }}>SETTLED</Text>
+                        </View>
                       </View>
-                      <Text style={styles.settlementAmount}>
-                        {formatCurrency(settlement.amount, currency)}
+                      <Text style={styles.settlementMeta}>
+                        {settlement.note || 'Settlement'}
                       </Text>
-                    </Pressable>
-                  ))
-                )}
-              </>
+                    </View>
+                    <Text style={[styles.settlementAmount, { color: isRecipient ? '#10B981' : '#FFFFFF' }]}>
+                      {isRecipient ? `+${formatCurrency(settlement.amount, currency)}` : formatCurrency(settlement.amount, currency)}
+                    </Text>
+                  </Pressable>
+                );
+              })
             )}
 
             <View style={{ height: 40 }} />

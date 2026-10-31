@@ -91,6 +91,22 @@ function isAbortError(error: any) {
   return error?.name === 'AbortError';
 }
 
+function formatActivityDate(value?: string | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (isToday) return `Today, ${timeStr}`;
+  if (isYesterday) return `Yesterday, ${timeStr}`;
+  return `${date.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${timeStr}`;
+}
+
 export default function GroupDetailsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -124,9 +140,12 @@ export default function GroupDetailsScreen() {
   const [myUserId, setMyUserId] = useState<string | null>(null);
 
   const overviewControllerRef = useRef<AbortController | null>(null);
-  const tabControllerRef = useRef<AbortController | null>(null);
+  const expensesControllerRef = useRef<AbortController | null>(null);
+  const financialControllerRef = useRef<AbortController | null>(null);
+  const activityControllerRef = useRef<AbortController | null>(null);
   const loadedTabsRef = useRef(new Set<Tab>());
   const membersControllerRef = useRef<AbortController | null>(null);
+  const [activityFilter, setActivityFilter] = useState<'All' | 'Expenses' | 'Settlements'>('All');
 
   const groupName = overview?.name || route.params?.groupName || 'Group';
   const currency = overview?.currency || 'INR';
@@ -163,9 +182,9 @@ export default function GroupDetailsScreen() {
 
   const loadExpenses = useCallback(async (force = false) => {
     if (!groupId || (!force && loadedTabsRef.current.has('Expenses'))) return;
-    tabControllerRef.current?.abort();
+    expensesControllerRef.current?.abort();
     const controller = new AbortController();
-    tabControllerRef.current = controller;
+    expensesControllerRef.current = controller;
 
     const result = await getGroupExpenses(groupId, 200, expenseCategory, expenseScope, paidByFilter, controller.signal);
     if (isAbortError(result.error) || controller.signal.aborted || result.error) return;
@@ -175,9 +194,9 @@ export default function GroupDetailsScreen() {
 
   const loadFinancial = useCallback(async (force = false) => {
     if (!groupId || (!force && loadedTabsRef.current.has('Balances'))) return;
-    tabControllerRef.current?.abort();
+    financialControllerRef.current?.abort();
     const controller = new AbortController();
-    tabControllerRef.current = controller;
+    financialControllerRef.current = controller;
 
     const result = await getGroupFinancialSummary(groupId, controller.signal);
     if (isAbortError(result.error) || controller.signal.aborted || !result.data) return;
@@ -230,9 +249,9 @@ export default function GroupDetailsScreen() {
 
   const loadActivity = useCallback(async (force = false) => {
     if (!groupId || (!force && loadedTabsRef.current.has('Activity'))) return;
-    tabControllerRef.current?.abort();
+    activityControllerRef.current?.abort();
     const controller = new AbortController();
-    tabControllerRef.current = controller;
+    activityControllerRef.current = controller;
 
     const result = await getGroupHistory(groupId, 100, controller.signal);
     if (isAbortError(result.error) || controller.signal.aborted || !result.data) return;
@@ -248,23 +267,29 @@ export default function GroupDetailsScreen() {
         return;
       }
 
-      if (getCachedGroupOverview(groupId)) {
-        loadOverview(true);
-      } else {
-        loadOverview(false);
-      }
+      loadOverview(true);
       void loadTrip(false);
       void loadMembers(false);
+
+      // Invalidate tabs cache so subsequent tab navigation fetches fresh data
+      loadedTabsRef.current.clear();
+
+      if (tab === 'Expenses') void loadExpenses(true);
+      else if (tab === 'Balances') void loadFinancial(true);
+      else if (tab === 'Activity') void loadActivity(true);
+
       supabase.auth.getSession().then(({ data }) => {
         if (data.session?.user?.id) setMyUserId(data.session.user.id);
       });
 
       return () => {
         overviewControllerRef.current?.abort();
-        tabControllerRef.current?.abort();
+        expensesControllerRef.current?.abort();
+        financialControllerRef.current?.abort();
+        activityControllerRef.current?.abort();
         membersControllerRef.current?.abort();
       };
-    }, [groupId, loadOverview, loadTrip]),
+    }, [groupId, loadOverview, loadTrip, tab, loadExpenses, loadFinancial, loadActivity]),
   );
 
   useEffect(() => {
@@ -373,8 +398,30 @@ export default function GroupDetailsScreen() {
       return;
     }
 
+    // Immediately push new settlement into state so Activity and Overview show it with zero delay
+    if (result.data) {
+      const newSt: GroupSettlement = {
+        ...result.data,
+        from_name: result.data.from_name || selectedDebt.from_name || memberMap.get(selectedDebt.from_user_id) || 'Member',
+        to_name: result.data.to_name || selectedDebt.to_name || memberMap.get(selectedDebt.to_user_id) || 'Member',
+      };
+      setSettlements((prev) => [newSt, ...prev.filter((s) => s.id !== newSt.id)]);
+    }
+
     closeSettlement();
-    await refreshActiveData();
+
+    // Clear tabs cache so navigating to Balances or Activity fetches fresh state
+    loadedTabsRef.current.delete('Activity');
+    loadedTabsRef.current.delete('Balances');
+    loadedTabsRef.current.delete('Expenses');
+
+    // Invalidate group overview cache and refresh active overview and history in parallel
+    invalidateGroupOverview(groupId);
+    await Promise.all([
+      loadOverview(true),
+      loadFinancial(true),
+      loadActivity(true),
+    ]);
   };
 
   const handleAddMember = async (email: string) => {
@@ -425,6 +472,142 @@ export default function GroupDetailsScreen() {
     () => selectedDebt ? `${selectedDebt.from_name} → ${selectedDebt.to_name}` : '',
     [selectedDebt],
   );
+
+  type ActivityTimelineItem =
+    | { kind: 'expense'; id: string; timestamp: number; dateStr: string; expense: any }
+    | { kind: 'settlement'; id: string; timestamp: number; dateStr: string; settlement: GroupSettlement };
+
+  const activityTimeline = useMemo(() => {
+    const items: ActivityTimelineItem[] = [];
+
+    if (activityFilter === 'All' || activityFilter === 'Expenses') {
+      activityExpenses.forEach((exp) => {
+        const dateVal = exp.expense_date || exp.created_at;
+        const ts = dateVal ? new Date(dateVal).getTime() : 0;
+        items.push({
+          kind: 'expense',
+          id: exp.id,
+          timestamp: Number.isNaN(ts) ? 0 : ts,
+          dateStr: dateVal || '',
+          expense: exp,
+        });
+      });
+    }
+
+    if (activityFilter === 'All' || activityFilter === 'Settlements') {
+      settlements.forEach((st) => {
+        const ts = st.created_at ? new Date(st.created_at).getTime() : 0;
+        items.push({
+          kind: 'settlement',
+          id: st.id,
+          timestamp: Number.isNaN(ts) ? 0 : ts,
+          dateStr: st.created_at || '',
+          settlement: st,
+        });
+      });
+    }
+
+    return items.sort((a, b) => b.timestamp - a.timestamp);
+  }, [activityExpenses, settlements, activityFilter]);
+
+  const overviewRecentActivity = useMemo(() => {
+    const items: ActivityTimelineItem[] = [];
+
+    (overview?.recent_expenses || []).forEach((exp) => {
+      const dateVal = exp.expense_date || exp.created_at;
+      const ts = dateVal ? new Date(dateVal).getTime() : 0;
+      items.push({
+        kind: 'expense',
+        id: exp.id,
+        timestamp: Number.isNaN(ts) ? 0 : ts,
+        dateStr: dateVal || '',
+        expense: exp,
+      });
+    });
+
+    const recentSts = (overview?.recent_settlements && overview.recent_settlements.length > 0)
+      ? overview.recent_settlements
+      : settlements;
+
+    recentSts.forEach((st) => {
+      const ts = st.created_at ? new Date(st.created_at).getTime() : 0;
+      items.push({
+        kind: 'settlement',
+        id: st.id,
+        timestamp: Number.isNaN(ts) ? 0 : ts,
+        dateStr: st.created_at || '',
+        settlement: st as GroupSettlement,
+      });
+    });
+
+    return items.sort((a, b) => b.timestamp - a.timestamp).slice(0, 5);
+  }, [overview?.recent_expenses, overview?.recent_settlements, settlements]);
+
+  const renderSettlementCard = (settlement: GroupSettlement, keyPrefix = 'st') => {
+    const isPayer = settlement.from_user_id === currentUserId;
+    const isRecipient = settlement.to_user_id === currentUserId;
+
+    const rawFromName = settlement.from_name || memberMap.get(settlement.from_user_id) || 'Member';
+    const rawToName = settlement.to_name || memberMap.get(settlement.to_user_id) || 'Member';
+
+    let title = `${rawFromName} paid ${rawToName}`;
+    if (isPayer && isRecipient) {
+      title = 'Self payment';
+    } else if (isPayer) {
+      title = `You paid ${rawToName}`;
+    } else if (isRecipient) {
+      title = `${rawFromName} paid you`;
+    }
+
+    const dateLabel = formatActivityDate(settlement.created_at);
+
+    return (
+      <Pressable
+        key={`${keyPrefix}-${settlement.id}`}
+        style={styles.settlementTimelineCard}
+        onPress={() =>
+          navigation.navigate('SettlementDetails', {
+            groupId,
+            settlementId: settlement.id,
+          })
+        }
+      >
+        <View style={styles.settlementIconBox}>
+          <Ionicons name="swap-horizontal" size={20} color="#10B981" />
+        </View>
+        <View style={styles.flexOne}>
+          <View style={styles.settlementHeaderRow}>
+            <Text style={styles.settlementTitle} numberOfLines={1}>
+              {title}
+            </Text>
+            <View style={styles.settlementBadge}>
+              <Text style={styles.settlementBadgeText}>SETTLED</Text>
+            </View>
+          </View>
+          <View style={styles.settlementMetaRow}>
+            <Text style={styles.settlementDate}>{dateLabel}</Text>
+            {Boolean(settlement.note) && (
+              <Text style={styles.settlementNote} numberOfLines={1}>
+                {' '}• {settlement.note}
+              </Text>
+            )}
+          </View>
+        </View>
+        <View style={styles.settlementAmountBox}>
+          <Text
+            style={[
+              styles.settlementAmount,
+              isRecipient && styles.settlementAmountPositive,
+              isPayer && styles.settlementAmountNegative,
+            ]}
+          >
+            {isRecipient ? `+${money(settlement.amount, currency)}` : money(settlement.amount, currency)}
+          </Text>
+          <Ionicons name="chevron-forward" size={13} color="#64748B" style={{ alignSelf: 'flex-end', marginTop: 3 }} />
+        </View>
+      </Pressable>
+    );
+  };
 
   if (!groupId) {
     return (
@@ -727,29 +910,39 @@ export default function GroupDetailsScreen() {
 
                 <View style={styles.sectionHeader}>
                   <View>
-                    <Text style={styles.sectionTitle}>Recent expenses</Text>
-                    <Text style={styles.sectionSubtitle}>Latest activity in this group</Text>
+                    <Text style={styles.sectionTitle}>Recent activity</Text>
+                    <Text style={styles.sectionSubtitle}>Latest in this group</Text>
                   </View>
-                  <Pressable onPress={() => setTab('Expenses')}><Text style={styles.linkText}>View all</Text></Pressable>
+                  <Pressable onPress={() => setTab('Activity')}><Text style={styles.linkText}>View all activity</Text></Pressable>
                 </View>
 
                 {!overview ? (
                   <View style={styles.emptyCard}>
                     <ActivityIndicator size="small" color="#00E5FF" />
-                    <Text style={styles.emptyCardTitle}>Loading recent expenses…</Text>
+                    <Text style={styles.emptyCardTitle}>Loading recent activity…</Text>
                   </View>
-                ) : overview.recent_expenses.length === 0 ? (
+                ) : overviewRecentActivity.length === 0 ? (
                   <View style={styles.emptyCard}>
                     <Ionicons name="receipt-outline" size={28} color="#64748B" />
-                    <Text style={styles.emptyCardTitle}>No expenses yet</Text>
+                    <Text style={styles.emptyCardTitle}>No activity yet</Text>
                   </View>
-                ) : overview.recent_expenses.map((expense) => (
-                  <ExpenseCard
-                    key={expense.id}
-                    expense={{ ...expense, category: expense.category as ExpenseCategory }}
-                    currency={currency}
-                  />
-                ))}
+                ) : overviewRecentActivity.map((item) => {
+                  if (item.kind === 'expense') {
+                    const expense = item.expense;
+                    const payerName = expense.paid_by === currentUserId
+                      ? 'You'
+                      : (expense.paid_by ? memberMap.get(expense.paid_by) : null);
+                    return (
+                      <ExpenseCard
+                        key={`overview-expense-${expense.id}`}
+                        expense={{ ...expense, category: expense.category as ExpenseCategory }}
+                        currency={currency}
+                        payerName={payerName}
+                      />
+                    );
+                  }
+                  return renderSettlementCard(item.settlement, 'overview-st');
+                })}
               </>
             )}
 
@@ -915,26 +1108,59 @@ export default function GroupDetailsScreen() {
 
             {tab === 'Activity' && (
               <>
-                <View style={styles.sectionHeader}><View><Text style={styles.sectionTitle}>Activity</Text><Text style={styles.sectionSubtitle}>Expenses and settlements</Text></View></View>
-                {activityExpenses.length === 0 && settlements.length === 0 ? (
-                  <View style={styles.emptyCard}><Ionicons name="time-outline" size={30} color="#64748B" /><Text style={styles.emptyCardTitle}>No activity yet</Text></View>
-                ) : <>
-                  {activityExpenses.map((expense) => <ExpenseCard key={`expense-${expense.id}`} expense={expense} currency={currency} />)}
-                  {settlements.map((settlement) => {
-                    const fromName = settlement.from_name || memberMap.get(settlement.from_user_id) || 'Member';
-                    const toName = settlement.to_name || memberMap.get(settlement.to_user_id) || 'Member';
+                <View style={styles.sectionHeader}>
+                  <View>
+                    <Text style={styles.sectionTitle}>Activity</Text>
+                    <Text style={styles.sectionSubtitle}>Expenses and settlements</Text>
+                  </View>
+                </View>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+                  {(['All', 'Expenses', 'Settlements'] as Array<'All' | 'Expenses' | 'Settlements'>).map((item) => {
+                    const count = item === 'All'
+                      ? activityExpenses.length + settlements.length
+                      : item === 'Expenses'
+                        ? activityExpenses.length
+                        : settlements.length;
+                    const active = activityFilter === item;
                     return (
-                      <View key={`settlement-${settlement.id}`} style={styles.activityCard}>
-                        <View style={styles.activityIcon}><Ionicons name="swap-horizontal-outline" size={20} color="#00E5FF" /></View>
-                        <View style={styles.flexOne}>
-                          <Text style={styles.activityTitle}>{fromName} paid {toName}</Text>
-                          <Text style={styles.activityMeta}>{settlement.note || 'Settlement'}</Text>
-                        </View>
-                        <Text style={styles.activityAmount}>{money(settlement.amount, currency)}</Text>
-                      </View>
+                      <Pressable
+                        key={item}
+                        style={[styles.filterChip, active && styles.filterChipActive]}
+                        onPress={() => setActivityFilter(item)}
+                      >
+                        <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                          {item} ({count})
+                        </Text>
+                      </Pressable>
                     );
                   })}
-                </>}
+                </ScrollView>
+
+                {activityTimeline.length === 0 ? (
+                  <View style={styles.emptyCard}>
+                    <Ionicons name="time-outline" size={30} color="#64748B" />
+                    <Text style={styles.emptyCardTitle}>No activity yet</Text>
+                  </View>
+                ) : (
+                  activityTimeline.map((item) => {
+                    if (item.kind === 'expense') {
+                      const expense = item.expense;
+                      const payerName = expense.paid_by === currentUserId
+                        ? 'You'
+                        : (expense.paid_by ? memberMap.get(expense.paid_by) : null);
+                      return (
+                        <ExpenseCard
+                          key={`expense-${expense.id}`}
+                          expense={expense}
+                          currency={currency}
+                          payerName={payerName}
+                        />
+                      );
+                    }
+                    return renderSettlementCard(item.settlement, 'activity-st');
+                  })
+                )}
               </>
             )}
           </UniversalScrollView>
@@ -1049,6 +1275,85 @@ const styles = StyleSheet.create({
   shareLinkButtonText: { color: '#00E5FF', fontWeight: '800', fontSize: 12 },
   addButton: { backgroundColor: '#00E5FF', borderRadius: 12, paddingHorizontal: 11, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 5 },
   addButtonText: { color: '#06090F', fontWeight: '900', fontSize: 12 },
+  settlementTimelineCard: {
+    backgroundColor: '#0E1524',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.22)',
+  },
+  settlementIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.28)',
+  },
+  settlementHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 6,
+  },
+  settlementTitle: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14,
+    flex: 1,
+  },
+  settlementBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    marginLeft: 6,
+  },
+  settlementBadgeText: {
+    color: '#10B981',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  settlementMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
+  settlementDate: {
+    color: '#94A3B8',
+    fontSize: 11,
+  },
+  settlementNote: {
+    color: '#64748B',
+    fontSize: 11,
+    flexShrink: 1,
+  },
+  settlementAmountBox: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
+  settlementAmount: {
+    color: '#10B981',
+    fontWeight: '900',
+    fontSize: 15,
+  },
+  settlementAmountPositive: {
+    color: '#10B981',
+  },
+  settlementAmountNegative: {
+    color: '#E2E8F0',
+  },
   activityCard: { backgroundColor: '#0E1524', borderRadius: 16, padding: 15, marginBottom: 10, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
   activityIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
   activityTitle: { color: '#FFFFFF', fontWeight: '800' },

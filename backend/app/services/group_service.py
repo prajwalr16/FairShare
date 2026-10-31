@@ -248,17 +248,44 @@ def _postgres_group_overview(session: Session, group_id: UUID, user_id: UUID) ->
             FROM balances b
             CROSS JOIN public.groups g
             WHERE g.id = :group_id
+        ),
+        recent_settlements AS (
+            SELECT COALESCE(jsonb_agg(
+                jsonb_build_object(
+                    'id', s.id,
+                    'group_id', s.group_id,
+                    'from_user_id', s.from_user_id,
+                    'to_user_id', s.to_user_id,
+                    'amount', s.amount,
+                    'note', s.note,
+                    'created_by', s.created_by,
+                    'created_at', s.created_at,
+                    'updated_at', s.updated_at,
+                    'from_name', COALESCE(uf.full_name, uf.email, 'Member'),
+                    'to_name', COALESCE(ut.full_name, ut.email, 'Member')
+                ) ORDER BY s.created_at DESC
+            ), '[]'::jsonb) AS data
+            FROM (
+                SELECT * FROM public.settlements
+                WHERE group_id = :group_id
+                ORDER BY created_at DESC
+                LIMIT 5
+            ) s
+            LEFT JOIN public.users uf ON uf.id = s.from_user_id
+            LEFT JOIN public.users ut ON ut.id = s.to_user_id
         )
         SELECT
             g.id, g.owner_id, g.name, g.type, g.currency, g.description, g.created_at,
             CASE WHEN g.owner_id = CAST(:user_id AS uuid) THEN 'owner' ELSE gm.role END AS role,
             bj.data AS balances,
-            re.data AS recent_expenses
+            re.data AS recent_expenses,
+            rs.data AS recent_settlements
         FROM public.groups g
         LEFT JOIN public.group_members gm
           ON gm.group_id = g.id AND gm.user_id = CAST(:user_id AS uuid) AND gm.status = 'active'
         CROSS JOIN balance_json bj
         CROSS JOIN recent_expenses re
+        CROSS JOIN recent_settlements rs
         WHERE g.id = :group_id
           AND (g.owner_id = CAST(:user_id AS uuid) OR gm.id IS NOT NULL)
         """
@@ -269,10 +296,13 @@ def _postgres_group_overview(session: Session, group_id: UUID, user_id: UUID) ->
 
     raw_balances = row["balances"]
     raw_recent = row["recent_expenses"]
+    raw_settlements = row["recent_settlements"]
     if isinstance(raw_balances, str):
         raw_balances = json.loads(raw_balances)
     if isinstance(raw_recent, str):
         raw_recent = json.loads(raw_recent)
+    if isinstance(raw_settlements, str):
+        raw_settlements = json.loads(raw_settlements)
 
     balances: list[dict] = []
     for item in raw_balances or []:
@@ -300,6 +330,7 @@ def _postgres_group_overview(session: Session, group_id: UUID, user_id: UUID) ->
         "current_user_balance": next((b for b in balances if b["user_id"] == str(user_id)), None),
         "top_debts": simplified[:3],
         "recent_expenses": raw_recent or [],
+        "recent_settlements": raw_settlements or [],
     }
 
 
@@ -316,11 +347,13 @@ def get_overview(session: Session, group_id: UUID, user_id: UUID) -> dict:
     financial = compute_group_overview_financial(session, group_id, user_id)
     current = next((b for b in financial["balances"] if b["user_id"] == user_id), None)
     from ..repositories.expense_repository import list_expenses
+    from ..repositories.settlement_repository import list_settlements
     return {
         "id": group.id, "owner_id": group.owner_id, "name": group.name, "type": group.type,
         "currency": group.currency, "description": group.description, "created_at": group.created_at,
         "is_owner": group.owner_id == user_id, "role": role, "current_user_balance": current,
         "top_debts": financial["simplified"][:3], "recent_expenses": list_expenses(session, group_id, limit=5),
+        "recent_settlements": list_settlements(session, group_id, limit=5),
     }
 
 

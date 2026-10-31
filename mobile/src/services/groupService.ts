@@ -87,6 +87,7 @@ export type GroupOverview = {
   current_user_balance: GroupBalance | null;
   top_debts: GroupDebt[];
   recent_expenses: GroupOverviewExpense[];
+  recent_settlements?: GroupHistorySettlement[];
 };
 
 export type GroupHistorySettlement = {
