@@ -2,9 +2,9 @@ name: FairShare CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 jobs:
   backend-postgres: 
@@ -63,7 +63,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pytest -q
 
-  mobile-static:
+  mobile-ci:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -77,3 +77,10 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
       - run: npx tsc --noEmit
+      - run: npm test
+      - name: Expo Web Bundle Export
+        run: npx expo export --platform web
+        env:
+          EXPO_PUBLIC_API_URL: https://api.fairshare.test
+          EXPO_PUBLIC_SUPABASE_URL: https://test.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-key
