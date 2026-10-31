@@ -1,5 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiRequest } from './apiClient';
+import {
+  CacheKeys,
+  getInMemoryCache,
+  getPersistentCache,
+  removePersistentCache,
+  setInMemoryCache,
+  setPersistentCache,
+} from './offlineStorage';
 import { supabase } from '../config/supabase';
 
 export type GroupRole = 'owner' | 'admin' | 'member' | 'viewer';
@@ -116,13 +124,14 @@ const groupOverviewRequests = new Map<string, Promise<{ data: GroupOverview | nu
 const groupSettingsCache = new Map<string, GroupSettings>();
 const groupsRequest: { promise: Promise<{ data: GroupSummary[] | null; error: any }> | null } = { promise: null };
 
-export function getCachedGroupOverview(groupId: string) {
-  return groupOverviewCache.get(groupId) || null;
+export function getCachedGroupOverview(groupId: string): GroupOverview | null {
+  return getInMemoryCache<GroupOverview>(CacheKeys.groupOverview(groupId)) || groupOverviewCache.get(groupId) || null;
 }
 
 export function invalidateGroupOverview(groupId: string) {
   groupOverviewCache.delete(groupId);
   groupSettingsCache.delete(groupId);
+  void removePersistentCache(CacheKeys.groupOverview(groupId));
 }
 
 export function clearGroupOverviewCache() {
@@ -131,10 +140,13 @@ export function clearGroupOverviewCache() {
 }
 
 export async function getGroupOverview(groupId: string, signal?: AbortSignal) {
-  const cached = groupOverviewCache.get(groupId);
-  if (cached && !signal) {
-    return { data: cached, error: null };
+  const inMemory = getCachedGroupOverview(groupId);
+  if (inMemory && !signal) {
+    return { data: inMemory, error: null };
   }
+
+  // Check persistent cache for instant offline hydration
+  const persistentCached = await getPersistentCache<GroupOverview>(CacheKeys.groupOverview(groupId));
 
   const inFlight = groupOverviewRequests.get(groupId);
   if (inFlight) return inFlight;
@@ -144,8 +156,14 @@ export async function getGroupOverview(groupId: string, signal?: AbortSignal) {
       const data = await apiRequest<GroupOverview>(`/groups/${groupId}/overview`, { signal });
       groupOverviewCache.set(groupId, data);
       groupSettingsCache.set(groupId, data);
+      void setPersistentCache(CacheKeys.groupOverview(groupId), data);
       return { data, error: null };
     } catch (error: any) {
+      // If network fails (e.g. offline), fallback to persistent cached data
+      if (persistentCached) {
+        groupOverviewCache.set(groupId, persistentCached);
+        return { data: persistentCached, error: null };
+      }
       return { data: null, error };
     }
   })();
@@ -313,8 +331,13 @@ export async function updateGroupMemberRole(input: { groupId: string; userId: st
 export async function getGroupHistory(groupId: string, limit = 100, signal?: AbortSignal) {
   try {
     const data = await apiRequest<GroupHistory>(`/groups/${groupId}/history?limit=${limit}`, { signal });
+    void setPersistentCache(CacheKeys.groupHistory(groupId), data);
     return { data, error: null };
   } catch (error: any) {
+    const cached = await getPersistentCache<GroupHistory>(CacheKeys.groupHistory(groupId));
+    if (cached) {
+      return { data: cached, error: null };
+    }
     return { data: null, error };
   }
 }

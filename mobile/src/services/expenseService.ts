@@ -1,4 +1,7 @@
 import { apiRequest } from './apiClient';
+import { broadcastGroupMutation } from './realtimeService';
+import { enqueueOfflineMutation, isDeviceOnline } from './offlineQueue';
+import { CacheKeys, getPersistentCache, setPersistentCache } from './offlineStorage';
 import { invalidateGroupOverview, clearGroupOverviewCache } from './groupService';
 import { ExpenseCategory } from '../constants/expenseCategories';
 import { CalculatedSplit, SplitInput, SplitType } from '../utils/expenseCalculation';
@@ -92,29 +95,100 @@ function locationPayload(input: ExpenseLocationInput) {
 }
 
 export async function createExpense(input: CreateExpenseInput) {
+  const body = {
+    title: input.title.trim(),
+    amount: Number(input.amount.toFixed(2)),
+    paid_by: input.paidBy,
+    split_type: input.splitType,
+    category: input.category,
+    splits: input.splits.map((split) => ({
+      user_id: split.userId,
+      value: split.value,
+    })),
+    expense_date: input.expenseDate || undefined,
+    ...locationPayload(input),
+  };
+
+  // If device is offline, enqueue immediately and return optimistic expense
+  if (!isDeviceOnline()) {
+    const optimistic: ExpenseDetailsRecord = {
+      id: `offline-exp-${Date.now()}`,
+      group_id: input.groupId,
+      title: input.title.trim(),
+      amount: input.amount,
+      split_type: input.splitType,
+      category: input.category,
+      paid_by: input.paidBy,
+      location_name: input.locationName?.trim() || null,
+      journey_stop_id: input.journeyStopId || null,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
+      created_at: new Date().toISOString(),
+      expense_date: input.expenseDate || new Date().toISOString(),
+    };
+
+    void enqueueOfflineMutation({
+      id: optimistic.id,
+      type: 'create_expense',
+      groupId: input.groupId,
+      endpoint: `/groups/${input.groupId}/expenses`,
+      method: 'POST',
+      body,
+      title: input.title.trim(),
+    });
+
+    invalidateGroupOverview(input.groupId);
+    return { data: optimistic, error: null };
+  }
+
   try {
     const data = await apiRequest<ExpenseDetailsRecord>(
       `/groups/${input.groupId}/expenses`,
       {
         method: 'POST',
-        body: {
-          title: input.title.trim(),
-          amount: Number(input.amount.toFixed(2)),
-          paid_by: input.paidBy,
-          split_type: input.splitType,
-          category: input.category,
-          splits: input.splits.map((split) => ({
-            user_id: split.userId,
-            value: split.value,
-          })),
-          expense_date: input.expenseDate || undefined,
-          ...locationPayload(input),
-        },
+        body,
       },
     );
     invalidateGroupOverview(input.groupId);
+    void broadcastGroupMutation(input.groupId, 'expense');
     return { data, error: null };
   } catch (error: any) {
+    const isNetworkError =
+      error?.status === 0 ||
+      error?.name === 'TypeError' ||
+      /network|offline|failed to fetch/i.test(error?.message || '');
+
+    if (isNetworkError) {
+      const optimistic: ExpenseDetailsRecord = {
+        id: `offline-exp-${Date.now()}`,
+        group_id: input.groupId,
+        title: input.title.trim(),
+        amount: input.amount,
+        split_type: input.splitType,
+        category: input.category,
+        paid_by: input.paidBy,
+        location_name: input.locationName?.trim() || null,
+        journey_stop_id: input.journeyStopId || null,
+        latitude: input.latitude ?? null,
+        longitude: input.longitude ?? null,
+        created_at: new Date().toISOString(),
+        expense_date: input.expenseDate || new Date().toISOString(),
+      };
+
+      void enqueueOfflineMutation({
+        id: optimistic.id,
+        type: 'create_expense',
+        groupId: input.groupId,
+        endpoint: `/groups/${input.groupId}/expenses`,
+        method: 'POST',
+        body,
+        title: input.title.trim(),
+      });
+
+      invalidateGroupOverview(input.groupId);
+      return { data: optimistic, error: null };
+    }
+
     return { data: null, error };
   }
 }
@@ -219,6 +293,7 @@ export async function updateExpense(input: UpdateExpenseInput) {
 
     invalidateExpenseDetails(input.expenseId);
     invalidateGroupOverview(input.groupId);
+    void broadcastGroupMutation(input.groupId, 'expense');
     return { data, error: null };
   } catch (error: any) {
     return { data: null, error };
@@ -265,8 +340,13 @@ export async function getGroupExpenses(
       { signal },
     );
 
+    void setPersistentCache(CacheKeys.groupExpenses(groupId), data);
     return { data, error: null };
   } catch (error: any) {
+    const cached = await getPersistentCache<ExpenseDetailsRecord[]>(CacheKeys.groupExpenses(groupId));
+    if (cached) {
+      return { data: cached, error: null };
+    }
     return { data: null, error };
   }
 }
