@@ -73,3 +73,4 @@ export async function hapticError(): Promise<void> {
     // Ignore haptic failures
   }
 }
+
