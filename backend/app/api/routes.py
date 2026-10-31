@@ -3,10 +3,11 @@ from __future__ import annotations
 import inspect
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db, get_read_db
+from ..core.rate_limit import limiter
 from ..core.security import CurrentUser, ensure_user, get_current_user, set_database_user_context
 from ..repositories.settlement_repository import list_settlements
 from ..schemas.balance import BalanceResponse
@@ -145,7 +146,8 @@ def pending_invitation(group_id: UUID, user: CurrentUser = Depends(get_current_u
 
 
 @router.post("/groups/{group_id}/members/invite")
-def invite(group_id: UUID, payload: InviteMember, user=Depends(db_user), session: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+def invite(request: Request, group_id: UUID, payload: InviteMember, user=Depends(db_user), session: Session = Depends(get_db)):
     return invite_member(session, group_id, payload.email, payload.redirect_to, user)
 
 
@@ -173,7 +175,8 @@ def expenses(group_id: UUID, limit: int | None = Query(default=None, ge=1, le=20
 
 
 @router.post("/groups/{group_id}/expenses", response_model=ExpenseSummary, status_code=status.HTTP_201_CREATED)
-def create_expense_route(group_id: UUID, payload: ExpenseCreate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+def create_expense_route(request: Request, group_id: UUID, payload: ExpenseCreate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
     exp = create_expense(session, group_id, payload.title, payload.amount, payload.paid_by, payload.split_type, payload.category, payload.splits, user, payload.location_name, payload.journey_stop_id, payload.latitude, payload.longitude, payload.expense_date)
     notify_group_expense(session, group_id, exp.paid_by, user.full_name or user.email, exp.title, exp.amount)
     return exp
@@ -212,7 +215,8 @@ def settlements(group_id: UUID, limit: int | None = Query(default=None, ge=1, le
 
 
 @router.post("/groups/{group_id}/settlements", response_model=SettlementResponse, status_code=status.HTTP_201_CREATED)
-def record_settlement_route(group_id: UUID, payload: SettlementCreate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+def record_settlement_route(request: Request, group_id: UUID, payload: SettlementCreate, user: CurrentUser = Depends(write_context), session: Session = Depends(get_db)):
     st = create_settlement(session, group_id, payload.from_user_id, payload.to_user_id, payload.amount, payload.note, user.id)
     notify_settlement(session, group_id, payload.from_user_id, user.full_name or user.email, payload.to_user_id, payload.amount)
     return st
