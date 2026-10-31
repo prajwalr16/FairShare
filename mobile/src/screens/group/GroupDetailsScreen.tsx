@@ -22,6 +22,9 @@ import ExpenseCard from '../../components/ExpenseCard';
 import MemberCard from '../../components/MemberCard';
 import AddMemberModal from '../../components/AddMemberModal';
 import PaidByPickerModal from '../../components/PaidByPickerModal';
+import OfflineStatusBar from '../../components/OfflineStatusBar';
+import { subscribeToGroupRealtime } from '../../services/realtimeService';
+import { initOfflineQueue } from '../../services/offlineQueue';
 import { supabase } from '../../config/supabase';
 import UniversalScrollView from '../../components/UniversalScrollView';
 import { shareGroupInvite } from '../../utils/shareInvite';
@@ -293,6 +296,10 @@ export default function GroupDetailsScreen() {
   );
 
   useEffect(() => {
+    void initOfflineQueue();
+  }, []);
+
+  useEffect(() => {
     const initial = route.params?.initialTab as Tab | undefined;
     if (initial === 'Journey' && overview?.type === 'Trip') {
       setTab('Journey');
@@ -341,6 +348,14 @@ export default function GroupDetailsScreen() {
       setRefreshing(false);
     }
   }, [refreshActiveData]);
+
+  // Real-time synchronization: listen for remote expenses, settlements, and member changes
+  useEffect(() => {
+    if (!groupId) return;
+    return subscribeToGroupRealtime(groupId, () => {
+      void refreshActiveData();
+    });
+  }, [groupId, refreshActiveData]);
 
   const currentUserId = myUserId || overview?.current_user_balance?.user_id || null;
 
@@ -653,6 +668,8 @@ export default function GroupDetailsScreen() {
               </Pressable>
             </View>
           </View>
+
+          <OfflineStatusBar />
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} bounces={false} style={styles.tabsContainer} contentContainerStyle={styles.tabs}>
             {([

@@ -19,6 +19,8 @@ import GroupCard from '../../components/GroupCard';
 import BrandLogo from '../../components/BrandLogo';
 import CreateGroupModal from '../../components/CreateGroupModal';
 import UniversalScrollView from '../../components/UniversalScrollView';
+import OfflineStatusBar from '../../components/OfflineStatusBar';
+import { initOfflineQueue } from '../../services/offlineQueue';
 import { Theme } from '../../theme/theme';
 import { formatCurrency } from '../../utils/currency';
 import { registerPushNotificationToken } from '../../services/notificationService';
@@ -95,6 +97,7 @@ export default function HomeScreen() {
 
     // Register push notification token (free zero-cost notification setup)
     void registerPushNotificationToken();
+    void initOfflineQueue();
 
     const loadCachedGroups = async () => {
       try {
@@ -237,6 +240,8 @@ export default function HomeScreen() {
               </Pressable>
             </View>
           </View>
+
+          <OfflineStatusBar />
 
           {/* Interactive FlatList with Custom Luxury Header Component */}
           <FlatList

@@ -1,4 +1,5 @@
 import { apiRequest } from './apiClient';
+import { CacheKeys, getPersistentCache, setPersistentCache, removePersistentCache } from './offlineStorage';
 import { invalidateGroupOverview } from './groupService';
 
 export type GroupMember = {
@@ -44,8 +45,14 @@ export async function getGroupMembers(groupId: string, signal?: AbortSignal, for
     try {
       const data = await apiRequest<GroupMember[]>(`/groups/${groupId}/members`, { signal });
       groupMemberCache.set(groupId, { data, cachedAt: Date.now() });
+      void setPersistentCache(CacheKeys.groupMembers(groupId), data);
       return { data, error: null };
     } catch (error: any) {
+      const cached = await getPersistentCache<GroupMember[]>(CacheKeys.groupMembers(groupId));
+      if (cached) {
+        groupMemberCache.set(groupId, { data: cached, cachedAt: Date.now() });
+        return { data: cached, error: null };
+      }
       return { data: null, error };
     }
   })();
