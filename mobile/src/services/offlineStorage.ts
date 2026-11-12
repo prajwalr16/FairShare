@@ -101,5 +101,8 @@ export const CacheKeys = {
   groupMembers: (groupId: string) => `fairshare:cache:group_members:${groupId}`,
   groupFinancial: (groupId: string) => `fairshare:cache:group_financial:${groupId}`,
   userGroups: (userId: string) => `fairshare:groups:v2:${userId}`,
+  trip: (groupId: string) => `fairshare:cache:trip:${groupId}`,
+  tripRoute: (groupId: string, dayNumber?: number | null) =>
+    `fairshare:cache:trip_route:${groupId}:${dayNumber ?? 'all'}`,
 };
 

@@ -1,5 +1,18 @@
 import { supabase } from '../config/supabase';
-import { assertApiConfigured } from '../config/api';
+import { API_BASE_URL, assertApiConfigured } from '../config/api';
+
+export function warmUpBackend(): void {
+  try {
+    if (API_BASE_URL) {
+      void fetch(`${API_BASE_URL}/health?db=1`, { method: 'GET' }).catch(() => {});
+    }
+  } catch {
+    // Non-blocking warm-up
+  }
+}
+
+// Trigger initial warm-up ping immediately when module is loaded
+warmUpBackend();
 
 export class ApiError extends Error {
   status: number;
