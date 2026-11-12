@@ -1,0 +1,33 @@
+name: FairShare Keep-Alive Heartbeat
+
+on:
+  schedule:
+    # Runs every 2 days at 04:00 UTC (well within the 7-day Supabase inactivity pause window)
+    - cron: '0 4 */2 * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions console anytime
+
+jobs:
+  heartbeat:
+    name: Database & API Heartbeat Ping
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Backend & Supabase PostgreSQL Database
+        run: |
+          echo "Pinging FairShare backend with live database health check..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://fairshare-api-q7hd.onrender.com/api/v1/health?db=1")
+          echo "Backend & Database Response Status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "Success! Supabase PostgreSQL connection verified active. 7-day inactivity timer reset."
+          else
+            echo "::warning ::Backend returned HTTP status $HTTP_STATUS"
+          fi
+
+      - name: Optional Direct Supabase REST Ping (if secret configured)
+        if: env.SUPABASE_SECRET_KEY != ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://nxiqywosoracorsxdclc.supabase.co' }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          echo "Pinging Supabase REST API directly..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "apikey: $SUPABASE_SECRET_KEY" "$SUPABASE_URL/rest/v1/groups?select=id&limit=1")
+          echo "Supabase REST Response: $STATUS"

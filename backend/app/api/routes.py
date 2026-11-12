@@ -4,6 +4,7 @@ import inspect
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db, get_read_db
@@ -45,7 +46,10 @@ def write_context(current_user: CurrentUser = Depends(get_current_user), session
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
+def health(db: bool = False, session: Session = Depends(get_read_db)) -> dict[str, str]:
+    if db:
+        session.execute(text("SELECT 1"))
+        return {"status": "healthy", "database": "active", "app": "FairShare API"}
     return {"status": "healthy", "app": "FairShare API"}
 
 
