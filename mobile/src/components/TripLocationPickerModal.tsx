@@ -67,7 +67,11 @@ function buildPickerMapHtml(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-gl.css">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
+<link rel="dns-prefetch" href="https://tiles.openfreemap.org">
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.10.0/dist/maplibre-gl.css">
 <style>
 html,body,#map{height:100%;width:100%;margin:0;background:#E8EEF4;}
 .maplibregl-ctrl-group{border-radius:12px;overflow:hidden;}
@@ -77,7 +81,7 @@ html,body,#map{height:100%;width:100%;margin:0;background:#E8EEF4;}
 <body>
 <div id="map"></div>
 <script type="module">
-import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-gl.mjs';
+import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.10.0/dist/maplibre-gl.mjs';
 const initial = ${initial};
 const map = new maplibregl.Map({
   container:'map',
@@ -186,6 +190,8 @@ export default function TripLocationPickerModal({
     () => buildPickerMapHtml(initialLatitude ?? null, initialLongitude ?? null),
     [initialLatitude, initialLongitude, visible],
   );
+
+  const webViewSource = useMemo(() => ({ html: mapHtml }), [mapHtml]);
 
   const syncMap = (nextLatitude: number, nextLongitude: number) => {
     const message = JSON.stringify({
@@ -347,10 +353,11 @@ export default function TripLocationPickerModal({
             <View style={styles.mapCard}>
               <UniversalWebView
                 ref={webViewRef}
-                source={{ html: mapHtml }}
+                source={webViewSource}
                 originWhitelist={['*']}
                 javaScriptEnabled
                 domStorageEnabled
+                cacheEnabled
                 onMessage={handleMapMessage}
                 style={styles.map}
               />

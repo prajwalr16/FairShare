@@ -16,9 +16,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import UniversalWebView, { UniversalWebViewRef } from '../../components/UniversalWebView';
 
-import { getCachedTrip, getTrip, Trip } from '../../services/tripService';
+import {
+  getCachedTrip,
+  getPersistentCachedTrip,
+  getTrip,
+  Trip,
+} from '../../services/tripService';
 import {
   getCachedTripRoute,
+  getPersistentCachedTripRoute,
   getTripRoute,
   TripRoute,
 } from '../../services/routeService';
@@ -117,7 +123,11 @@ function buildMapHtml(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-gl.css">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
+<link rel="dns-prefetch" href="https://tiles.openfreemap.org">
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.10.0/dist/maplibre-gl.css">
 <style>
 html, body, #map {
   width:100%;
@@ -146,7 +156,7 @@ html, body, #map {
 <body>
 <div id="map"></div>
 <script type="module">
-import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-gl.mjs';
+import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.10.0/dist/maplibre-gl.mjs';
 
 const payload = ${payload};
 const points = payload.stops || [];
@@ -361,6 +371,26 @@ export default function TripMapScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   const mapWebViewRef = useRef<UniversalWebViewRef>(null);
 
+  // Fast offline/persistent hydration
+  useEffect(() => {
+    if (!groupId || trip) return;
+    void getPersistentCachedTrip(groupId).then(persisted => {
+      if (persisted) {
+        setTrip(persisted);
+        setLoading(false);
+      }
+    });
+  }, [groupId, trip]);
+
+  useEffect(() => {
+    if (!groupId || routeData) return;
+    void getPersistentCachedTripRoute(groupId, selectedDay).then(persisted => {
+      if (persisted) {
+        setRouteData(persisted);
+      }
+    });
+  }, [groupId, routeData, selectedDay]);
+
   const pushRouteDataToMap = useCallback(
     (data: TripRoute | null) => {
       if (!mapWebViewRef.current) return;
@@ -571,12 +601,32 @@ export default function TripMapScreen() {
     );
   }
 
-  const mapHtml = trip
-    ? buildMapHtml(
-        trip,
-        selectedDay,
+  const stopsKey = useMemo(() => {
+    if (!trip?.stops) return '';
+    return trip.stops
+      .filter(
+        stop =>
+          selectedDay == null || stop.day_number === selectedDay,
       )
-    : '<html><body style="background:#06090F"></body></html>';
+      .map(
+        stop =>
+          `${stop.id}:${stop.day_number}:${stop.sequence}:${stop.latitude}:${stop.longitude}:${stop.name}:${stop.stop_type}`,
+      )
+      .join('|');
+  }, [selectedDay, trip?.stops]);
+
+  const mapHtml = useMemo(() => {
+    if (!trip) return '<html><body style="background:#06090F"></body></html>';
+    return buildMapHtml(trip, selectedDay);
+  }, [selectedDay, stopsKey, trip ? 1 : 0]);
+
+  const webViewSource = useMemo(
+    () => ({
+      html: mapHtml,
+      baseUrl: 'https://fairshare.local',
+    }),
+    [mapHtml],
+  );
 
   const displayStops =
     routeData?.stops ||
@@ -812,12 +862,11 @@ export default function TripMapScreen() {
                   ref={mapWebViewRef}
                   key={`${selectedDay ?? 'all'}`}
                   originWhitelist={['*']}
-                  source={{
-                    html: mapHtml,
-                    baseUrl:'https://fairshare.local',
-                  }}
+                  source={webViewSource}
                   javaScriptEnabled
                   domStorageEnabled
+                  cacheEnabled
+                  sharedCookiesEnabled
                   nestedScrollEnabled
                   startInLoadingState
                   renderLoading={() => (
@@ -839,7 +888,7 @@ export default function TripMapScreen() {
                         )
                       : null;
                     pushRouteDataToMap(
-                      latestCachedRoute,
+                      latestCachedRoute || routeData,
                     );
                   }}
                   style={styles.map}

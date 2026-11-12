@@ -1,5 +1,12 @@
 
 import { apiRequest } from './apiClient';
+import {
+  CacheKeys,
+  getInMemoryCache,
+  getPersistentCache,
+  removePersistentCache,
+  setPersistentCache,
+} from './offlineStorage';
 
 export type RouteStop = {
   stop_id: string;
@@ -63,7 +70,25 @@ export function getCachedTripRoute(
   groupId: string,
   dayNumber?: number | null,
 ) {
-  return routeCache.get(cacheKey(groupId, dayNumber)) || null;
+  return (
+    getInMemoryCache<TripRoute>(CacheKeys.tripRoute(groupId, dayNumber)) ||
+    routeCache.get(cacheKey(groupId, dayNumber)) ||
+    null
+  );
+}
+
+export async function getPersistentCachedTripRoute(
+  groupId: string,
+  dayNumber?: number | null,
+): Promise<TripRoute | null> {
+  const inMemory = getCachedTripRoute(groupId, dayNumber);
+  if (inMemory) return inMemory;
+  const persistent = await getPersistentCache<TripRoute>(CacheKeys.tripRoute(groupId, dayNumber));
+  if (persistent) {
+    routeCache.set(cacheKey(groupId, dayNumber), persistent);
+    return persistent;
+  }
+  return null;
 }
 
 export function invalidateTripRoute(groupId: string) {
@@ -72,6 +97,7 @@ export function invalidateTripRoute(groupId: string) {
       routeCache.delete(key);
     }
   }
+  void removePersistentCache(CacheKeys.tripRoute(groupId));
 }
 
 export async function getTripRoute(
@@ -83,8 +109,14 @@ export async function getTripRoute(
   const key = cacheKey(groupId, dayNumber);
 
   if (!force && !signal) {
-    const cached = routeCache.get(key);
+    const cached = getCachedTripRoute(groupId, dayNumber);
     if (cached) return { data: cached, error: null };
+
+    const persistent = await getPersistentCache<TripRoute>(CacheKeys.tripRoute(groupId, dayNumber));
+    if (persistent) {
+      routeCache.set(key, persistent);
+      return { data: persistent, error: null };
+    }
 
     const inFlight = routeRequests.get(key);
     if (inFlight) return inFlight;
@@ -102,6 +134,7 @@ export async function getTripRoute(
         { signal },
       );
       routeCache.set(key, data);
+      void setPersistentCache(CacheKeys.tripRoute(groupId, dayNumber), data);
       return { data, error: null };
     } catch (error: any) {
       return { data: null, error };

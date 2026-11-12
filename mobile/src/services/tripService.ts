@@ -1,4 +1,11 @@
 import { apiRequest } from './apiClient';
+import {
+  CacheKeys,
+  getInMemoryCache,
+  getPersistentCache,
+  removePersistentCache,
+  setPersistentCache,
+} from './offlineStorage';
 
 export type TripStopType = 'start' | 'stop' | 'destination';
 
@@ -51,18 +58,36 @@ export type TripStopPayload = {
 const tripCache = new Map<string, Trip>();
 const tripRequests = new Map<string, Promise<{ data: Trip | null; error: any }>>();
 
-export function getCachedTrip(groupId: string) {
-  return tripCache.get(groupId) || null;
+export function getCachedTrip(groupId: string): Trip | null {
+  return getInMemoryCache<Trip>(CacheKeys.trip(groupId)) || tripCache.get(groupId) || null;
+}
+
+export async function getPersistentCachedTrip(groupId: string): Promise<Trip | null> {
+  const inMemory = getCachedTrip(groupId);
+  if (inMemory) return inMemory;
+  const persistent = await getPersistentCache<Trip>(CacheKeys.trip(groupId));
+  if (persistent) {
+    tripCache.set(groupId, persistent);
+    return persistent;
+  }
+  return null;
 }
 
 export function invalidateTrip(groupId: string) {
   tripCache.delete(groupId);
+  void removePersistentCache(CacheKeys.trip(groupId));
 }
 
 export async function getTrip(groupId: string, force = false, signal?: AbortSignal) {
   if (!force && !signal) {
-    const cached = tripCache.get(groupId);
+    const cached = getCachedTrip(groupId);
     if (cached) return { data: cached, error: null };
+
+    const persistent = await getPersistentCache<Trip>(CacheKeys.trip(groupId));
+    if (persistent) {
+      tripCache.set(groupId, persistent);
+      return { data: persistent, error: null };
+    }
 
     const inFlight = tripRequests.get(groupId);
     if (inFlight) return inFlight;
@@ -72,6 +97,7 @@ export async function getTrip(groupId: string, force = false, signal?: AbortSign
     try {
       const data = await apiRequest<Trip>(`/groups/${groupId}/trip`, { signal });
       tripCache.set(groupId, data);
+      void setPersistentCache(CacheKeys.trip(groupId), data);
       return { data, error: null };
     } catch (error: any) {
       return { data: null, error };
@@ -93,6 +119,7 @@ export async function createTrip(groupId: string, payload: TripPayload = {}) {
       body: payload,
     });
     tripCache.set(groupId, data);
+    void setPersistentCache(CacheKeys.trip(groupId), data);
     return { data, error: null };
   } catch (error: any) {
     return { data: null, error };
@@ -106,6 +133,7 @@ export async function updateTrip(groupId: string, payload: TripPayload) {
       body: payload,
     });
     tripCache.set(groupId, data);
+    void setPersistentCache(CacheKeys.trip(groupId), data);
     return { data, error: null };
   } catch (error: any) {
     return { data: null, error };
