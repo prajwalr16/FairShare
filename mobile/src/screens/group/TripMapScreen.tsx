@@ -28,11 +28,7 @@ import {
   getTripRoute,
   TripRoute,
 } from '../../services/routeService';
-
-function parseDate(value: string) {
-  const [year, month, day] = value.split('-').map(Number);
-  return new Date(year, month - 1, day, 12, 0, 0, 0);
-}
+import { addDaysIso, parseDate } from '../../utils/tripDates';
 
 function getDayCount(trip: Trip | null) {
   if (!trip?.start_date || !trip?.end_date) return 1;
@@ -43,16 +39,6 @@ function getDayCount(trip: Trip | null) {
         86400000,
     ) + 1
   );
-}
-
-function addDaysIso(value: string, days: number) {
-  const date = parseDate(value);
-  date.setDate(date.getDate() + days);
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
 }
 
 function formatDayDate(trip: Trip, dayNumber: number) {

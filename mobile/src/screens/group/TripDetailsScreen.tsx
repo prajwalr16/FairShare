@@ -35,6 +35,15 @@ import {
 } from '../../services/tripService';
 import { invalidateTripRoute } from '../../services/routeService';
 import { PlaceSearchResult, searchPlaces } from '../../services/placeService';
+import {
+  parseDate,
+  toIsoDate,
+  formatDate,
+  formatShortDate,
+  getDayCount,
+  addDaysIso,
+  isValidDateRange,
+} from '../../utils/tripDates';
 
 const STOP_TYPES: Array<{
   value: TripStopType;
@@ -55,50 +64,6 @@ function isTripNotConfiguredError(error: any) {
     error?.status === 404
     && error?.message === 'Trip is not configured for this group.'
   );
-}
-
-function parseDate(value: string | null | undefined) {
-  if (!value) return new Date();
-  const [year, month, day] = value.split('-').map(Number);
-  if (!year || !month || !day) return new Date();
-  return new Date(year, month - 1, day, 12, 0, 0, 0);
-}
-
-function toIsoDate(value: Date) {
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
-}
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return 'Not set';
-  const [year, month, day] = value.split('-').map(Number);
-  if (!year || !month || !day) return value;
-  return new Intl.DateTimeFormat('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(year, month - 1, day));
-}
-
-function formatShortDate(value: string) {
-  const [year, month, day] = value.split('-').map(Number);
-  if (!year || !month || !day) return value;
-  return new Intl.DateTimeFormat('en-IN', {
-    day: 'numeric',
-    month: 'short',
-  }).format(new Date(year, month - 1, day));
-}
-
-function getDayCount(startDate: string | null, endDate: string | null) {
-  if (!startDate || !endDate) return 1;
-  const start = parseDate(startDate).getTime();
-  const end = parseDate(endDate).getTime();
-  return Math.max(1, Math.round((end - start) / 86400000) + 1);
-}
-
-function addDaysIso(value: string, days: number) {
-  const date = parseDate(value);
-  date.setDate(date.getDate() + days);
-  return toIsoDate(date);
 }
 
 function sortStops(stops: TripStop[]) {
@@ -673,12 +638,63 @@ export default function TripDetailsScreen() {
                 <View style={styles.dateRow}>
                   <Pressable style={styles.dateField} onPress={() => openDatePicker('start')}>
                     <Text style={styles.fieldCaption}>START DATE</Text>
-                    <View style={styles.fieldValueRow}><Ionicons name="calendar-clear-outline" size={17} color="#94A3B8" /><Text style={styles.dateValue}>{startDate ? formatDate(startDate) : 'Select start'}</Text></View>
+                    <View style={styles.fieldValueRow}>
+                      <Ionicons name="calendar-clear-outline" size={17} color="#94A3B8" />
+                      <Text style={styles.dateValue}>{startDate ? formatDate(startDate) : 'Select start'}</Text>
+                    </View>
+                    {Platform.OS === 'web' && (
+                      React.createElement('input', {
+                        type: 'date',
+                        value: startDate || '',
+                        onChange: (e: any) => {
+                          const val = e.target.value;
+                          if (val) {
+                            applyDate(parseDate(val), 'start');
+                          }
+                        },
+                        style: {
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer',
+                          zIndex: 2,
+                        },
+                      })
+                    )}
                   </Pressable>
                   <View style={styles.dateArrow}><Ionicons name="arrow-forward" size={15} color="#475569" /></View>
                   <Pressable style={styles.dateField} onPress={() => openDatePicker('end')}>
                     <Text style={styles.fieldCaption}>END DATE</Text>
-                    <View style={styles.fieldValueRow}><Ionicons name="calendar-clear-outline" size={17} color="#94A3B8" /><Text style={styles.dateValue}>{endDate ? formatDate(endDate) : 'Select end'}</Text></View>
+                    <View style={styles.fieldValueRow}>
+                      <Ionicons name="calendar-clear-outline" size={17} color="#94A3B8" />
+                      <Text style={styles.dateValue}>{endDate ? formatDate(endDate) : 'Select end'}</Text>
+                    </View>
+                    {Platform.OS === 'web' && (
+                      React.createElement('input', {
+                        type: 'date',
+                        value: endDate || '',
+                        min: startDate || undefined,
+                        onChange: (e: any) => {
+                          const val = e.target.value;
+                          if (val) {
+                            applyDate(parseDate(val), 'end');
+                          }
+                        },
+                        style: {
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer',
+                          zIndex: 2,
+                        },
+                      })
+                    )}
                   </Pressable>
                 </View>
               </View>
@@ -925,13 +941,13 @@ const styles = StyleSheet.create({
   dateBadge: { backgroundColor: '#06090F', borderWidth: 1, borderColor: '#2A3A50', borderRadius: 12, paddingHorizontal: 9, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 5 },
   dateBadgeText: { color: '#CBD5E1', fontSize: 10, fontWeight: '900' },
   dateRow: { flexDirection: 'row', alignItems: 'center' },
-  dateField: { flex: 1, backgroundColor: '#06090F', borderWidth: 1, borderColor: '#2A3A50', borderRadius: 16, padding: 13, minHeight: 76 },
+  dateField: { flex: 1, backgroundColor: '#06090F', borderWidth: 1, borderColor: '#2A3A50', borderRadius: 16, padding: 13, minHeight: 76, position: 'relative' },
   dateArrow: { width: 32, alignItems: 'center' },
   fieldCaption: { color: '#64748B', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
   fieldValueRow: { flexDirection: 'row', alignItems: 'center', marginTop: 9, gap: 7 },
   dateValue: { color: '#F8FAFC', fontSize: 12, fontWeight: '700', flexShrink: 1 },
   saveJourneyButton: { minHeight: 52, borderRadius: 15, backgroundColor: '#00E5FF', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, marginBottom: 14 },
-  saveJourneyButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  saveJourneyButtonText: { color: '#06090F', fontSize: 13, fontWeight: '900' },
   detailsToggle: { flexDirection: 'row', alignItems: 'center' },
   detailsToggleIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   detailsToggleTitle: { color: '#F8FAFC', fontSize: 14, fontWeight: '800' },
