@@ -1,40 +1,21 @@
 import { Linking, Platform } from 'react-native';
+import {
+  UpiPaymentParams,
+  buildUpiUri,
+  isValidUpiId,
+  getUpiQrCodeUrl,
+  getUpiQrCodeFallbackUrl,
+  COMMON_UPI_HANDLES,
+} from './upiScheme';
 
-export interface UpiPaymentParams {
-  payeeUpiId: string;
-  payeeName: string;
-  amount: number;
-  note?: string;
-  transactionRef?: string;
-}
-
-/**
- * Builds standard NPCI UPI URI scheme compatible with Google Pay, PhonePe, Paytm, BHIM, Cred, etc.
- * Spec: upi://pay?pa=...&pn=...&am=...&cu=INR&tn=...
- */
-export function buildUpiUri(params: UpiPaymentParams): string {
-  const { payeeUpiId, payeeName, amount, note, transactionRef } = params;
-  const cleanId = payeeUpiId.trim();
-  const cleanName = payeeName.trim();
-  const cleanAmount = Math.max(0, amount).toFixed(2);
-  const cleanNote = (note || 'FairShare Settlement').trim();
-
-  let url = `upi://pay?pa=${cleanId}&pn=${encodeURIComponent(cleanName)}&am=${cleanAmount}&cu=INR&tn=${encodeURIComponent(cleanNote)}`;
-
-  if (transactionRef) {
-    url += `&tr=${encodeURIComponent(transactionRef)}`;
-  }
-
-  return url;
-}
-
-/**
- * Generates a high-resolution QR code URL for the UPI payment link
- * for desktop/web cross-device scanning.
- */
-export function getUpiQrCodeUrl(upiUri: string, size = 260): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(upiUri)}`;
-}
+export {
+  UpiPaymentParams,
+  buildUpiUri,
+  isValidUpiId,
+  getUpiQrCodeUrl,
+  getUpiQrCodeFallbackUrl,
+  COMMON_UPI_HANDLES,
+};
 
 /**
  * Attempts to launch installed UPI apps (GPay, PhonePe, Paytm, BHIM) on mobile.
@@ -65,4 +46,3 @@ export async function openUpiApp(params: UpiPaymentParams): Promise<boolean> {
 
   return false;
 }
-

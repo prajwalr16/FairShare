@@ -9,11 +9,20 @@ import {
   ActivityIndicator,
   Platform,
   Image,
+  ScrollView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { GroupDebt as Debt } from '../services/groupService';
 import { formatCurrency } from '../utils/currency';
-import { buildUpiUri, getUpiQrCodeUrl, openUpiApp } from '../utils/upi';
+import {
+  buildUpiUri,
+  getUpiQrCodeUrl,
+  getUpiQrCodeFallbackUrl,
+  isValidUpiId,
+  openUpiApp,
+  COMMON_UPI_HANDLES,
+} from '../utils/upi';
 import { hapticMedium, hapticSelection, hapticSuccess, hapticWarning } from '../utils/haptics';
 
 interface SettleUpModalProps {
@@ -37,19 +46,30 @@ export function SettleUpModal({
   const [note, setNote] = useState('');
   const [upiId, setUpiId] = useState('');
   const [showQr, setShowQr] = useState(false);
+  const [useFallbackQr, setUseFallbackQr] = useState(false);
   const [upiStatus, setUpiStatus] = useState<string | null>(null);
+
+  const payeeKey = debt
+    ? (debt.to_user_id || debt.to_name.toLowerCase().replace(/\s+/g, ''))
+    : '';
 
   useEffect(() => {
     if (debt) {
       setAmount(Number(debt.amount).toFixed(2));
       setNote('UPI settlement');
       setShowQr(false);
+      setUseFallbackQr(false);
       setUpiStatus(null);
-      // Auto-suggest UPI ID from payee name or generic handle
-      const rawName = (debt.to_name || (debt as any).to_user_name || 'member')
-        .toLowerCase()
-        .replace(/\s+/g, '');
-      setUpiId(`${rawName}@upi`);
+
+      // Restore previously saved real UPI ID for this payee if available
+      const key = debt.to_user_id || debt.to_name.toLowerCase().replace(/\s+/g, '');
+      void AsyncStorage.getItem(`fairshare:upi_vpa:${key}`).then(saved => {
+        if (saved && isValidUpiId(saved)) {
+          setUpiId(saved);
+        } else {
+          setUpiId('');
+        }
+      });
     } else {
       setAmount('');
       setNote('');
@@ -62,13 +82,33 @@ export function SettleUpModal({
   const numAmount = Number(amount.replace(/,/g, '').trim()) || 0;
   const payeeName = debt.to_name || (debt as any).to_user_name || 'Member';
   const isINR = (currency || 'INR').toUpperCase() === 'INR';
+  const isUpiValid = isValidUpiId(upiId);
 
   const upiUri = buildUpiUri({
-    payeeUpiId: upiId.trim() || 'payee@upi',
+    payeeUpiId: upiId.trim(),
     payeeName,
     amount: numAmount,
     note: note || 'FairShare settlement',
   });
+
+  const handleUpiChange = (text: string) => {
+    setUpiId(text);
+    setUseFallbackQr(false);
+    if (isValidUpiId(text) && payeeKey) {
+      void AsyncStorage.setItem(`fairshare:upi_vpa:${payeeKey}`, text.trim());
+    }
+  };
+
+  const handleApplyHandle = (suffix: string) => {
+    const raw = upiId.trim();
+    const prefix = raw.includes('@') ? raw.split('@')[0] : (raw || debt.to_name.toLowerCase().replace(/\s+/g, ''));
+    const complete = `${prefix.trim()}${suffix}`;
+    setUpiId(complete);
+    setUseFallbackQr(false);
+    if (isValidUpiId(complete) && payeeKey) {
+      void AsyncStorage.setItem(`fairshare:upi_vpa:${payeeKey}`, complete);
+    }
+  };
 
   const handlePayUpi = async () => {
     await hapticMedium();
@@ -77,14 +117,20 @@ export function SettleUpModal({
       return;
     }
 
+    if (!isUpiValid) {
+      setShowQr(true);
+      setUpiStatus('Enter payee’s actual UPI ID (e.g. 9876543210@paytm) to proceed');
+      return;
+    }
+
     if (Platform.OS === 'web') {
-      setShowQr(!showQr);
-      setUpiStatus('Scan QR code with any UPI app (GPay, PhonePe, Paytm)');
+      setShowQr(true);
+      setUpiStatus('Scan QR code with Google Pay, PhonePe, or Paytm on your phone');
       return;
     }
 
     const opened = await openUpiApp({
-      payeeUpiId: upiId.trim() || 'payee@upi',
+      payeeUpiId: upiId.trim(),
       payeeName,
       amount: numAmount,
       note: note || 'FairShare settlement',
@@ -94,7 +140,7 @@ export function SettleUpModal({
       setShowQr(true);
       setUpiStatus('UPI app not found. Scan the QR code below.');
     } else {
-      setUpiStatus('Payment initiated. Record payment below once done.');
+      setUpiStatus('Payment initiated in UPI app. Record payment below once done.');
     }
   };
 
@@ -175,12 +221,35 @@ export function SettleUpModal({
                 <Text style={styles.upiPrefix}>VPA:</Text>
                 <TextInput
                   value={upiId}
-                  onChangeText={setUpiId}
-                  placeholder="payee@okhdfcbank"
+                  onChangeText={handleUpiChange}
+                  placeholder="payee@okhdfcbank or 9876543210@paytm"
                   placeholderTextColor="#64748B"
                   style={styles.upiInput}
                   autoCapitalize="none"
                 />
+                {isUpiValid && (
+                  <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                )}
+              </View>
+
+              {/* Quick bank handle autocomplete chips */}
+              <View style={styles.handleChipsWrapper}>
+                <Text style={styles.handleChipsLabel}>Quick handle:</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.handleChipsContainer}
+                >
+                  {COMMON_UPI_HANDLES.map(handle => (
+                    <Pressable
+                      key={handle}
+                      style={styles.handleChip}
+                      onPress={() => handleApplyHandle(handle)}
+                    >
+                      <Text style={styles.handleChipText}>{handle}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
               </View>
 
               <Pressable style={styles.upiButton} onPress={handlePayUpi}>
@@ -189,13 +258,30 @@ export function SettleUpModal({
               </Pressable>
 
               {showQr && (
-                <View style={styles.qrContainer}>
-                  <Image
-                    source={{ uri: getUpiQrCodeUrl(upiUri, 200) }}
-                    style={styles.qrImage}
-                    resizeMode="contain"
-                  />
-                  <Text style={styles.qrSubtext}>Scan with any UPI app on your phone</Text>
+                <View style={isUpiValid ? styles.qrContainer : styles.qrPlaceholderContainer}>
+                  {isUpiValid ? (
+                    <>
+                      <Image
+                        source={{ uri: useFallbackQr ? getUpiQrCodeFallbackUrl(upiUri, 240) : getUpiQrCodeUrl(upiUri, 240) }}
+                        style={styles.qrImage}
+                        resizeMode="contain"
+                        onError={() => setUseFallbackQr(true)}
+                      />
+                      <View style={styles.verifiedBadge}>
+                        <Ionicons name="checkmark-circle" size={14} color="#15803D" />
+                        <Text style={styles.verifiedText}>Valid UPI QR • {upiId.trim()}</Text>
+                      </View>
+                      <Text style={styles.qrSubtext}>Scan with Google Pay, PhonePe, Paytm, or BHIM</Text>
+                    </>
+                  ) : (
+                    <View style={styles.qrPlaceholder}>
+                      <Ionicons name="qr-code-outline" size={36} color="#00E5FF" />
+                      <Text style={styles.qrPlaceholderTitle}>Enter Payee’s UPI ID</Text>
+                      <Text style={styles.qrPlaceholderText}>
+                        Type payee’s VPA above (e.g. 9876543210@paytm or name@okaxis) to generate a scannable payment QR code.
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -380,22 +466,94 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
   },
+  handleChipsWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 6,
+  },
+  handleChipsLabel: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  handleChipsContainer: {
+    gap: 6,
+  },
+  handleChip: {
+    backgroundColor: '#06090F',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.25)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  handleChipText: {
+    color: '#00E5FF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   qrContainer: {
     alignItems: 'center',
     marginTop: 12,
-    padding: 10,
+    padding: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  qrPlaceholderContainer: {
+    marginTop: 12,
   },
   qrImage: {
-    width: 180,
-    height: 180,
+    width: 200,
+    height: 200,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  verifiedText: {
+    color: '#15803D',
+    fontSize: 11,
+    fontWeight: '800',
   },
   qrSubtext: {
-    color: '#06090F',
+    color: '#334155',
     fontSize: 11,
     fontWeight: '600',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  qrPlaceholder: {
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#0E1524',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(0, 229, 255, 0.35)',
+    width: '100%',
+  },
+  qrPlaceholderTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    marginTop: 8,
+  },
+  qrPlaceholderText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    textAlign: 'center',
     marginTop: 4,
+    lineHeight: 17,
   },
   upiStatusText: {
     color: '#00E5FF',
