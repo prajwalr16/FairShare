@@ -23,6 +23,7 @@ import MemberCard from '../../components/MemberCard';
 import AddMemberModal from '../../components/AddMemberModal';
 import PaidByPickerModal from '../../components/PaidByPickerModal';
 import OfflineStatusBar from '../../components/OfflineStatusBar';
+import SkeletonLoader from '../../components/SkeletonLoader';
 import { subscribeToGroupRealtime } from '../../services/realtimeService';
 import { initOfflineQueue } from '../../services/offlineQueue';
 import { supabase } from '../../config/supabase';
@@ -113,6 +114,23 @@ function formatActivityDate(value?: string | null) {
   return `${date.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${timeStr}`;
 }
 
+const CATEGORY_COLORS: Record<string, string> = {
+  Food: '#F97316',
+  Stay: '#A855F7',
+  Fuel: '#00E5FF',
+  Transport: '#38BDF8',
+  Activities: '#10B981',
+  Shopping: '#EC4899',
+  Bills: '#FACC15',
+  Other: '#94A3B8',
+};
+
+function getCategoryColor(category: string, index: number): string {
+  return CATEGORY_COLORS[category] || [
+    '#00E5FF', '#F97316', '#10B981', '#A855F7', '#EC4899', '#38BDF8', '#FACC15'
+  ][index % 7];
+}
+
 export default function GroupDetailsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -122,6 +140,8 @@ export default function GroupDetailsScreen() {
   const [tab, setTab] = useState<Tab>(requestedInitialTab || 'Overview');
   const [trip, setTrip] = useState<Trip | null>(getCachedTrip(groupId || '') || null);
   const [tripLoading, setTripLoading] = useState(false);
+  const [expenseSearchQuery, setExpenseSearchQuery] = useState('');
+  const [showCategoryAnalytics, setShowCategoryAnalytics] = useState(false);
   const [overview, setOverview] = useState<GroupOverview | null>(null);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [balances, setBalances] = useState<GroupBalance[]>([]);
@@ -372,10 +392,66 @@ export default function GroupDetailsScreen() {
 
   const currentUserId = myUserId || overview?.current_user_balance?.user_id || null;
 
+  const categoryAnalytics = useMemo(() => {
+    const totalGroupSpend = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    if (totalGroupSpend <= 0) return { total: 0, items: [] };
+
+    const grouped: Record<string, number> = {};
+    for (const exp of expenses) {
+      const cat = exp.category || 'Other';
+      grouped[cat] = (grouped[cat] || 0) + (Number(exp.amount) || 0);
+    }
+
+    const items = Object.entries(grouped)
+      .map(([cat, amount]) => {
+        const percentage = Math.round((amount / totalGroupSpend) * 100);
+        return {
+          category: cat,
+          amount,
+          percentage,
+        };
+      })
+      .sort((a, b) => b.amount - a.amount);
+
+    return { total: totalGroupSpend, items };
+  }, [expenses]);
+
+  const memberMap = useMemo(() => {
+    const map = new Map<string, string>();
+    members.forEach((m) => {
+      if (m.user_id) {
+        map.set(m.user_id, m.full_name?.trim() || m.email?.trim() || 'Member');
+      }
+    });
+    return map;
+  }, [members]);
+
   const visibleExpenses = useMemo(() => {
-    if (!paidByFilter) return expenses;
-    return expenses.filter((e) => e.paid_by === paidByFilter);
-  }, [expenses, paidByFilter]);
+    let list = expenses;
+
+    if (paidByFilter) {
+      list = list.filter((e) => e.paid_by === paidByFilter);
+    }
+
+    if (expenseCategory && expenseCategory !== 'All') {
+      list = list.filter((e) => (e.category || '').toLowerCase() === expenseCategory.toLowerCase());
+    }
+
+    const query = expenseSearchQuery.trim().toLowerCase();
+    if (query) {
+      list = list.filter((e) => {
+        const titleMatch = (e.title || '').toLowerCase().includes(query);
+        const noteMatch = (e.notes || '').toLowerCase().includes(query);
+        const categoryMatch = (e.category || '').toLowerCase().includes(query);
+        const payerName = e.paid_by ? (memberMap.get(e.paid_by) || '') : '';
+        const payerMatch = payerName.toLowerCase().includes(query);
+        const amountMatch = String(e.amount || '').includes(query);
+        return titleMatch || noteMatch || categoryMatch || payerMatch || amountMatch;
+      });
+    }
+
+    return list;
+  }, [expenses, paidByFilter, expenseCategory, expenseSearchQuery, memberMap]);
 
   const currentBalance = overview?.current_user_balance || null;
   const visibleDebts: Debt[] = tab === 'Overview'
@@ -503,16 +579,6 @@ export default function GroupDetailsScreen() {
       ],
     );
   };
-
-  const memberMap = useMemo(() => {
-    const map = new Map<string, string>();
-    members.forEach((m) => {
-      if (m.user_id) {
-        map.set(m.user_id, m.full_name?.trim() || m.email?.trim() || 'Member');
-      }
-    });
-    return map;
-  }, [members]);
 
   const settlementName = useMemo(
     () => selectedDebt ? `${selectedDebt.from_name} → ${selectedDebt.to_name}` : '',
@@ -1062,7 +1128,103 @@ export default function GroupDetailsScreen() {
 
             {tab === 'Expenses' && (
               <>
-                <View style={styles.sectionHeader}><View><Text style={styles.sectionTitle}>Expenses</Text><Text style={styles.sectionSubtitle}>Group or personal expenses</Text></View></View>
+                <View style={styles.sectionHeader}>
+                  <View>
+                    <Text style={styles.sectionTitle}>Expenses</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      {visibleExpenses.length} {visibleExpenses.length === 1 ? 'expense' : 'expenses'} • {money(categoryAnalytics.total, currency)}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={[styles.analyticsToggleBtn, showCategoryAnalytics && styles.analyticsToggleBtnActive]}
+                    onPress={() => setShowCategoryAnalytics((prev) => !prev)}
+                  >
+                    <Ionicons
+                      name={showCategoryAnalytics ? 'pie-chart' : 'pie-chart-outline'}
+                      size={14}
+                      color={showCategoryAnalytics ? '#06090F' : '#00E5FF'}
+                    />
+                    <Text style={[styles.analyticsToggleText, showCategoryAnalytics && styles.analyticsToggleTextActive]}>
+                      {showCategoryAnalytics ? 'Hide Chart' : 'Analytics'}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {/* Live Expense Search Bar */}
+                <View style={styles.expenseSearchBar}>
+                  <Ionicons name="search" size={15} color="#64748B" style={styles.expenseSearchIcon} />
+                  <TextInput
+                    value={expenseSearchQuery}
+                    onChangeText={setExpenseSearchQuery}
+                    placeholder="Search by title, note, payer or amount..."
+                    placeholderTextColor="#64748B"
+                    style={styles.expenseSearchInput}
+                    returnKeyType="search"
+                  />
+                  {Boolean(expenseSearchQuery) && (
+                    <Pressable hitSlop={8} onPress={() => setExpenseSearchQuery('')} style={styles.expenseSearchClear}>
+                      <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                    </Pressable>
+                  )}
+                </View>
+
+                {/* Visual Spending Analytics Card */}
+                {showCategoryAnalytics && categoryAnalytics.total > 0 && (
+                  <View style={styles.analyticsCard}>
+                    <View style={styles.analyticsHeaderRow}>
+                      <View>
+                        <Text style={styles.analyticsTitle}>Spending by Category</Text>
+                        <Text style={styles.analyticsSubtitle}>
+                          {money(categoryAnalytics.total, currency)} across {expenses.length} group expenses
+                        </Text>
+                      </View>
+                      <Pressable hitSlop={8} onPress={() => setShowCategoryAnalytics(false)}>
+                        <Ionicons name="close" size={18} color="#64748B" />
+                      </Pressable>
+                    </View>
+
+                    {/* Segmented multi-color proportion bar */}
+                    <View style={styles.stackedBarWrap}>
+                      {categoryAnalytics.items.map((item, idx) => (
+                        <View
+                          key={item.category}
+                          style={[
+                            styles.stackedBarSegment,
+                            {
+                              flex: Math.max(0.01, item.amount),
+                              backgroundColor: getCategoryColor(item.category, idx),
+                            },
+                          ]}
+                        />
+                      ))}
+                    </View>
+
+                    {/* Category Breakdown Rows */}
+                    <View style={styles.analyticsGrid}>
+                      {categoryAnalytics.items.map((item, idx) => {
+                        const color = getCategoryColor(item.category, idx);
+                        const isFiltered = expenseCategory === item.category;
+                        return (
+                          <Pressable
+                            key={item.category}
+                            style={[styles.analyticsRow, isFiltered && styles.analyticsRowFiltered]}
+                            onPress={() => setExpenseCategory(isFiltered ? 'All' : item.category as ExpenseCategory)}
+                          >
+                            <View style={[styles.analyticsIconBox, { backgroundColor: `${color}18`, borderColor: `${color}35` }]}>
+                              <Ionicons name={EXPENSE_CATEGORY_ICONS[item.category as ExpenseCategory] || 'receipt-outline'} size={13} color={color} />
+                            </View>
+                            <View style={styles.flexOne}>
+                              <Text style={styles.analyticsCatName}>{item.category}</Text>
+                              <Text style={styles.analyticsPercentage}>{item.percentage}%</Text>
+                            </View>
+                            <Text style={styles.analyticsAmount}>{money(item.amount, currency)}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
                   <Pressable
                     style={[styles.filterChip, expenseScope === 'all' && !paidByFilter && styles.filterChipActive]}
@@ -1129,6 +1291,7 @@ export default function GroupDetailsScreen() {
                     )}
                   </Pressable>
                 </ScrollView>
+
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
                   <Pressable style={[styles.filterChip, expenseCategory === 'All' && styles.filterChipActive]} onPress={() => setExpenseCategory('All')}>
                     <Text style={[styles.filterChipText, expenseCategory === 'All' && styles.filterChipTextActive]}>All</Text>
@@ -1140,21 +1303,60 @@ export default function GroupDetailsScreen() {
                     </Pressable>
                   ))}
                 </ScrollView>
-                {visibleExpenses.length === 0 ? (
-                  <View style={styles.emptyCard}><Ionicons name="receipt-outline" size={30} color="#64748B" /><Text style={styles.emptyCardTitle}>No expenses found</Text></View>
-                ) : visibleExpenses.map((expense) => {
-                  const payerName = expense.paid_by === currentUserId
-                    ? 'You'
-                    : (expense.paid_by ? memberMap.get(expense.paid_by) : null);
-                  return (
-                    <ExpenseCard
-                      key={expense.id}
-                      expense={expense}
-                      currency={currency}
-                      payerName={payerName}
-                    />
-                  );
-                })}
+
+                {/* Active filter status pill */}
+                {(Boolean(expenseSearchQuery) || Boolean(paidByFilter) || expenseCategory !== 'All') && (
+                  <View style={styles.activeFilterNotice}>
+                    <Text style={styles.activeFilterNoticeText}>
+                      Showing {visibleExpenses.length} of {expenses.length} expenses
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        setExpenseSearchQuery('');
+                        setPaidByFilter(null);
+                        setExpenseCategory('All');
+                      }}
+                    >
+                      <Text style={styles.activeFilterResetText}>Reset filters</Text>
+                    </Pressable>
+                  </View>
+                )}
+
+                {loading && expenses.length === 0 ? (
+                  <View style={styles.skeletonContainer}>
+                    <SkeletonLoader height={72} borderRadius={16} style={{ marginBottom: 10 }} />
+                    <SkeletonLoader height={72} borderRadius={16} style={{ marginBottom: 10 }} />
+                    <SkeletonLoader height={72} borderRadius={16} style={{ marginBottom: 10 }} />
+                  </View>
+                ) : visibleExpenses.length === 0 ? (
+                  <View style={styles.emptyCard}>
+                    <Ionicons name="receipt-outline" size={30} color="#64748B" />
+                    <Text style={styles.emptyCardTitle}>
+                      {expenseSearchQuery.trim()
+                        ? `No expenses matching "${expenseSearchQuery.trim()}"`
+                        : 'No expenses found'}
+                    </Text>
+                    {expenseSearchQuery.trim() && (
+                      <Pressable style={styles.clearSearchBtn} onPress={() => setExpenseSearchQuery('')}>
+                        <Text style={styles.clearSearchBtnText}>Clear search</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                ) : (
+                  visibleExpenses.map((expense) => {
+                    const payerName = expense.paid_by === currentUserId
+                      ? 'You'
+                      : (expense.paid_by ? memberMap.get(expense.paid_by) : null);
+                    return (
+                      <ExpenseCard
+                        key={expense.id}
+                        expense={expense}
+                        currency={currency}
+                        payerName={payerName}
+                      />
+                    );
+                  })
+                )}
               </>
             )}
 
@@ -1312,6 +1514,7 @@ export default function GroupDetailsScreen() {
         currency={currency}
         submitting={settling}
         onSubmit={submitSettlementWithValues}
+        groupName={groupName || overview?.name}
       />
 
       <ExportStatementModal
@@ -1534,4 +1737,166 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   loadingText: { color: '#94A3B8', marginTop: 12 },
   emptyTitle: { color: '#FFFFFF', fontWeight: '900', fontSize: 20 },
+  expenseSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0E1524',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    height: 44,
+  },
+  expenseSearchIcon: {
+    marginRight: 8,
+  },
+  expenseSearchInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 13,
+    paddingVertical: 0,
+  },
+  expenseSearchClear: {
+    padding: 4,
+  },
+  analyticsToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 229, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.25)',
+  },
+  analyticsToggleBtnActive: {
+    backgroundColor: '#00E5FF',
+    borderColor: '#00E5FF',
+  },
+  analyticsToggleText: {
+    color: '#00E5FF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  analyticsToggleTextActive: {
+    color: '#06090F',
+  },
+  analyticsCard: {
+    backgroundColor: '#0E1524',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.2)',
+  },
+  analyticsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  analyticsTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  analyticsSubtitle: {
+    color: '#64748B',
+    fontSize: 10,
+    marginTop: 2,
+    fontWeight: '700',
+  },
+  stackedBarWrap: {
+    height: 10,
+    borderRadius: 5,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    backgroundColor: '#1E293B',
+    marginBottom: 14,
+  },
+  stackedBarSegment: {
+    height: '100%',
+  },
+  analyticsGrid: {
+    gap: 8,
+  },
+  analyticsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: '#06090F',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  analyticsRowFiltered: {
+    borderColor: '#00E5FF',
+    backgroundColor: 'rgba(0, 229, 255, 0.06)',
+  },
+  analyticsIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  analyticsCatName: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  analyticsPercentage: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  analyticsAmount: {
+    color: '#00E5FF',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  activeFilterNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(0, 229, 255, 0.05)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.15)',
+  },
+  activeFilterNoticeText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  activeFilterResetText: {
+    color: '#00E5FF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  skeletonContainer: {
+    marginTop: 4,
+  },
+  clearSearchBtn: {
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 229, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.3)',
+  },
+  clearSearchBtnText: {
+    color: '#00E5FF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
 });

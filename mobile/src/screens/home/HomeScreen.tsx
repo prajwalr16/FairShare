@@ -20,6 +20,7 @@ import BrandLogo from '../../components/BrandLogo';
 import CreateGroupModal from '../../components/CreateGroupModal';
 import UniversalScrollView from '../../components/UniversalScrollView';
 import OfflineStatusBar from '../../components/OfflineStatusBar';
+import SkeletonLoader from '../../components/SkeletonLoader';
 import { initOfflineQueue } from '../../services/offlineQueue';
 import { Theme } from '../../theme/theme';
 import { formatCurrency } from '../../utils/currency';
@@ -463,9 +464,10 @@ export default function HomeScreen() {
             )}
             ListEmptyComponent={
               loading ? (
-                <View style={styles.emptyState}>
-                  <ActivityIndicator size="small" color="#00E5FF" />
-                  <Text style={styles.emptyTitle}>Synchronizing portfolio…</Text>
+                <View style={styles.skeletonList}>
+                  <SkeletonLoader height={88} borderRadius={18} style={{ marginBottom: 12 }} />
+                  <SkeletonLoader height={88} borderRadius={18} style={{ marginBottom: 12 }} />
+                  <SkeletonLoader height={88} borderRadius={18} style={{ marginBottom: 12 }} />
                 </View>
               ) : error ? (
                 <View style={styles.emptyState}>
@@ -917,6 +919,11 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '800',
     letterSpacing: 0.2,
+  },
+  skeletonList: {
+    width: '100%',
+    paddingHorizontal: 4,
+    marginTop: 4,
   },
   emptyState: {
     alignItems: 'center',

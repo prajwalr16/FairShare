@@ -21,6 +21,9 @@ import {
   getUpiQrCodeFallbackUrl,
   isValidUpiId,
   openUpiApp,
+  openDirectUpiApp,
+  openWhatsAppReminder,
+  SupportedUpiApp,
   COMMON_UPI_HANDLES,
 } from '../utils/upi';
 import { hapticMedium, hapticSelection, hapticSuccess, hapticWarning } from '../utils/haptics';
@@ -32,6 +35,7 @@ interface SettleUpModalProps {
   currency: string;
   submitting: boolean;
   onSubmit: (amount: number, note: string) => Promise<void>;
+  groupName?: string;
 }
 
 export function SettleUpModal({
@@ -41,6 +45,7 @@ export function SettleUpModal({
   currency,
   submitting,
   onSubmit,
+  groupName,
 }: SettleUpModalProps) {
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
@@ -141,6 +146,55 @@ export function SettleUpModal({
       setUpiStatus('UPI app not found. Scan the QR code below.');
     } else {
       setUpiStatus('Payment initiated in UPI app. Record payment below once done.');
+    }
+  };
+
+  const handlePayDirect = async (app: SupportedUpiApp) => {
+    await hapticMedium();
+    if (numAmount <= 0) {
+      setUpiStatus('Enter a valid amount first');
+      return;
+    }
+
+    if (!isUpiValid) {
+      setShowQr(true);
+      setUpiStatus('Enter payee’s actual UPI ID (e.g. 9876543210@paytm) to proceed');
+      return;
+    }
+
+    if (Platform.OS === 'web') {
+      setShowQr(true);
+      setUpiStatus('Scan QR code with Google Pay, PhonePe, or Paytm on your phone');
+      return;
+    }
+
+    const appName = app === 'gpay' ? 'Google Pay' : app === 'phonepe' ? 'PhonePe' : app === 'paytm' ? 'Paytm' : 'UPI';
+    const opened = await openDirectUpiApp(app, {
+      payeeUpiId: upiId.trim(),
+      payeeName,
+      amount: numAmount,
+      note: note || 'FairShare settlement',
+    });
+
+    if (!opened) {
+      setShowQr(true);
+      setUpiStatus(`${appName} not found. Scan the QR code below.`);
+    } else {
+      setUpiStatus(`Payment initiated in ${appName}. Record payment below once done.`);
+    }
+  };
+
+  const handleSendReminder = async () => {
+    await hapticMedium();
+    const sent = await openWhatsAppReminder({
+      payeeName,
+      amount: numAmount,
+      currency,
+      groupName,
+      payeeUpiId: isUpiValid ? upiId.trim() : undefined,
+    });
+    if (sent) {
+      setUpiStatus('WhatsApp opened with payment reminder.');
     }
   };
 
@@ -262,10 +316,44 @@ export function SettleUpModal({
                 </ScrollView>
               </View>
 
-              <Pressable style={styles.upiButton} onPress={handlePayUpi}>
-                <Ionicons name="open-outline" size={16} color="#06090F" />
-                <Text style={styles.upiButtonText}>Pay with UPI (GPay / PhonePe / Paytm)</Text>
-              </Pressable>
+              <View style={styles.upiAppsSection}>
+                <Text style={styles.upiAppsTitle}>1-Tap Pay via Installed UPI App:</Text>
+                <View style={styles.upiAppsRow}>
+                  <Pressable style={styles.appPayButton} onPress={() => void handlePayDirect('gpay')}>
+                    <Ionicons name="card-outline" size={14} color="#38BDF8" />
+                    <Text style={styles.appPayText}>GPay</Text>
+                  </Pressable>
+                  <Pressable style={styles.appPayButton} onPress={() => void handlePayDirect('phonepe')}>
+                    <Ionicons name="flash-outline" size={14} color="#A855F7" />
+                    <Text style={styles.appPayText}>PhonePe</Text>
+                  </Pressable>
+                  <Pressable style={styles.appPayButton} onPress={() => void handlePayDirect('paytm')}>
+                    <Ionicons name="wallet-outline" size={14} color="#00E5FF" />
+                    <Text style={styles.appPayText}>Paytm</Text>
+                  </Pressable>
+                  <Pressable style={styles.appPayButton} onPress={() => void handlePayDirect('generic')}>
+                    <Ionicons name="open-outline" size={14} color="#CBD5E1" />
+                    <Text style={styles.appPayText}>Any App</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.qrToggleRow}>
+                <Pressable
+                  style={styles.qrToggleBtn}
+                  onPress={() => setShowQr((prev) => !prev)}
+                >
+                  <Ionicons name={showQr ? 'chevron-up' : 'qr-code-outline'} size={15} color="#00E5FF" />
+                  <Text style={styles.qrToggleText}>{showQr ? 'Hide QR Code' : 'Show Scannable QR Code'}</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.whatsAppBtn}
+                  onPress={handleSendReminder}
+                >
+                  <Ionicons name="logo-whatsapp" size={15} color="#25D366" />
+                  <Text style={styles.whatsAppText}>Remind</Text>
+                </Pressable>
+              </View>
 
               {showQr && (
                 <View style={isUpiValid ? styles.qrContainer : styles.qrPlaceholderContainer}>
@@ -570,6 +658,73 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 8,
     textAlign: 'center',
+  },
+  upiAppsSection: {
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  upiAppsTitle: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '800',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  upiAppsRow: {
+    flexDirection: 'row',
+    gap: 7,
+  },
+  appPayButton: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 12,
+    backgroundColor: '#06090F',
+    borderWidth: 1,
+    borderColor: '#243147',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  appPayText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  qrToggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  qrToggleBtn: {
+    flex: 1.4,
+    minHeight: 38,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0, 229, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.25)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  whatsAppBtn: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 11,
+    backgroundColor: 'rgba(37, 211, 102, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(37, 211, 102, 0.3)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  whatsAppText: {
+    color: '#25D366',
+    fontSize: 11,
+    fontWeight: '800',
   },
   input: {
     backgroundColor: '#0E1524',
