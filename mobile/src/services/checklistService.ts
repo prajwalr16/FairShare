@@ -73,6 +73,25 @@ export async function assignChecklistItem(
   });
 }
 
+export type ChecklistUpdateInput = {
+  title?: string;
+  category?: string;
+  scope?: 'personal' | 'group';
+  is_private?: boolean;
+  assigned_to?: string | null;
+};
+
+export async function updateChecklistItem(
+  groupId: string,
+  checklistId: string,
+  payload: ChecklistUpdateInput,
+) {
+  return apiRequest<ChecklistItem>(`/groups/${groupId}/checklists/${checklistId}`, {
+    method: 'PATCH',
+    body: payload,
+  });
+}
+
 export async function deleteChecklistItem(groupId: string, checklistId: string) {
   return apiRequest<void>(`/groups/${groupId}/checklists/${checklistId}`, {
     method: 'DELETE',

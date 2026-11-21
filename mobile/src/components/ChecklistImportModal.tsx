@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +31,9 @@ export default function ChecklistImportModal({ visible, onClose, onImport }: Pro
     return new Set(CHECKLIST_TEMPLATE_PACKS[0].items.map((it) => it.id));
   });
   const [importing, setImporting] = useState<boolean>(false);
+  const [editedTitles, setEditedTitles] = useState<Record<string, string>>({});
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState<string>('');
 
   const currentPack = useMemo<ChecklistTemplatePack>(() => {
     return (
@@ -53,10 +57,28 @@ export default function ChecklistImportModal({ visible, onClose, onImport }: Pro
     void hapticSelection();
     setSelectedPackId(packId);
     setActiveCategory('All');
+    setEditingItemId(null);
     const pack = CHECKLIST_TEMPLATE_PACKS.find((p) => p.id === packId);
     if (pack) {
       setSelectedItemIds(new Set(pack.items.map((it) => it.id)));
     }
+  };
+
+  const startEditing = (itemId: string, currentTitle: string) => {
+    void hapticSelection();
+    setEditingItemId(itemId);
+    setEditingText(editedTitles[itemId] || currentTitle);
+  };
+
+  const saveEditing = (itemId: string) => {
+    if (editingText.trim().length > 0) {
+      setEditedTitles((prev) => ({
+        ...prev,
+        [itemId]: editingText.trim(),
+      }));
+    }
+    setEditingItemId(null);
+    setEditingText('');
   };
 
   const toggleItem = (itemId: string) => {
@@ -89,7 +111,12 @@ export default function ChecklistImportModal({ visible, onClose, onImport }: Pro
   };
 
   const handleImport = async () => {
-    const itemsToImport = currentPack.items.filter((it) => selectedItemIds.has(it.id));
+    const itemsToImport = currentPack.items
+      .filter((it) => selectedItemIds.has(it.id))
+      .map((it) => ({
+        ...it,
+        title: editedTitles[it.id]?.trim() || it.title,
+      }));
     if (itemsToImport.length === 0) return;
     setImporting(true);
     try {
@@ -187,6 +214,9 @@ export default function ChecklistImportModal({ visible, onClose, onImport }: Pro
           <ScrollView style={styles.itemsList} showsVerticalScrollIndicator={false}>
             {visibleItems.map((item) => {
               const isChecked = selectedItemIds.has(item.id);
+              const isEditing = editingItemId === item.id;
+              const displayTitle = editedTitles[item.id] || item.title;
+              const hasCustomName = Boolean(editedTitles[item.id] && editedTitles[item.id] !== item.title);
               const catColor = CATEGORY_COLORS[item.category] || '#00E5FF';
               const catIcon = CATEGORY_ICONS[item.category] || 'checkbox-outline';
 
@@ -201,9 +231,51 @@ export default function ChecklistImportModal({ visible, onClose, onImport }: Pro
                   </View>
 
                   <View style={styles.itemInfo}>
-                    <Text style={[styles.itemTitle, isChecked && styles.itemTitleChecked]}>
-                      {item.title}
-                    </Text>
+                    {isEditing ? (
+                      <View style={styles.editRow} onStartShouldSetResponder={() => true}>
+                        <TextInput
+                          value={editingText}
+                          onChangeText={setEditingText}
+                          style={styles.editInput}
+                          autoFocus
+                          selectTextOnFocus
+                          onSubmitEditing={() => saveEditing(item.id)}
+                          placeholder="Item name"
+                          placeholderTextColor="#64748B"
+                        />
+                        <Pressable
+                          style={styles.editSaveBtn}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            saveEditing(item.id);
+                          }}
+                        >
+                          <Ionicons name="checkmark" size={14} color="#06090F" />
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View style={styles.titleRow}>
+                        <Text style={[styles.itemTitle, isChecked && styles.itemTitleChecked]} numberOfLines={1}>
+                          {displayTitle}
+                        </Text>
+                        {hasCustomName ? (
+                          <View style={styles.editedBadge}>
+                            <Text style={styles.editedBadgeText}>Custom</Text>
+                          </View>
+                        ) : null}
+                        <Pressable
+                          style={styles.renameBtn}
+                          hitSlop={8}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            startEditing(item.id, displayTitle);
+                          }}
+                        >
+                          <Ionicons name="pencil" size={12} color="#00E5FF" />
+                        </Pressable>
+                      </View>
+                    )}
+
                     <View style={styles.itemMeta}>
                       <View style={[styles.catBadge, { borderColor: catColor + '40', backgroundColor: catColor + '15' }]}>
                         <Ionicons name={catIcon as any} size={10} color={catColor} style={{ marginRight: 3 }} />
@@ -354,8 +426,44 @@ const styles = StyleSheet.create({
   },
   checkboxActive: { backgroundColor: '#00E5FF', borderColor: '#00E5FF' },
   itemInfo: { flex: 1 },
-  itemTitle: { color: '#CBD5E1', fontSize: 13, fontWeight: '700' },
+  itemTitle: { color: '#CBD5E1', fontSize: 13, fontWeight: '700', flex: 1 },
   itemTitleChecked: { color: '#FFFFFF' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  renameBtn: {
+    padding: 3,
+    backgroundColor: 'rgba(0, 229, 255, 0.1)',
+    borderRadius: 6,
+    marginLeft: 4,
+  },
+  editedBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0, 229, 255, 0.15)',
+    borderWidth: 0.5,
+    borderColor: '#00E5FF',
+  },
+  editedBadgeText: { color: '#00E5FF', fontSize: 9, fontWeight: '800' },
+  editRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  editInput: {
+    flex: 1,
+    backgroundColor: '#06090F',
+    borderWidth: 1,
+    borderColor: '#00E5FF',
+    borderRadius: 8,
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  editSaveBtn: {
+    backgroundColor: '#00E5FF',
+    borderRadius: 8,
+    padding: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   itemMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   catBadge: {
     flexDirection: 'row',

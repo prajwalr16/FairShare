@@ -197,3 +197,54 @@ def test_checklist_group_assignment_and_shared_packing(client, seed_users):
     assert tent_item["is_packed"] is True
     assert tent_item["assigned_to"] == str(USER_B)
 
+
+def test_checklist_update_item_and_unassign(client, seed_users):
+    group = create_group(client)
+    gid = group["id"]
+
+    # 1. Create a group item
+    res = client.post(
+        f"/api/v1/groups/{gid}/checklists",
+        json={"title": "Solar Lantern", "category": "Gear", "scope": "group", "is_private": False},
+    )
+    assert res.status_code == 201
+    item_id = res.json()["id"]
+
+    # 2. Assign to User A
+    client.patch(f"/api/v1/groups/{gid}/checklists/{item_id}/assign", json={"assigned_to": str(USER_A)})
+
+    # 3. Unassign (set assigned_to = None)
+    unassign_res = client.patch(
+        f"/api/v1/groups/{gid}/checklists/{item_id}/assign",
+        json={"assigned_to": None},
+    )
+    assert unassign_res.status_code == 200
+
+    # Verify unassigned in summary
+    summary = client.get(f"/api/v1/groups/{gid}/checklists").json()
+    item = next(i for i in summary["group"] if i["id"] == item_id)
+    assert item["assigned_to"] is None
+
+    # 4. Full update of any feature: title, category, scope, is_private
+    update_res = client.patch(
+        f"/api/v1/groups/{gid}/checklists/{item_id}",
+        json={
+            "title": "Rechargeable LED Emergency Light",
+            "category": "Electronics",
+            "scope": "personal",
+            "is_private": True,
+        },
+    )
+    assert update_res.status_code == 200
+    up_data = update_res.json()
+    assert up_data["title"] == "Rechargeable LED Emergency Light"
+    assert up_data["category"] == "Electronics"
+    assert up_data["scope"] == "personal"
+    assert up_data["is_private"] is True
+
+    # 5. Verify it now appears in personal list
+    summary_after = client.get(f"/api/v1/groups/{gid}/checklists").json()
+    assert any(i["title"] == "Rechargeable LED Emergency Light" for i in summary_after["personal"])
+    assert not any(i["id"] == item_id for i in summary_after["group"])
+
+
