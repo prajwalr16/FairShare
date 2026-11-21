@@ -8,6 +8,7 @@ from ..models.checklist import TripChecklist, TripChecklistUserStatus
 from ..models.user import User
 from ..models.group_member import GroupMember
 from ..schemas.checklist import (
+    CHECKLIST_CATEGORIES,
     ChecklistItemCreate,
     ChecklistBatchImportItem,
     ChecklistItemOut,
@@ -270,13 +271,21 @@ def assign_checklist_item(
     return item
 
 
-def delete_checklist_item(
+def update_checklist_item(
     session: Session,
     group_id: UUID,
     checklist_id: UUID,
     user_id: UUID,
-) -> None:
+    title: str | None = None,
+    category: str | None = None,
+    scope: str | None = None,
+    is_private: bool | None = None,
+    assigned_to: UUID | None = None,
+    assigned_to_provided: bool = False,
+) -> TripChecklist:
     _, role = get_group_and_role(session, group_id, user_id)
+    require_permission(role, "money", "Viewers cannot edit checklist items.")
+
     item = session.scalar(
         select(TripChecklist).where(
             TripChecklist.id == checklist_id,
@@ -286,9 +295,67 @@ def delete_checklist_item(
     if not item:
         raise HTTPException(status_code=404, detail="Checklist item not found.")
 
-    # Creator or group owner/admin can delete
-    if item.created_by != user_id and role not in {"owner", "admin"}:
-        raise HTTPException(status_code=403, detail="You do not have permission to delete this item.")
+    if item.is_private and item.created_by != user_id:
+        raise HTTPException(status_code=403, detail="You do not have permission to edit this private item.")
+
+    if title is not None:
+        cleaned = title.strip()
+        if not cleaned:
+            raise HTTPException(status_code=400, detail="Title cannot be empty.")
+        item.title = cleaned
+
+    if category is not None:
+        cat = category.strip()
+        item.category = cat if cat in CHECKLIST_CATEGORIES else "General"
+
+    if scope is not None:
+        sc = scope.strip().lower()
+        if sc in {"personal", "group"}:
+            item.scope = sc
+            if sc == "personal":
+                item.assigned_to = None
+
+    if is_private is not None:
+        item.is_private = bool(is_private) and (item.scope == "personal")
+
+    if assigned_to_provided and item.scope == "group":
+        if assigned_to is not None:
+            is_member = session.scalar(
+                select(GroupMember.id).where(
+                    GroupMember.group_id == group_id,
+                    GroupMember.user_id == assigned_to,
+                    GroupMember.status == "active",
+                )
+            )
+            if not is_member:
+                raise HTTPException(status_code=400, detail="Assignee is not an active member.")
+        item.assigned_to = assigned_to
+
+    session.commit()
+    return item
+
+
+def delete_checklist_item(
+    session: Session,
+    group_id: UUID,
+    checklist_id: UUID,
+    user_id: UUID,
+) -> None:
+    _, role = get_group_and_role(session, group_id, user_id)
+    require_permission(role, "money", "Viewers cannot delete checklist items.")
+
+    item = session.scalar(
+        select(TripChecklist).where(
+            TripChecklist.id == checklist_id,
+            TripChecklist.group_id == group_id,
+        )
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Checklist item not found.")
+
+    # Private items can only be deleted by their creator
+    if item.is_private and item.created_by != user_id:
+        raise HTTPException(status_code=403, detail="You do not have permission to delete this private item.")
 
     session.delete(item)
     session.commit()

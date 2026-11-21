@@ -19,13 +19,20 @@ from ..schemas.group import (
     GroupSummary, GroupUpdate, InviteMember, MemberBatchCreate, MemberResponse,
     PendingInvitation, RoleUpdate, UnclaimedMemberResponse,
 )
-from ..schemas.checklist import ChecklistItemCreate, ChecklistBatchImport, ChecklistSummary
+from ..schemas.checklist import (
+    ChecklistItemCreate,
+    ChecklistBatchImport,
+    ChecklistSummary,
+    ChecklistItemUpdate,
+    ChecklistItemOut,
+)
 from ..services.checklist_service import (
     get_group_checklists,
     create_checklist_item,
     batch_import_checklist_items,
     toggle_checklist_status,
     assign_checklist_item,
+    update_checklist_item,
     delete_checklist_item,
 )
 from ..schemas.notification import PushTokenRegister
@@ -339,6 +346,53 @@ def assign_checklist_item_route(
 ):
     assign_checklist_item(session, group_id, checklist_id, user.id, payload.assigned_to)
     return {"status": "ok"}
+
+
+@router.patch("/groups/{group_id}/checklists/{checklist_id}", response_model=ChecklistItemOut)
+def update_checklist_item_route(
+    group_id: UUID,
+    checklist_id: UUID,
+    payload: ChecklistItemUpdate,
+    user: CurrentUser = Depends(write_context),
+    session: Session = Depends(get_db),
+):
+    assigned_provided = "assigned_to" in payload.model_fields_set
+    item = update_checklist_item(
+        session,
+        group_id,
+        checklist_id,
+        user.id,
+        title=payload.title,
+        category=payload.category,
+        scope=payload.scope,
+        is_private=payload.is_private,
+        assigned_to=payload.assigned_to,
+        assigned_to_provided=assigned_provided,
+    )
+    assigned_name = None
+    if item.assigned_to:
+        m = session.scalar(
+            select(GroupMember).where(
+                GroupMember.group_id == group_id,
+                GroupMember.user_id == item.assigned_to,
+            )
+        )
+        if m:
+            assigned_name = m.display_name or m.email
+
+    return ChecklistItemOut(
+        id=item.id,
+        group_id=item.group_id,
+        created_by=item.created_by,
+        title=item.title,
+        category=item.category,
+        scope=item.scope,
+        is_private=item.is_private,
+        assigned_to=item.assigned_to,
+        assigned_name=assigned_name,
+        is_packed=item.is_packed_group if item.scope == "group" else False,
+        created_at=item.created_at,
+    )
 
 
 @router.delete("/groups/{group_id}/checklists/{checklist_id}", status_code=status.HTTP_204_NO_CONTENT)
