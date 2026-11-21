@@ -14,10 +14,11 @@ import {
   View,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import TripLocationPickerModal, { TripLocationSelection } from '../../components/TripLocationPickerModal';
+import { hapticMedium, hapticSelection, hapticSuccess } from '../../utils/haptics';
 
 import {
   addTripStop,
@@ -87,6 +88,7 @@ function defaultTimezone() {
 export default function TripDetailsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const insets = useSafeAreaInsets();
   const groupId = route.params?.groupId as string | undefined;
   const groupName = route.params?.groupName as string | undefined;
 
@@ -141,6 +143,18 @@ export default function TripDetailsScreen() {
     if (startDate) return `Starts ${formatDate(startDate)}`;
     return 'Choose the travel window';
   }, [endDate, startDate]);
+
+  const isDirty = useMemo(() => {
+    if (!trip) {
+      return Boolean(startDate || endDate || notes);
+    }
+    return (
+      (startDate || '') !== (trip.start_date || '') ||
+      (endDate || '') !== (trip.end_date || '') ||
+      (timezone || '') !== (trip.timezone || '') ||
+      (notes || '') !== (trip.notes || '')
+    );
+  }, [trip, startDate, endDate, timezone, notes]);
 
   const load = useCallback(async () => {
     if (!groupId) return;
@@ -469,9 +483,27 @@ export default function TripDetailsScreen() {
             <Text style={styles.headerTitle} numberOfLines={1}>{groupName || 'Journey'}</Text>
             <Text style={styles.headerSubtitle} numberOfLines={1}>{dateRangeLabel}</Text>
           </View>
-          <Pressable style={styles.headerButton} onPress={goToExpenses}>
-            <Ionicons name="receipt-outline" size={21} color="#FFFFFF" />
-          </Pressable>
+          <View style={styles.headerActionsRight}>
+            {isDirty && trip && (
+              <Pressable
+                style={[styles.headerSaveButton, saving && styles.disabled]}
+                onPress={() => void saveTrip()}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color="#06090F" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={15} color="#06090F" />
+                    <Text style={styles.headerSaveText}>Save</Text>
+                  </>
+                )}
+              </Pressable>
+            )}
+            <Pressable style={styles.headerButton} onPress={goToExpenses}>
+              <Ionicons name="receipt-outline" size={21} color="#FFFFFF" />
+            </Pressable>
+          </View>
         </View>
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -492,7 +524,24 @@ export default function TripDetailsScreen() {
                     <Text style={styles.sectionTitle}>Trip dates</Text>
                     <Text style={styles.sectionSubtitle}>{startDate && endDate ? `${dayCount} ${dayCount === 1 ? 'day' : 'days'}` : 'Choose the travel window'}</Text>
                   </View>
-                  <View style={styles.dateBadge}><Ionicons name="calendar-outline" size={15} color="#00E5FF" /><Text style={styles.dateBadgeText}>{dayCount}D</Text></View>
+                  {isDirty && trip ? (
+                    <Pressable
+                      style={[styles.inlineSaveBtn, saving && styles.disabled]}
+                      onPress={() => void saveTrip()}
+                      disabled={saving}
+                    >
+                      {saving ? (
+                        <ActivityIndicator size="small" color="#06090F" />
+                      ) : (
+                        <>
+                          <Ionicons name="checkmark" size={13} color="#06090F" />
+                          <Text style={styles.inlineSaveText}>Save</Text>
+                        </>
+                      )}
+                    </Pressable>
+                  ) : (
+                    <View style={styles.dateBadge}><Ionicons name="calendar-outline" size={15} color="#00E5FF" /><Text style={styles.dateBadgeText}>{dayCount}D</Text></View>
+                  )}
                 </View>
                 <View style={styles.dateRow}>
                   <Pressable style={styles.dateField} onPress={() => openDatePicker('start')}>
@@ -574,13 +623,23 @@ export default function TripDetailsScreen() {
                 )}
               </View>
 
-              <Pressable style={[styles.saveJourneyButton, saving && styles.disabled]} onPress={() => void saveTrip()} disabled={saving}>
-                {saving ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />}
-                <Text style={styles.saveJourneyButtonText}>{trip ? 'Save journey changes' : 'Create journey'}</Text>
-              </Pressable>
-
               {!trip ? (
-                <View style={styles.card}><Text style={styles.title}>Create the journey to start planning.</Text><Text style={styles.muted}>You can add expenses at any time without creating a journey.</Text></View>
+                <View style={styles.card}>
+                  <Text style={styles.title}>Create the journey to start planning.</Text>
+                  <Text style={styles.muted}>You can add expenses at any time without creating a journey.</Text>
+                  <Pressable
+                    style={[styles.createJourneyButton, saving && styles.disabled]}
+                    onPress={() => void saveTrip()}
+                    disabled={saving}
+                  >
+                    {saving ? (
+                      <ActivityIndicator size="small" color="#06090F" />
+                    ) : (
+                      <Ionicons name="sparkles" size={16} color="#06090F" />
+                    )}
+                    <Text style={styles.createJourneyButtonText}>Create Journey Plan</Text>
+                  </Pressable>
+                </View>
               ) : (
                 <>
                   <View style={styles.card}>
@@ -784,6 +843,35 @@ export default function TripDetailsScreen() {
           onClose={() => setShowLocationPicker(false)}
           onConfirm={handleLocationConfirmed}
         />
+
+        {/* Floating Save Dock Bar when Trip Dates or Details are modified */}
+        {isDirty && trip && (
+          <View style={[styles.floatingSaveBar, { bottom: Math.max(18, insets.bottom + 10) }]}>
+            <View style={styles.floatingSaveLeft}>
+              <View style={styles.floatingSaveIconRing}>
+                <Ionicons name="calendar-outline" size={15} color="#00E5FF" />
+              </View>
+              <View style={styles.flexOne}>
+                <Text style={styles.floatingSaveTitle}>Unsaved journey changes</Text>
+                <Text style={styles.floatingSaveSubtitle} numberOfLines={1}>Dates or details were modified</Text>
+              </View>
+            </View>
+            <Pressable
+              style={[styles.floatingSaveBtn, saving && styles.disabled]}
+              onPress={() => void saveTrip()}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#06090F" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark" size={15} color="#06090F" />
+                  <Text style={styles.floatingSaveBtnText}>Save</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -796,6 +884,22 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 55 },
   header: { minHeight: 76, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#0E1524' },
   headerButton: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#0E1524', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#263247' },
+  headerActionsRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerSaveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#00E5FF',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    shadowColor: '#00E5FF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  headerSaveText: { color: '#06090F', fontSize: 12, fontWeight: '900', letterSpacing: 0.2 },
   headerCenter: { flex: 1, minWidth: 0, paddingHorizontal: 12 },
   headerEyebrow: { color: '#00E5FF', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
   headerTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '900', marginTop: 2 },
@@ -819,8 +923,85 @@ const styles = StyleSheet.create({
   fieldCaption: { color: '#64748B', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
   fieldValueRow: { flexDirection: 'row', alignItems: 'center', marginTop: 9, gap: 7 },
   dateValue: { color: '#F8FAFC', fontSize: 12, fontWeight: '700', flexShrink: 1 },
-  saveJourneyButton: { minHeight: 52, borderRadius: 15, backgroundColor: '#00E5FF', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, marginBottom: 14 },
-  saveJourneyButtonText: { color: '#06090F', fontSize: 13, fontWeight: '900' },
+  inlineSaveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#00E5FF',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 10,
+    shadowColor: '#00E5FF',
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  inlineSaveText: { color: '#06090F', fontSize: 11.5, fontWeight: '900' },
+  createJourneyButton: {
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: '#00E5FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 14,
+    shadowColor: '#00E5FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  createJourneyButtonText: { color: '#06090F', fontSize: 13, fontWeight: '900', letterSpacing: 0.3 },
+  floatingSaveBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    backgroundColor: '#0E1524',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.4)',
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.55,
+    shadowRadius: 16,
+    elevation: 12,
+    zIndex: 99,
+  },
+  floatingSaveLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    marginRight: 10,
+  },
+  floatingSaveIconRing: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 229, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.3)',
+  },
+  floatingSaveTitle: { color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' },
+  floatingSaveSubtitle: { color: '#94A3B8', fontSize: 10, marginTop: 1 },
+  floatingSaveBtn: {
+    backgroundColor: '#00E5FF',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  floatingSaveBtnText: { color: '#06090F', fontSize: 12, fontWeight: '900' },
   detailsToggle: { flexDirection: 'row', alignItems: 'center' },
   detailsToggleIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   detailsToggleTitle: { color: '#F8FAFC', fontSize: 14, fontWeight: '800' },
