@@ -86,8 +86,8 @@ Unlike conventional expense calculators, FairShare includes day-by-day road trip
 
 | Feature | Description | Implementation Details |
 | :--- | :--- | :--- |
-| **Proportional Tax / Tip Distribution** | When a bill has extra charges (GST, restaurant service tax, delivery fees, driver tips), users enter base subtotal and tax/tip total. | Algorithm in `mobile/src/utils/expenseCalculation.ts`. |
-| **Fair Weighted Allocation** | Automatically distributes additional charges across participants proportionally based on their personal meal or item costs. | Prevents individuals with cheaper orders from subsidizing the tax/tip of expensive orders. |
+| **Proportional Tax / Tip Distribution** | When a bill has extra charges (GST, restaurant service tax, delivery fees, driver tips), users enter base subtotal and tax/tip total. | Algorithm: `calculateProportionalAdditionalCharges()` in `mobile/src/utils/expenseCalculation.ts`. |
+| **Fair Weighted Allocation** | Automatically distributes additional charges across participants proportionally based on their personal meal or item costs using largest-remainder cent rounding. | Prevents individuals with cheaper orders from subsidizing the tax/tip of expensive orders. Tested in `expenseCalculation.test.ts`. |
 | **Interactive UI Calculator** | Live preview showing exact breakdown: Subtotal + Extra Charges = Grand Total. | Integrated into `AddExpenseScreen.tsx`. |
 
 ---
@@ -125,7 +125,7 @@ Unlike conventional expense calculators, FairShare includes day-by-day road trip
 | :--- | :--- | :--- |
 | **Printable Styled PDF Statements** | Generates an executive, luxury-branded printable account statement with group summary, total expenses, member debts, and full itemized ledger. | Formatted HTML generator in `mobile/src/utils/statementExport.ts`. |
 | **Browser Print & Mobile PDF Download** | Triggers native browser print dialog (`window.print()`) on web and provides shareable exports on mobile devices. | Modal: `ExportStatementModal.tsx`. |
-| **CSV Spreadsheet Export** | Exports complete group financials into a clean `.csv` file formatted for Microsoft Excel, Google Sheets, or Apple Numbers. | Comma-delimited formatting with UTF-8 BOM encoding for currency symbols. |
+| **CSV Spreadsheet Export** | Exports complete group financials into a clean `.csv` file formatted for Microsoft Excel, Google Sheets, or Apple Numbers. Tested for quote escaping, column alignment, and sorting. | Formatting: `statementFormatter.ts`, Verified in `statementFormatter.test.ts`. |
 
 ---
 
@@ -220,12 +220,12 @@ Unlike conventional expense calculators, FairShare includes day-by-day road trip
 | Test Suite | Scope & Coverage | Status |
 | :--- | :--- | :--- |
 | **Backend Pytest Suite** (`backend/tests/`) | **68 Automated Tests Passing (1 skipped):**<br>• Core FairShare API routes (20 tests)<br>• Database cascade deletion (1 test)<br>• Migration metadata verification (1 test)<br>• Placeholder members, batch onboarding & claim transfers (3 tests)<br>• Performance & latency routes (2 tests)<br>• Place geocoding API (2 tests)<br>• Production hardening & rate limiting (2 tests)<br>• Route API & geometry caching (14 tests)<br>• Route strategy & individual legs (10 tests)<br>• JWT authentication security (2 tests)<br>• Financial split calculator logic (6 tests)<br>• Trip planning & stop lifecycle (5 tests) | **68 Passed, 0 Failed** |
-| **Mobile Unit Test Suite** (`mobile/src/utils/*.test.ts`) | **31 Automated Unit Tests Passing:**<br>• `currency.test.ts`: Symbol mapping, 2-decimal formatting, negative values, null safety (4 tests)<br>• `expenseCalculation.test.ts`: Equal split largest-remainder distribution, exact split verification, percentage allocations, shares ratios, zero/empty handling (6 tests)<br>• `memberOnboarding.test.ts`: Comma/newline bulk member parsing, deduplication, whitespace safety, and candidate auto-match resolution (6 tests)<br>• `tripDates.test.ts`: Date parsing, ISO string conversion, multi-day math, leap-year boundary additions, date range validation, Indian locale formatting (7 tests)<br>• `upiScheme.test.ts`: NPCI VPA format validation, fake handle rejection, URI parameter encoding, `margin=4` quiet-zone QR generation, fallback QR generation, bank suffix lookup (7 tests) | **31 Passed, 0 Failed** |
+| **Mobile Unit Test Suite** (`mobile/src/utils/*.test.ts`) | **37 Automated Unit Tests Passing across 6 Suites:**<br>• `currency.test.ts`: Symbol mapping, 2-decimal formatting, negative values, null safety (4 tests)<br>• `expenseCalculation.test.ts`: Equal split largest-remainder distribution, exact split verification, percentage allocations, shares ratios, proportional tax/tip allocation, zero/empty handling (9 tests)<br>• `memberOnboarding.test.ts`: Comma/newline bulk member parsing, deduplication, whitespace safety, and candidate auto-match resolution (6 tests)<br>• `statementFormatter.test.ts`: RFC 4180 CSV generation, quote/comma escaping, chronological sorting, ledger rows, and empty dataset handling (3 tests)<br>• `tripDates.test.ts`: Date parsing, ISO string conversion, multi-day math, leap-year boundary additions, date range validation, Indian locale formatting (7 tests)<br>• `upiScheme.test.ts`: NPCI VPA format validation, fake handle rejection, URI parameter encoding, `margin=4` quiet-zone QR generation, fallback QR generation, bank suffix lookup (7 tests) | **37 Passed, 0 Failed** |
 | **TypeScript Static Check** | Strict static type verification across all screens, components, services, and navigation stacks. | **0 Errors (`npx tsc --noEmit`)** |
 | **GitHub Actions CI Pipeline** (`.github/workflows/ci.yml`) | Multi-job matrix pipeline executing on every push to `main` and `dev`:<br>1. Ubuntu + PostgreSQL 16 container service database test.<br>2. Linear Alembic migration chain verification (`0010_placeholder_members`).<br>3. SQLite fallback verification.<br>4. Mobile TypeScript static check.<br>5. Mobile unit test runner (`npm test`).<br>6. Expo Web static production bundle export. | **Automated CI Active** |
 | **Production Hosting Deployment** | Deployed live via Expo Application Services (EAS) Web Hosting. | **Live at [fairshare-url.expo.app](https://fairshare-url.expo.app)** |
 
 ---
 
-*Last Updated & Verified: November 2026 (99 Total Automated Tests Passing)*  
+*Last Updated & Verified: November 2026 (105 Total Automated Tests Passing)*  
 *Maintained by Prajwal & the FairShare Engineering Team.*
