@@ -2,6 +2,8 @@ import test, { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
   buildUpiUri,
+  buildDirectUpiUri,
+  buildWhatsAppReminder,
   isValidUpiId,
   getUpiQrCodeUrl,
   getUpiQrCodeFallbackUrl,
@@ -77,5 +79,48 @@ describe('upiScheme Utility Unit Tests', () => {
     assert.ok(COMMON_UPI_HANDLES.includes('@okaxis'));
     assert.ok(COMMON_UPI_HANDLES.includes('@paytm'));
     assert.ok(COMMON_UPI_HANDLES.includes('@ybl'));
+  });
+
+  it('builds direct deep links for Google Pay, PhonePe, and Paytm', () => {
+    const params = {
+      payeeUpiId: 'rahul@okhdfcbank',
+      payeeName: 'Rahul',
+      amount: 450,
+      note: 'Dinner split',
+    };
+
+    const gpayUri = buildDirectUpiUri('gpay', params);
+    assert.ok(gpayUri.startsWith('tez://upi/pay?'));
+    assert.ok(gpayUri.includes('pa=rahul@okhdfcbank'));
+    assert.ok(gpayUri.includes('am=450.00'));
+
+    const phonepeUri = buildDirectUpiUri('phonepe', params);
+    assert.ok(phonepeUri.startsWith('phonepe://pay?'));
+    assert.ok(phonepeUri.includes('pa=rahul@okhdfcbank'));
+
+    const paytmUri = buildDirectUpiUri('paytm', params);
+    assert.ok(paytmUri.startsWith('paytmmp://pay?'));
+    assert.ok(paytmUri.includes('pa=rahul@okhdfcbank'));
+
+    const genericUri = buildDirectUpiUri('generic', params);
+    assert.ok(genericUri.startsWith('upi://pay?'));
+  });
+
+  it('builds friendly WhatsApp settlement reminder with amount and payment URI', () => {
+    const reminderUrl = buildWhatsAppReminder({
+      payeeName: 'Prajwal',
+      amount: 750,
+      currency: 'INR',
+      groupName: 'Goa Trip',
+      payeeUpiId: 'prajwal@okhdfcbank',
+    });
+
+    assert.ok(reminderUrl.startsWith('https://wa.me/?text='));
+    const decoded = decodeURIComponent(reminderUrl);
+    assert.ok(decoded.includes('Goa Trip'));
+    assert.ok(decoded.includes('750.00'));
+    assert.ok(decoded.includes('Prajwal'));
+    assert.ok(decoded.includes('prajwal@okhdfcbank'));
+    assert.ok(decoded.includes('upi://pay?'));
   });
 });

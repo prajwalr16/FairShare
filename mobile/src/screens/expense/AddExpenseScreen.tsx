@@ -63,6 +63,8 @@ export default function AddExpenseScreen() {
   const [splitInputs, setSplitInputs] = useState<SplitInput[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [payerId, setPayerId] = useState<string | null>(null);
+  const [isMultiPayer, setIsMultiPayer] = useState(false);
+  const [payerContributions, setPayerContributions] = useState<Record<string, string>>({});
   const [payerPickerVisible, setPayerPickerVisible] = useState(false);
   const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
   const [category, setCategory] = useState<ExpenseCategory>('Other');
@@ -180,6 +182,13 @@ export default function AddExpenseScreen() {
     return Number.isFinite(parsed) ? parsed : 0;
   }, [amountText]);
 
+  const multiPayerTotal = useMemo(() => {
+    return Object.values(payerContributions).reduce((sum, val) => {
+      const n = parseFloat(val) || 0;
+      return sum + (n > 0 ? n : 0);
+    }, 0);
+  }, [payerContributions]);
+
   const selectedMembers = useMemo(
     () =>
       members.filter(
@@ -196,11 +205,15 @@ export default function AddExpenseScreen() {
   );
 
   const payerName = useMemo(() => {
+    if (isMultiPayer) {
+      const activeCount = Object.values(payerContributions).filter((v) => (parseFloat(v) || 0) > 0).length;
+      return activeCount > 0 ? `Multiple people (${activeCount} payers)` : 'Multiple people paid';
+    }
     if (!payer) {
       return currentUserId ? 'You' : 'Select member';
     }
     return payer.full_name?.trim() || payer.email || 'Member';
-  }, [currentUserId, payer]);
+  }, [currentUserId, isMultiPayer, payer, payerContributions]);
 
   const effectiveInputs = useMemo(() => {
     const byId = new Map(
@@ -347,17 +360,19 @@ export default function AddExpenseScreen() {
       return;
     }
 
-    if (!payerId) {
-      Alert.alert('Select payer', 'Choose which group member paid this expense.');
-      return;
-    }
+    if (!isMultiPayer) {
+      if (!payerId) {
+        Alert.alert('Select payer', 'Choose which group member paid this expense.');
+        return;
+      }
 
-    if (!members.some((member) => member.user_id === payerId)) {
-      Alert.alert(
-        'Invalid payer',
-        'The selected payer is not an active member of this group.'
-      );
-      return;
+      if (!members.some((member) => member.user_id === payerId)) {
+        Alert.alert(
+          'Invalid payer',
+          'The selected payer is not an active member of this group.'
+        );
+        return;
+      }
     }
 
     if (selectedIds.length === 0) {
@@ -382,13 +397,79 @@ export default function AddExpenseScreen() {
       return;
     }
 
+    if (isMultiPayer) {
+      const activePayers = Object.entries(payerContributions)
+        .map(([uId, val]) => ({ userId: uId, amount: parseFloat(val) || 0 }))
+        .filter((p) => p.amount > 0.005);
+
+      if (activePayers.length === 0) {
+        Alert.alert('No contributions entered', 'Please enter how much each person paid.');
+        return;
+      }
+
+      const totalContrib = activePayers.reduce((s, p) => s + p.amount, 0);
+      if (Math.abs(totalContrib - amount) > 0.02) {
+        Alert.alert(
+          'Contribution mismatch',
+          `The sum of payer contributions (${formatCurrency(totalContrib, currency)}) must equal the total expense amount (${formatCurrency(amount, currency)}).`
+        );
+        return;
+      }
+
+      setSaving(true);
+      for (const p of activePayers) {
+        const payerMember = members.find((m) => m.user_id === p.userId);
+        const payerLabel = payerMember ? displayName(payerMember) : 'Payer';
+        const ratio = p.amount / amount;
+
+        const scaledSplits = effectiveInputs.map((item) => ({
+          userId: item.userId,
+          value: splitType === 'Exact' ? Number((item.value * ratio).toFixed(2)) : item.value,
+        }));
+
+        if (splitType === 'Exact') {
+          const scaledSum = scaledSplits.reduce((s, it) => s + it.value, 0);
+          const diff = Number((p.amount - scaledSum).toFixed(2));
+          if (diff !== 0 && scaledSplits.length > 0) {
+            scaledSplits[0].value = Number((scaledSplits[0].value + diff).toFixed(2));
+          }
+        }
+
+        const { error } = await createExpense({
+          groupId,
+          title: activePayers.length > 1 ? `${cleanTitle} (${payerLabel} paid ${formatCurrency(p.amount, currency)})` : cleanTitle,
+          amount: Number(p.amount.toFixed(2)),
+          paidBy: p.userId,
+          splitType,
+          category,
+          splits: scaledSplits,
+          locationName: locationName.trim() || null,
+          journeyStopId,
+          latitude: locationLatitude,
+          longitude: locationLongitude,
+          expenseDate: expenseDate.toISOString(),
+        });
+
+        if (error) {
+          setSaving(false);
+          Alert.alert('Unable to save expense', error.message);
+          return;
+        }
+      }
+
+      setSaving(false);
+      hapticSuccess();
+      navigation.goBack();
+      return;
+    }
+
     setSaving(true);
 
     const { error } = await createExpense({
       groupId,
       title: cleanTitle,
       amount: Number(amount.toFixed(2)),
-      paidBy: payerId,
+      paidBy: payerId!,
       splitType,
       category,
       splits: effectiveInputs,
@@ -538,9 +619,11 @@ export default function AddExpenseScreen() {
                     {payerName}
                   </Text>
                   <Text style={styles.payerSelectorMeta}>
-                    {payerId === currentUserId
-                      ? 'You paid this expense'
-                      : 'Another group member paid this expense'}
+                    {isMultiPayer
+                      ? `${Object.values(payerContributions).filter((v) => (parseFloat(v) || 0) > 0).length} people contributed`
+                      : payerId === currentUserId
+                        ? 'You paid this expense'
+                        : 'Another group member paid this expense'}
                   </Text>
                 </View>
                 <Ionicons name="chevron-down" size={20} color="#94A3B8" />
@@ -853,7 +936,9 @@ export default function AddExpenseScreen() {
               <View>
                 <Text style={styles.modalTitle}>Paid by</Text>
                 <Text style={styles.modalSubtitle}>
-                  Select the active member who paid this expense.
+                  {isMultiPayer
+                    ? 'Enter each person’s contribution'
+                    : 'Select the active member who paid this expense.'}
                 </Text>
               </View>
               <Pressable
@@ -864,54 +949,156 @@ export default function AddExpenseScreen() {
               </Pressable>
             </View>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.payerList}
-            >
-              {members.map((member) => {
-                const userId = member.user_id as string;
-                const selected = userId === payerId;
+            {/* Payer Mode Switcher */}
+            <View style={styles.payerModeSwitch}>
+              <Pressable
+                style={[styles.payerModeBtn, !isMultiPayer && styles.payerModeBtnActive]}
+                onPress={() => setIsMultiPayer(false)}
+              >
+                <Ionicons name="person-outline" size={14} color={!isMultiPayer ? '#06090F' : '#94A3B8'} />
+                <Text style={[styles.payerModeText, !isMultiPayer && styles.payerModeTextActive]}>Single Payer</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.payerModeBtn, isMultiPayer && styles.payerModeBtnActive]}
+                onPress={() => {
+                  setIsMultiPayer(true);
+                  if (Object.keys(payerContributions).length === 0 && payerId && amount > 0) {
+                    setPayerContributions({ [payerId]: amount.toFixed(2) });
+                  }
+                }}
+              >
+                <Ionicons name="people-outline" size={14} color={isMultiPayer ? '#06090F' : '#94A3B8'} />
+                <Text style={[styles.payerModeText, isMultiPayer && styles.payerModeTextActive]}>Multiple People Paid</Text>
+              </Pressable>
+            </View>
 
-                return (
+            {isMultiPayer ? (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.payerList}
+              >
+                <Text style={styles.multiPayerInstruction}>
+                  Enter the exact amount paid by each person. Total must sum to {formatCurrency(amount, currency)}.
+                </Text>
+                {members.map((member) => {
+                  const userId = member.user_id as string;
+                  const currentVal = payerContributions[userId] || '';
+                  return (
+                    <View key={member.id} style={styles.multiPayerRow}>
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>{displayName(member).charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View style={styles.memberInfo}>
+                        <Text style={styles.memberName} numberOfLines={1}>{displayName(member)}</Text>
+                        <Text style={styles.memberMeta}>{userId === currentUserId ? 'You' : member.role === 'owner' ? 'Owner' : 'Member'}</Text>
+                      </View>
+                      <View style={styles.multiPayerInputWrap}>
+                        <Text style={styles.currencyPrefix}>{currency}</Text>
+                        <TextInput
+                          value={currentVal}
+                          onChangeText={(text) => {
+                            const clean = text.replace(/[^0-9.]/g, '');
+                            setPayerContributions((prev) => ({
+                              ...prev,
+                              [userId]: clean,
+                            }));
+                          }}
+                          placeholder="0.00"
+                          placeholderTextColor="#64748B"
+                          keyboardType="decimal-pad"
+                          style={styles.multiPayerInput}
+                        />
+                      </View>
+                    </View>
+                  );
+                })}
+
+                <View style={styles.multiPayerFooter}>
+                  <View style={styles.multiPayerSummaryRow}>
+                    <Text style={styles.multiPayerSummaryLabel}>Total Contributed:</Text>
+                    <Text style={styles.multiPayerSummaryValue}>{formatCurrency(multiPayerTotal, currency)}</Text>
+                  </View>
+                  <View style={styles.multiPayerSummaryRow}>
+                    <Text style={styles.multiPayerSummaryLabel}>Expense Amount:</Text>
+                    <Text style={styles.multiPayerSummaryValue}>{formatCurrency(amount, currency)}</Text>
+                  </View>
+                  {Math.abs(multiPayerTotal - amount) > 0.01 ? (
+                    <Text style={styles.multiPayerDiffError}>
+                      {multiPayerTotal > amount
+                        ? `Over by ${formatCurrency(multiPayerTotal - amount, currency)}`
+                        : `Remaining: ${formatCurrency(amount - multiPayerTotal, currency)}`}
+                    </Text>
+                  ) : (
+                    <Text style={styles.multiPayerMatchSuccess}>✓ Sum matches total expense</Text>
+                  )}
+
                   <Pressable
-                    key={member.id}
                     style={[
-                      styles.payerRow,
-                      selected && styles.payerRowSelected,
+                      styles.confirmMultiPayerBtn,
+                      Math.abs(multiPayerTotal - amount) > 0.01 && styles.disabledButton,
                     ]}
                     onPress={() => {
-                      setPayerId(userId);
-                      setPayerPickerVisible(false);
+                      if (Math.abs(multiPayerTotal - amount) <= 0.01) {
+                        setPayerPickerVisible(false);
+                      }
                     }}
+                    disabled={Math.abs(multiPayerTotal - amount) > 0.01}
                   >
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>
-                        {displayName(member).charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={styles.memberInfo}>
-                      <Text style={styles.memberName} numberOfLines={1}>
-                        {displayName(member)}
-                      </Text>
-                      <Text style={styles.memberMeta}>
-                        {userId === currentUserId
-                          ? 'You'
-                          : member.role === 'owner'
-                            ? 'Owner'
-                            : 'Member'}
-                      </Text>
-                    </View>
-                    {selected ? (
-                      <View style={styles.payerCheck}>
-                        <Ionicons name="checkmark" size={17} color="#FFFFFF" />
-                      </View>
-                    ) : (
-                      <View style={styles.payerEmptyCheck} />
-                    )}
+                    <Text style={styles.confirmMultiPayerBtnText}>Done</Text>
                   </Pressable>
-                );
-              })}
-            </ScrollView>
+                </View>
+              </ScrollView>
+            ) : (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.payerList}
+              >
+                {members.map((member) => {
+                  const userId = member.user_id as string;
+                  const selected = userId === payerId;
+
+                  return (
+                    <Pressable
+                      key={member.id}
+                      style={[
+                        styles.payerRow,
+                        selected && styles.payerRowSelected,
+                      ]}
+                      onPress={() => {
+                        setPayerId(userId);
+                        setIsMultiPayer(false);
+                        setPayerPickerVisible(false);
+                      }}
+                    >
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>
+                          {displayName(member).charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.memberInfo}>
+                        <Text style={styles.memberName} numberOfLines={1}>
+                          {displayName(member)}
+                        </Text>
+                        <Text style={styles.memberMeta}>
+                          {userId === currentUserId
+                            ? 'You'
+                            : member.role === 'owner'
+                              ? 'Owner'
+                              : 'Member'}
+                        </Text>
+                      </View>
+                      {selected ? (
+                        <View style={styles.payerCheck}>
+                          <Ionicons name="checkmark" size={17} color="#FFFFFF" />
+                        </View>
+                      ) : (
+                        <View style={styles.payerEmptyCheck} />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -1384,5 +1571,124 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 2,
     borderColor: '#475569',
+  },
+  payerModeSwitch: {
+    flexDirection: 'row',
+    backgroundColor: '#06090F',
+    borderRadius: 12,
+    padding: 3,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  payerModeBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 10,
+  },
+  payerModeBtnActive: {
+    backgroundColor: '#00E5FF',
+  },
+  payerModeText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  payerModeTextActive: {
+    color: '#06090F',
+    fontWeight: '900',
+  },
+  multiPayerInstruction: {
+    color: '#94A3B8',
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+  multiPayerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  multiPayerInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#06090F',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2A3A50',
+    paddingHorizontal: 10,
+    width: 124,
+    height: 40,
+  },
+  currencyPrefix: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '700',
+    marginRight: 4,
+  },
+  multiPayerInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'right',
+    paddingVertical: 0,
+  },
+  multiPayerFooter: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  multiPayerSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  multiPayerSummaryLabel: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  multiPayerSummaryValue: {
+    color: '#00E5FF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  multiPayerDiffError: {
+    color: '#F87171',
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'right',
+    marginBottom: 8,
+  },
+  multiPayerMatchSuccess: {
+    color: '#10B981',
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'right',
+    marginBottom: 8,
+  },
+  confirmMultiPayerBtn: {
+    backgroundColor: '#00E5FF',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  confirmMultiPayerBtnText: {
+    color: '#06090F',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  disabledButton: {
+    opacity: 0.45,
   },
 });

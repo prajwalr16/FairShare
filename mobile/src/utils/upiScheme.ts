@@ -68,3 +68,44 @@ export function getUpiQrCodeUrl(upiUri: string, size = 260): string {
 export function getUpiQrCodeFallbackUrl(upiUri: string, size = 260): string {
   return `https://quickchart.io/qr?size=${size}&margin=4&text=${encodeURIComponent(upiUri)}`;
 }
+
+export type SupportedUpiApp = 'gpay' | 'phonepe' | 'paytm' | 'generic';
+
+/**
+ * Builds targeted deep links for specific UPI applications.
+ */
+export function buildDirectUpiUri(app: SupportedUpiApp, params: UpiPaymentParams): string {
+  const genericUri = buildUpiUri(params);
+  const query = genericUri.replace(/^upi:\/\/pay\?/, '');
+  switch (app) {
+    case 'gpay':
+      return `tez://upi/pay?${query}`;
+    case 'phonepe':
+      return `phonepe://pay?${query}`;
+    case 'paytm':
+      return `paytmmp://pay?${query}`;
+    default:
+      return genericUri;
+  }
+}
+
+/**
+ * Builds a friendly WhatsApp payment reminder link.
+ */
+export function buildWhatsAppReminder(params: {
+  payeeName: string;
+  payerName?: string;
+  amount: number;
+  currency: string;
+  groupName?: string;
+  payeeUpiId?: string;
+}): string {
+  const amountStr = `${params.currency || '₹'} ${params.amount.toFixed(2)}`;
+  const groupStr = params.groupName ? ` for *${params.groupName}*` : '';
+  const upiLink = params.payeeUpiId
+    ? `\n\n📲 *Quick UPI Pay:* upi://pay?pa=${params.payeeUpiId}&pn=${encodeURIComponent(params.payeeName)}&am=${params.amount.toFixed(2)}&cu=INR`
+    : '';
+
+  const text = `Hey! 👋 Just a quick friendly settlement reminder${groupStr} on FairShare:\n\n💰 *Amount:* ${amountStr}\n👤 *Pay to:* ${params.payeeName}${params.payeeUpiId ? ` (${params.payeeUpiId})` : ''}${upiLink}\n\nLet's settle up whenever you have a moment. Thanks! ✨`;
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
