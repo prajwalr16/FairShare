@@ -143,9 +143,16 @@ function setMarker(lng, lat, moveCamera) {
     marker.setLngLat([lng,lat]);
   }
   if (moveCamera) {
-    map.easeTo({center:[lng,lat],zoom:Math.max(map.getZoom(),14),duration:400});
+    if (map.loaded()) {
+      map.easeTo({center:[lng,lat],zoom:Math.max(map.getZoom(),14),duration:400});
+    } else {
+      map.once('load', () => {
+        map.easeTo({center:[lng,lat],zoom:Math.max(map.getZoom(),14),duration:400});
+      });
+    }
   }
 }
+window.setMarker = setMarker;
 
 map.on('load', () => {
   if (initial.latitude != null && initial.longitude != null) {
@@ -165,27 +172,29 @@ map.on('click', (event) => {
   }
 });
 
-window.addEventListener('message', (event) => {
+function handleIncomingMessage(raw) {
   try {
-    const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-    if (message.type === 'setLocation') {
-      const latitude = Number(message.latitude);
-      const longitude = Number(message.longitude);
+    let data = raw;
+    if (typeof data === 'string') {
+      try { data = JSON.parse(data); } catch(_) {}
+    }
+    if (data && data.type === '__RNWV_HOST_MESSAGE__' && data.payload) {
+      try {
+        data = typeof data.payload === 'string' ? JSON.parse(data.payload) : data.payload;
+      } catch(_) {
+        data = data.payload;
+      }
+    }
+    if (data && data.type === 'setLocation') {
+      const latitude = Number(data.latitude);
+      const longitude = Number(data.longitude);
       setMarker(longitude, latitude, true);
     }
   } catch (_) {}
-});
+}
 
-document.addEventListener('message', (event) => {
-  try {
-    const message = JSON.parse(event.data || '{}');
-    if (message.type === 'setLocation') {
-      const latitude = Number(message.latitude);
-      const longitude = Number(message.longitude);
-      setMarker(longitude, latitude, true);
-    }
-  } catch (_) {}
-});
+window.addEventListener('message', (event) => handleIncomingMessage(event.data));
+document.addEventListener('message', (event) => handleIncomingMessage(event.data));
 </script>
 </body>
 </html>`;
@@ -277,6 +286,14 @@ export default function TripLocationPickerModal({
       longitude: nextLongitude,
     });
     webViewRef.current?.postMessage(message);
+    webViewRef.current?.injectJavaScript(`
+      try {
+        if (typeof window.setMarker === 'function') {
+          window.setMarker(${nextLongitude}, ${nextLatitude}, true);
+        }
+      } catch (e) {}
+      true;
+    `);
   }, []);
 
   const saveToRecent = useCallback(async (place: PlaceSearchResult) => {

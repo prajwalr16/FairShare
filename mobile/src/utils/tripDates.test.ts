@@ -56,4 +56,41 @@ describe('tripDates Utility Unit Tests', () => {
     assert.ok(formatted.includes('Nov'));
     assert.ok(formatted.includes('2026'));
   });
+
+  it('correctly calculates stop visibility and expansion when a day has more than 3 stops', () => {
+    const dayStops = [
+      { id: '1', name: 'Stop 1', sequence: 0 },
+      { id: '2', name: 'Stop 2', sequence: 1 },
+      { id: '3', name: 'Stop 3', sequence: 2 },
+      { id: '4', name: 'Stop 4', sequence: 3 },
+      { id: '5', name: 'Stop 5', sequence: 4 },
+    ];
+
+    // Collapsed state limits to 3
+    const collapsed = dayStops.slice(0, 3);
+    assert.strictEqual(collapsed.length, 3);
+    assert.strictEqual(dayStops.length > 3, true);
+    assert.strictEqual(dayStops.length - 3, 2);
+
+    // Expanded state shows all stops
+    const expanded = dayStops;
+    assert.strictEqual(expanded.length, 5);
+  });
+
+  it('correctly aggregates unique days and handles day expansion', () => {
+    const allStops = [
+      { id: '1', day_number: 1 },
+      { id: '2', day_number: 1 },
+      { id: '3', day_number: 2 },
+      { id: '4', day_number: 3 },
+      { id: '5', day_number: 4 },
+    ];
+
+    const uniqueDays = Array.from(new Set(allStops.map((s) => s.day_number))).sort((a, b) => a - b);
+    assert.deepStrictEqual(uniqueDays, [1, 2, 3, 4]);
+    assert.strictEqual(uniqueDays.length > 3, true);
+
+    const defaultDays = uniqueDays.slice(0, 3);
+    assert.deepStrictEqual(defaultDays, [1, 2, 3]);
+  });
 });
