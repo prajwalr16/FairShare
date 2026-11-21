@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import StatusBanner from '../../components/StatusBanner';
 
 import { supabase } from '../../config/supabase';
 import { getCurrentSession } from '../../services/authService';
@@ -425,11 +426,11 @@ export default function AcceptInviteScreen() {
             editable={!saving}
           />
 
-          {status?.type === 'error' ? (
-            <View style={styles.statusBox}>
-              <Text style={styles.statusText}>{status.message}</Text>
-            </View>
-          ) : null}
+          <StatusBanner
+            type={status?.type}
+            message={status?.message}
+            onDismiss={() => setStatus(null)}
+          />
 
           <Pressable
             style={[styles.button, saving && styles.disabled]}
