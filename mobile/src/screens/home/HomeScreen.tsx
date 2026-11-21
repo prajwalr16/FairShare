@@ -233,18 +233,6 @@ export default function HomeScreen() {
 
             <View style={styles.headerActions}>
               <Pressable
-                style={styles.headerCreateBtn}
-                onPress={() => {
-                  void hapticSelection();
-                  setShowCreate(true);
-                }}
-                hitSlop={8}
-              >
-                <Ionicons name="add" size={15} color="#06090F" />
-                <Text style={styles.headerCreateText}>Group</Text>
-              </Pressable>
-
-              <Pressable
                 style={styles.headerIconBtn}
                 onPress={() => void handleRefresh()}
                 hitSlop={8}
@@ -431,7 +419,7 @@ export default function HomeScreen() {
                   />
                 </View>
 
-                {/* Section Header with Direct New Group Action */}
+                {/* Section Header */}
                 <View style={styles.sectionTitleRow}>
                   <View style={styles.sectionTitleLeft}>
                     <Text style={styles.sectionTitle}>
@@ -441,18 +429,6 @@ export default function HomeScreen() {
                       <Text style={styles.sectionBadgeText}>{filteredGroups.length}</Text>
                     </View>
                   </View>
-
-                  <Pressable
-                    style={styles.sectionCreateBtn}
-                    onPress={() => {
-                      void hapticSelection();
-                      setShowCreate(true);
-                    }}
-                    hitSlop={6}
-                  >
-                    <Ionicons name="add" size={14} color="#00E5FF" />
-                    <Text style={styles.sectionCreateBtnText}>New Group</Text>
-                  </Pressable>
                 </View>
               </Animated.View>
             }
@@ -592,26 +568,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  headerCreateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#00E5FF',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 10,
-    shadowColor: '#00E5FF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  headerCreateText: {
-    color: '#06090F',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.3,
   },
   headerIconBtn: {
     width: 36,
@@ -902,23 +858,6 @@ const styles = StyleSheet.create({
     color: '#CBD5E1',
     fontSize: 10,
     fontWeight: '800',
-  },
-  sectionCreateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0, 229, 255, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 229, 255, 0.28)',
-    paddingHorizontal: 11,
-    paddingVertical: 5,
-    borderRadius: 9,
-  },
-  sectionCreateBtnText: {
-    color: '#00E5FF',
-    fontSize: 11.5,
-    fontWeight: '800',
-    letterSpacing: 0.2,
   },
   skeletonList: {
     width: '100%',
