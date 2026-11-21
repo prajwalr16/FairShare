@@ -356,3 +356,80 @@ export function buildDefaultInputs(
 
   return ids.map((userId) => ({ userId, value: 1 }));
 }
+
+export type ItemShare = {
+  userId: string;
+  itemSubtotal: number;
+};
+
+export type AllocatedCharge = {
+  userId: string;
+  subtotal: number;
+  allocatedCharge: number;
+  totalWithCharge: number;
+};
+
+/**
+ * Proportionally allocates extra charges (tax, tip, platform/delivery fees)
+ * across participant item costs using largest-remainder integer cent distribution,
+ * guaranteeing that sum(allocatedCharge) === additionalCharges to the exact paisa/cent.
+ */
+export function calculateProportionalAdditionalCharges(
+  itemShares: ItemShare[],
+  additionalCharges: number
+): AllocatedCharge[] {
+  if (!itemShares || itemShares.length === 0) return [];
+
+  const validCharges = Number.isFinite(additionalCharges) ? Math.max(0, additionalCharges) : 0;
+  const totalChargeCents = Math.round(validCharges * 100);
+
+  const subtotalCents = itemShares.map((item) =>
+    Math.round(Math.max(0, Number(item.itemSubtotal) || 0) * 100)
+  );
+  const totalSubtotalCents = subtotalCents.reduce((sum, c) => sum + c, 0);
+
+  if (totalChargeCents === 0 || totalSubtotalCents === 0) {
+    return itemShares.map((item, idx) => ({
+      userId: item.userId,
+      subtotal: subtotalCents[idx] / 100,
+      allocatedCharge: 0,
+      totalWithCharge: subtotalCents[idx] / 100,
+    }));
+  }
+
+  const baseCents = subtotalCents.map((subCents) =>
+    Math.floor((totalChargeCents * subCents) / totalSubtotalCents)
+  );
+  const remainders = subtotalCents.map(
+    (subCents) => (totalChargeCents * subCents) % totalSubtotalCents
+  );
+
+  let remainingCents =
+    totalChargeCents - baseCents.reduce((sum, c) => sum + c, 0);
+
+  const rankedIndexes = itemShares
+    .map((_, index) => index)
+    .sort((a, b) => {
+      if (remainders[b] !== remainders[a]) return remainders[b] - remainders[a];
+      return a - b;
+    });
+
+  const bonusCents = new Set<number>();
+  for (const idx of rankedIndexes) {
+    if (remainingCents <= 0) break;
+    if (subtotalCents[idx] <= 0) continue;
+    bonusCents.add(idx);
+    remainingCents -= 1;
+  }
+
+  return itemShares.map((item, index) => {
+    const allocated = (baseCents[index] + (bonusCents.has(index) ? 1 : 0)) / 100;
+    const sub = subtotalCents[index] / 100;
+    return {
+      userId: item.userId,
+      subtotal: sub,
+      allocatedCharge: allocated,
+      totalWithCharge: Number((sub + allocated).toFixed(2)),
+    };
+  });
+}

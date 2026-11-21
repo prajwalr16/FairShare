@@ -4,6 +4,7 @@ import {
   calculateSplits,
   validateSplit,
   sharesTotal,
+  calculateProportionalAdditionalCharges,
   type SplitInput,
 } from './expenseCalculation.ts';
 
@@ -108,5 +109,53 @@ describe('expenseCalculation Unit Tests', () => {
 
     const emptyResult = calculateSplits('Equal', 100, []);
     assert.strictEqual(emptyResult.length, 0);
+  });
+
+  it('allocates proportional tax and tip across item subtotals accurately', () => {
+    // Alice ordered ₹100, Bob ordered ₹200. Restaurant added ₹30 tax/service charge.
+    const itemShares = [
+      { userId: 'alice', itemSubtotal: 100 },
+      { userId: 'bob', itemSubtotal: 200 },
+    ];
+    const allocated = calculateProportionalAdditionalCharges(itemShares, 30);
+    assert.strictEqual(allocated.length, 2);
+
+    const alice = allocated.find((a) => a.userId === 'alice');
+    const bob = allocated.find((a) => a.userId === 'bob');
+
+    assert.strictEqual(alice?.allocatedCharge, 10);
+    assert.strictEqual(alice?.totalWithCharge, 110);
+
+    assert.strictEqual(bob?.allocatedCharge, 20);
+    assert.strictEqual(bob?.totalWithCharge, 220);
+
+    const totalAllocated = allocated.reduce((sum, a) => sum + a.allocatedCharge, 0);
+    assert.strictEqual(Number(totalAllocated.toFixed(2)), 30);
+  });
+
+  it('handles remainder cent distribution on proportional extra charges without losing a paisa', () => {
+    // 3 participants each have ₹100 subtotal, with ₹10 extra charge.
+    // Must distribute 3.34, 3.33, 3.33 summing to exactly 10.00
+    const itemShares = [
+      { userId: 'u1', itemSubtotal: 100 },
+      { userId: 'u2', itemSubtotal: 100 },
+      { userId: 'u3', itemSubtotal: 100 },
+    ];
+    const allocated = calculateProportionalAdditionalCharges(itemShares, 10);
+    const sumAllocated = Number(
+      allocated.reduce((sum, a) => sum + a.allocatedCharge, 0).toFixed(2)
+    );
+    assert.strictEqual(sumAllocated, 10.00);
+
+    const charges = allocated.map((a) => a.allocatedCharge);
+    assert.ok(charges.includes(3.34));
+    assert.ok(charges.includes(3.33));
+  });
+
+  it('returns zero extra charge when additional charges are zero or negative', () => {
+    const itemShares = [{ userId: 'u1', itemSubtotal: 50 }];
+    const allocated = calculateProportionalAdditionalCharges(itemShares, 0);
+    assert.strictEqual(allocated[0].allocatedCharge, 0);
+    assert.strictEqual(allocated[0].totalWithCharge, 50);
   });
 });
