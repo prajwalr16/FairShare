@@ -17,7 +17,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import UniversalWebView, { UniversalWebViewRef, WebViewMessageEvent } from '../../components/UniversalWebView';
+import TripLocationPickerModal, { TripLocationSelection } from '../../components/TripLocationPickerModal';
 
 import {
   addTripStop,
@@ -84,76 +84,6 @@ function defaultTimezone() {
   }
 }
 
-function buildPickerMapHtml(
-  latitude: number | null,
-  longitude: number | null,
-  label: string,
-) {
-  const safeLabel = JSON.stringify(label).replace(/</g, '\\u003c');
-  const initial = JSON.stringify({ latitude, longitude, label }).replace(/</g, '\\u003c');
-
-  return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-gl.css">
-<style>
-html,body,#map{height:100%;width:100%;margin:0;background:#E8EEF4;overflow:hidden;touch-action:none}
-.marker{width:38px;height:38px;border-radius:19px;background:#00E5FF;border:3px solid #fff;box-shadow:0 3px 10px rgba(15,23,42,.35);display:flex;align-items:center;justify-content:center;color:#fff;font:900 13px system-ui,-apple-system,sans-serif}
-.maplibregl-ctrl-group{border-radius:13px;overflow:hidden}
-</style>
-</head>
-<body><div id="map"></div>
-<script type="module">
-import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-gl.mjs';
-const initial=${initial};
-const fallback=[78.9629,20.5937];
-let currentMarker=null;
-let selected={lat:initial.latitude,lon:initial.longitude,label:initial.label||'Selected location'};
-const map=new maplibregl.Map({
- container:'map',
- style:'https://tiles.openfreemap.org/styles/liberty',
- center:initial.longitude!=null&&initial.latitude!=null?[initial.longitude,initial.latitude]:fallback,
- zoom:initial.longitude!=null&&initial.latitude!=null?13:4.4,
- attributionControl:false,
- cooperativeGestures:false,
- touchZoomRotate:true,
- dragPan:true,
- doubleClickZoom:true,
- scrollZoom:true
-});
-map.addControl(new maplibregl.NavigationControl({showCompass:false}), 'top-right');
-map.addControl(new maplibregl.AttributionControl({compact:true}), 'bottom-right');
-function drawMarker(){
- if(currentMarker){currentMarker.remove();}
- if(selected.lat==null||selected.lon==null)return;
- const el=document.createElement('div');el.className='marker';el.textContent='•';
- currentMarker=new maplibregl.Marker({element:el,anchor:'center'}).setLngLat([selected.lon,selected.lat]).addTo(map);
-}
-window.setSelectedLocation=function(latitude,longitude,label){
- if(!Number.isFinite(latitude)||!Number.isFinite(longitude)) return;
- selected={lat:latitude,lon:longitude,label:label||'Selected location'};
- drawMarker();
- map.resize();
- map.flyTo({center:[longitude,latitude],zoom:14.2,duration:500,essential:true});
-};
-map.on('load',()=>{
- drawMarker();
- if(initial.longitude!=null&&initial.latitude!=null){map.flyTo({center:[initial.longitude,initial.latitude],zoom:14,duration:350,essential:true});}
-});
-map.on('click',(event)=>{
- selected={lat:event.lngLat.lat,lon:event.lngLat.lng,label:'Selected location'};
- drawMarker();
- window.ReactNativeWebView.postMessage(JSON.stringify({type:'map-tap',latitude:selected.lat,longitude:selected.lon}));
-});
-document.addEventListener('touchstart',()=>post('map-touch-start',{}),{capture:true,passive:true});
-document.addEventListener('touchend',()=>post('map-touch-end',{}),{capture:true,passive:true});
-document.addEventListener('touchcancel',()=>post('map-touch-end',{}),{capture:true,passive:true});
-</script>
-</body></html>`;
-}
-
 export default function TripDetailsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -185,20 +115,8 @@ export default function TripDetailsScreen() {
   const [stopLongitude, setStopLongitude] = useState('');
   const [stopNote, setStopNote] = useState('');
   const [savingStop, setSavingStop] = useState(false);
-
-  const [placeSearch, setPlaceSearch] = useState('');
-  const [placeResults, setPlaceResults] = useState<PlaceSearchResult[]>([]);
+  const [stopFormError, setStopFormError] = useState<string | null>(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [pickerLatitude, setPickerLatitude] = useState<number | null>(null);
-  const [pickerLongitude, setPickerLongitude] = useState<number | null>(null);
-  const [pickerLabel, setPickerLabel] = useState('Selected location');
-  const [pickerAddress, setPickerAddress] = useState<string | null>(null);
-  const [pickerLoadingSearch, setPickerLoadingSearch] = useState(false);
-  const [pickerMapTouching, setPickerMapTouching] = useState(false);
-  const [pickerSession, setPickerSession] = useState(0);
-  const pickerWebViewRef = useRef<UniversalWebViewRef>(null);
-  const pickerInitialRef = useRef<{ latitude: number | null; longitude: number | null; label: string }>({ latitude: null, longitude: null, label: 'Selected location' });
-  const pendingPickerFocusRef = useRef<{ latitude: number; longitude: number; label: string } | null>(null);
 
   const reorderSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingOrder = useRef<string[] | null>(null);
@@ -208,6 +126,15 @@ export default function TripDetailsScreen() {
   const orderedStops = useMemo(() => sortStops(trip?.stops || []), [trip?.stops]);
   const dayStops = useMemo(() => orderedStops.filter((stop) => stop.day_number === selectedDay), [orderedStops, selectedDay]);
   const mappedCount = useMemo(() => trip?.stops.filter((stop) => stop.latitude != null && stop.longitude != null).length || 0, [trip?.stops]);
+
+  const existingStartStop = useMemo(
+    () => (trip?.stops || []).find((s) => s.stop_type === 'start' && s.id !== editingStop?.id),
+    [trip?.stops, editingStop?.id],
+  );
+  const existingDestinationStop = useMemo(
+    () => (trip?.stops || []).find((s) => s.stop_type === 'destination' && s.id !== editingStop?.id),
+    [trip?.stops, editingStop?.id],
+  );
 
   const dateRangeLabel = useMemo(() => {
     if (startDate && endDate) return `${formatDate(startDate)} → ${formatDate(endDate)}`;
@@ -335,7 +262,10 @@ export default function TripDetailsScreen() {
 
   const openAddStop = () => {
     setEditingStop(null);
-    setStopType(dayStops.length === 0 ? 'start' : 'stop');
+    setStopFormError(null);
+    const defaultType: TripStopType =
+      !existingStartStop && selectedDay === 1 && dayStops.length === 0 ? 'start' : 'stop';
+    setStopType(defaultType);
     setStopDay(selectedDay);
     setStopName('');
     setStopLabel('');
@@ -343,13 +273,12 @@ export default function TripDetailsScreen() {
     setStopLatitude('');
     setStopLongitude('');
     setStopNote('');
-    setPlaceSearch('');
-    setPlaceResults([]);
     setShowStopForm(true);
   };
 
   const openEditStop = (stop: TripStop) => {
     setEditingStop(stop);
+    setStopFormError(null);
     setStopType(stop.stop_type);
     setStopDay(stop.day_number);
     setStopName(stop.name);
@@ -358,118 +287,50 @@ export default function TripDetailsScreen() {
     setStopLatitude(stop.latitude == null ? '' : String(stop.latitude));
     setStopLongitude(stop.longitude == null ? '' : String(stop.longitude));
     setStopNote(stop.note || '');
-    setPlaceSearch('');
-    setPlaceResults([]);
     setShowStopForm(true);
   };
 
   const closeStopForm = () => {
     setShowStopForm(false);
     setEditingStop(null);
-    setPlaceSearch('');
-    setPlaceResults([]);
+    setStopFormError(null);
   };
 
   const openLocationPicker = () => {
-    const latitude = stopLatitude.trim() ? Number(stopLatitude.trim()) : null;
-    const longitude = stopLongitude.trim() ? Number(stopLongitude.trim()) : null;
-    const hasValidCoords =
-      latitude != null && longitude != null && Number.isFinite(latitude) && Number.isFinite(longitude) &&
-      latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
-
-    const initialLatitude = hasValidCoords ? latitude : null;
-    const initialLongitude = hasValidCoords ? longitude : null;
-    const initialLabel = stopName.trim() || 'Selected location';
-    pickerInitialRef.current = { latitude: initialLatitude, longitude: initialLongitude, label: initialLabel };
-    pendingPickerFocusRef.current = null;
-    setPickerLatitude(initialLatitude);
-    setPickerLongitude(initialLongitude);
-    setPickerLabel(initialLabel);
-    setPickerAddress(stopAddress.trim() || null);
-    setPickerSession((value) => value + 1);
     setShowLocationPicker(true);
   };
 
-  const focusPickerLocation = (latitude: number, longitude: number, label: string) => {
-    const payload = { latitude, longitude, label };
-    pendingPickerFocusRef.current = payload;
-    const script = `window.setSelectedLocation && window.setSelectedLocation(${JSON.stringify(latitude)},${JSON.stringify(longitude)},${JSON.stringify(label)}); true;`;
-    pickerWebViewRef.current?.injectJavaScript(script);
-  };
-
-  const searchInsidePicker = async () => {
-    const query = placeSearch.trim();
-    if (query.length < 2) {
-      Alert.alert('Search place', 'Enter at least 2 characters.');
-      return;
+  const handleLocationConfirmed = (selection: TripLocationSelection) => {
+    setStopLatitude(selection.latitude.toFixed(6));
+    setStopLongitude(selection.longitude.toFixed(6));
+    if (!stopName.trim() || selection.name !== 'Selected location') {
+      setStopName(selection.name);
     }
-    setPickerLoadingSearch(true);
-    const result = await searchPlaces(query);
-    setPickerLoadingSearch(false);
-    if (result.error) {
-      Alert.alert('Place search failed', result.error.message);
-      return;
+    if (selection.address) {
+      setStopAddress(selection.address);
     }
-    const results = result.data?.results || [];
-    setPlaceResults(results.slice(0, 5));
-    if (!results.length) {
-      Alert.alert('No places found', 'Try a more specific place or address.');
-      return;
-    }
-    const place = results[0];
-    setPickerLatitude(place.latitude);
-    setPickerLongitude(place.longitude);
-    setPickerLabel(place.name || place.display_name);
-    setPickerAddress(place.address || place.display_name);
-    focusPickerLocation(place.latitude, place.longitude, place.name || place.display_name);
-  };
-
-  const choosePickerResult = (place: PlaceSearchResult) => {
-    setPickerLatitude(place.latitude);
-    setPickerLongitude(place.longitude);
-    setPickerLabel(place.name || place.display_name);
-    setPickerAddress(place.address || place.display_name);
-    setPlaceResults([]);
-    focusPickerLocation(place.latitude, place.longitude, place.name || place.display_name);
-  };
-
-  const onPickerMapMessage = (event: WebViewMessageEvent) => {
-    try {
-      const message = JSON.parse(event.nativeEvent.data || '{}');
-      if (message.type === 'map-touch-start') setPickerMapTouching(true);
-      if (message.type === 'map-touch-end') setPickerMapTouching(false);
-      if (message.type === 'map-tap') {
-        const latitude = Number(message.latitude);
-        const longitude = Number(message.longitude);
-        if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-          setPickerLatitude(latitude);
-          setPickerLongitude(longitude);
-          setPickerLabel('Selected location');
-          setPickerAddress(null);
-          setPlaceResults([]);
-        }
-      }
-    } catch {
-      // Ignore malformed WebView messages.
-    }
-  };
-
-  const usePickerLocation = () => {
-    if (pickerLatitude == null || pickerLongitude == null) {
-      Alert.alert('Choose a location', 'Search for a place or tap the map first.');
-      return;
-    }
-    setStopLatitude(pickerLatitude.toFixed(6));
-    setStopLongitude(pickerLongitude.toFixed(6));
-    if (!stopName.trim() || pickerLabel !== 'Selected location') setStopName(pickerLabel);
-    if (pickerAddress) setStopAddress(pickerAddress);
     setShowLocationPicker(false);
   };
 
   const saveStop = async () => {
+    setStopFormError(null);
     if (!groupId || !trip) return;
     if (!stopName.trim()) {
-      Alert.alert('Stop name required', 'Enter a name for this stop.');
+      setStopFormError('Please enter a name for this stop.');
+      return;
+    }
+
+    if (stopType === 'start' && existingStartStop) {
+      setStopFormError(
+        `A start point already exists on Day ${existingStartStop.day_number} ("${existingStartStop.name}"). Each journey can only have one starting location. Please select "Stop" or "Destination".`
+      );
+      return;
+    }
+
+    if (stopType === 'destination' && existingDestinationStop) {
+      setStopFormError(
+        `A destination already exists on Day ${existingDestinationStop.day_number} ("${existingDestinationStop.name}"). Each journey can only have one destination. Please select "Stop".`
+      );
       return;
     }
 
@@ -480,7 +341,7 @@ export default function TripDetailsScreen() {
       (latitude != null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) ||
       (longitude != null && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180))
     ) {
-      Alert.alert('Invalid coordinates', 'Choose a location on the map or leave the location unset.');
+      setStopFormError('Choose a valid location on the map or leave coordinates blank.');
       return;
     }
 
@@ -501,6 +362,7 @@ export default function TripDetailsScreen() {
     setSavingStop(false);
 
     if (result.error) {
+      setStopFormError(result.error.message || 'Unable to save stop.');
       Alert.alert('Unable to save stop', result.error.message);
       return;
     }
@@ -589,9 +451,6 @@ export default function TripDetailsScreen() {
     })),
     [dayCount, startDate],
   );
-
-  const pickerHtml = useMemo(() => buildPickerMapHtml(pickerInitialRef.current.latitude, pickerInitialRef.current.longitude, pickerInitialRef.current.label), [pickerSession]);
-  const pickerResults = placeResults.slice(0, 5);
 
   if (!groupId) {
     return <SafeAreaView style={styles.safeArea}><View style={styles.center}><Text style={styles.emptyTitle}>Journey unavailable</Text></View></SafeAreaView>;
@@ -823,6 +682,14 @@ export default function TripDetailsScreen() {
                   <View style={styles.flexOne}><Text style={styles.modalTitle}>{editingStop ? 'Edit stop' : 'Add stop'}</Text><Text style={styles.modalSubtitle}>Add where you will start, stay, visit or finish.</Text></View>
                   <Pressable style={styles.modalClose} onPress={closeStopForm}><Ionicons name="close" size={20} color="#FFFFFF" /></Pressable>
                 </View>
+
+                {!!stopFormError && (
+                  <View style={styles.formErrorBanner}>
+                    <Ionicons name="alert-circle" size={17} color="#EF4444" />
+                    <Text style={styles.formErrorText}>{stopFormError}</Text>
+                  </View>
+                )}
+
                 <ScrollView style={styles.stopFormScroll} contentContainerStyle={styles.stopFormContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                   <Text style={styles.inputLabel}>Day</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalDayRow}>
@@ -830,10 +697,60 @@ export default function TripDetailsScreen() {
                   </ScrollView>
 
                   <Text style={styles.inputLabel}>Stop type</Text>
-                  <View style={styles.stopTypeRow}>{STOP_TYPES.map((item) => <Pressable key={item.value} style={[styles.stopTypeChip, stopType === item.value && styles.stopTypeChipActive]} onPress={() => setStopType(item.value)}><Ionicons name={item.icon} size={16} color={stopType === item.value ? '#FFFFFF' : '#94A3B8'} /><Text style={[styles.stopTypeChipText, stopType === item.value && styles.stopTypeChipTextActive]}>{item.label}</Text></Pressable>)}</View>
+                  <View style={styles.stopTypeRow}>
+                    {STOP_TYPES.map((item) => {
+                      const isStartLocked = item.value === 'start' && !!existingStartStop;
+                      const isDestLocked = item.value === 'destination' && !!existingDestinationStop;
+                      const isLocked = isStartLocked || isDestLocked;
+                      const isSelected = stopType === item.value;
+
+                      return (
+                        <Pressable
+                          key={item.value}
+                          style={[
+                            styles.stopTypeChip,
+                            isSelected && styles.stopTypeChipActive,
+                            isLocked && !isSelected && styles.stopTypeChipLocked,
+                          ]}
+                          onPress={() => {
+                            if (isStartLocked) {
+                              setStopFormError(
+                                `A starting location is already set for Day ${existingStartStop.day_number} ("${existingStartStop.name}"). Each journey can only have one starting point.`
+                              );
+                              return;
+                            }
+                            if (isDestLocked) {
+                              setStopFormError(
+                                `A destination is already set for Day ${existingDestinationStop.day_number} ("${existingDestinationStop.name}"). Each journey can only have one destination.`
+                              );
+                              return;
+                            }
+                            setStopFormError(null);
+                            setStopType(item.value);
+                          }}
+                        >
+                          <Ionicons
+                            name={isLocked && !isSelected ? 'lock-closed' : item.icon}
+                            size={15}
+                            color={isSelected ? '#FFFFFF' : isLocked ? '#64748B' : '#94A3B8'}
+                          />
+                          <Text
+                            style={[
+                              styles.stopTypeChipText,
+                              isSelected && styles.stopTypeChipTextActive,
+                              isLocked && !isSelected && styles.stopTypeChipTextLocked,
+                            ]}
+                          >
+                            {item.label}
+                            {isStartLocked ? ` (D${existingStartStop.day_number})` : isDestLocked ? ` (D${existingDestinationStop.day_number})` : ''}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
 
                   <Text style={styles.inputLabel}>Name</Text>
-                  <TextInput value={stopName} onChangeText={setStopName} placeholder="e.g. Pangong Lake" placeholderTextColor="#64748B" style={styles.input} />
+                  <TextInput value={stopName} onChangeText={(text) => { setStopName(text); if (stopFormError) setStopFormError(null); }} placeholder="e.g. Pangong Lake" placeholderTextColor="#64748B" style={styles.input} />
 
                   <Text style={styles.inputLabel}>Label <Text style={styles.optionalLabel}>(optional)</Text></Text>
                   <TextInput value={stopLabel} onChangeText={setStopLabel} placeholder="Stay / Viewpoint / Fuel" placeholderTextColor="#64748B" style={styles.input} />
@@ -857,60 +774,16 @@ export default function TripDetailsScreen() {
           </View>
         </Modal>
 
-        <Modal visible={showLocationPicker} transparent animationType="slide" onRequestClose={() => setShowLocationPicker(false)}>
-          <View style={styles.locationModalOverlay}>
-            <View style={styles.locationModalCard}>
-              <View style={styles.modalHeader}>
-                <View style={styles.flexOne}><Text style={styles.modalTitle}>Choose stop location</Text><Text style={styles.modalSubtitle}>Search a place or tap the map. Roads and place names stay visible while you adjust the point.</Text></View>
-                <Pressable style={styles.modalClose} onPress={() => { setPlaceResults([]); setShowLocationPicker(false); }}><Ionicons name="close" size={20} color="#FFFFFF" /></Pressable>
-              </View>
-
-              <View style={styles.locationSearchRow}>
-                <TextInput value={placeSearch} onChangeText={setPlaceSearch} placeholder="Search a place or address" placeholderTextColor="#64748B" style={styles.locationSearchInput} returnKeyType="search" onSubmitEditing={() => void searchInsidePicker()} />
-                <Pressable style={[styles.locationSearchButton, pickerLoadingSearch && styles.disabled]} onPress={() => void searchInsidePicker()} disabled={pickerLoadingSearch}>{pickerLoadingSearch ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="search" size={18} color="#FFFFFF" />}</Pressable>
-              </View>
-
-              {!!pickerResults.length && (
-                <View style={styles.pickerResultsOverlay}>
-                  {pickerResults.map((place) => <Pressable key={place.place_id} style={styles.pickerResultRow} onPress={() => choosePickerResult(place)}><View style={styles.searchResultIcon}><Ionicons name="location-outline" size={16} color="#00E5FF" /></View><View style={styles.flexOne}><Text style={styles.searchResultName} numberOfLines={1}>{place.name}</Text><Text style={styles.searchResultAddress} numberOfLines={2}>{place.display_name}</Text></View></Pressable>)}
-                  <Text style={styles.searchAttribution}>Search data © OpenStreetMap contributors</Text>
-                </View>
-              )}
-
-              <View style={styles.locationMapWrap}>
-                <UniversalWebView
-                  ref={pickerWebViewRef}
-                  source={{ html: pickerHtml, baseUrl: 'https://fairshare.local/' }}
-                  style={styles.locationWebView}
-                  javaScriptEnabled
-                  domStorageEnabled
-                  originWhitelist={['*']}
-                  setSupportMultipleWindows={false}
-                  scrollEnabled={false}
-                  onLoadEnd={() => {
-                    const pending = pendingPickerFocusRef.current;
-                    if (pending) {
-                      const script = `window.setSelectedLocation && window.setSelectedLocation(${JSON.stringify(pending.latitude)},${JSON.stringify(pending.longitude)},${JSON.stringify(pending.label)}); true;`;
-                      pickerWebViewRef.current?.injectJavaScript(script);
-                    }
-                  }}
-                  onMessage={onPickerMapMessage}
-                />
-                <View pointerEvents="none" style={styles.mapHintBadge}><Ionicons name="hand-left-outline" size={13} color="#FFFFFF" /><Text style={styles.mapHintText}>{pickerMapTouching ? 'Map controls active' : 'Drag • pinch • tap'}</Text></View>
-              </View>
-
-              <View style={styles.selectedLocationCard}>
-                <View style={styles.selectedLocationIcon}><Ionicons name="location" size={20} color="#FFFFFF" /></View>
-                <View style={styles.flexOne}><Text style={styles.selectedLocationTitle} numberOfLines={1}>{pickerLabel}</Text><Text style={styles.selectedLocationAddress} numberOfLines={2}>{pickerAddress || (pickerLatitude != null && pickerLongitude != null ? 'Exact point selected on map' : 'No location selected yet')}</Text></View>
-              </View>
-
-              <View style={styles.locationModalActions}>
-                <Pressable style={styles.modalCancel} onPress={() => { setPlaceResults([]); setShowLocationPicker(false); }}><Text style={styles.modalCancelText}>Cancel</Text></Pressable>
-                <Pressable style={[styles.modalConfirm, pickerLatitude == null || pickerLongitude == null ? styles.disabled : null]} disabled={pickerLatitude == null || pickerLongitude == null} onPress={usePickerLocation}><Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" /><Text style={styles.modalConfirmText}>Use this location</Text></Pressable>
-              </View>
-            </View>
-          </View>
-        </Modal>
+        <TripLocationPickerModal
+          visible={showLocationPicker}
+          title="Choose stop location"
+          initialLatitude={stopLatitude.trim() ? Number(stopLatitude.trim()) : null}
+          initialLongitude={stopLongitude.trim() ? Number(stopLongitude.trim()) : null}
+          initialName={stopName.trim()}
+          initialAddress={stopAddress.trim() || null}
+          onClose={() => setShowLocationPicker(false)}
+          onConfirm={handleLocationConfirmed}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -1068,4 +941,32 @@ const styles = StyleSheet.create({
   selectedLocationTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   selectedLocationAddress: { color: '#94A3B8', fontSize: 9, lineHeight: 14, marginTop: 3 },
   locationModalActions: { flexDirection: 'row', gap: 9, marginTop: 10 },
+  formErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  formErrorText: {
+    flex: 1,
+    color: '#FCA5A5',
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 17,
+  },
+  stopTypeChipLocked: {
+    opacity: 0.5,
+    borderColor: '#1E293B',
+    backgroundColor: '#0A0F1D',
+  },
+  stopTypeChipTextLocked: {
+    color: '#64748B',
+  },
 });
