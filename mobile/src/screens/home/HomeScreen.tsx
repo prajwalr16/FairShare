@@ -179,8 +179,9 @@ export default function HomeScreen() {
     const { initialMembers, ...groupPayload } = group;
     const result = await createGroup(groupPayload);
     if (result.error) {
-      setError(getErrorMessage(result.error));
-      return;
+      const msg = getErrorMessage(result.error);
+      setError(msg);
+      throw new Error(msg);
     }
 
     if (result.data?.id && Array.isArray(initialMembers) && initialMembers.length > 0) {

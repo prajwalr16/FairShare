@@ -150,8 +150,18 @@ export function SettleUpModal({
       setUpiStatus('Please enter a valid settlement amount.');
       return;
     }
-    await hapticSuccess();
-    await onSubmit(numAmount, note);
+    if (numAmount - Number(debt.amount) > 0.005) {
+      await hapticWarning();
+      setUpiStatus(`Amount cannot exceed the outstanding balance (${formatCurrency(debt.amount, currency)}).`);
+      return;
+    }
+    try {
+      await onSubmit(numAmount, note);
+      await hapticSuccess();
+    } catch (err: any) {
+      await hapticWarning();
+      setUpiStatus(err?.message || 'Unable to record payment.');
+    }
   };
 
   return (

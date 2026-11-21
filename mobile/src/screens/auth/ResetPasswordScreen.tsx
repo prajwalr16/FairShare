@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import PasswordInput from '../../components/PasswordInput';
 import StatusBanner, { StatusBannerType } from '../../components/StatusBanner';
+import { formatAuthError } from '../../utils/authErrors';
 import { supabase } from '../../config/supabase';
 
 export default function ResetPasswordScreen() {
@@ -45,7 +46,11 @@ export default function ResetPasswordScreen() {
     setLoading(false);
 
     if (error) {
-      return setStatus({ type: 'error', message: error.message || 'Unable to update password.' });
+      const formatted = formatAuthError(error);
+      const fullMsg = formatted.actionHint
+        ? `${formatted.message} ${formatted.actionHint}`
+        : formatted.message;
+      return setStatus({ type: 'error', message: fullMsg });
     }
 
     setStatus({

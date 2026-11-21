@@ -394,12 +394,14 @@ export default function GroupDetailsScreen() {
   const submitSettlementWithValues = async (amount: number, note: string) => {
     if (!groupId || !selectedDebt) return;
     if (!Number.isFinite(amount) || amount <= 0) {
-      Alert.alert('Invalid amount', 'Enter a valid settlement amount.');
-      return;
+      const msg = 'Please enter a valid settlement amount.';
+      Alert.alert('Invalid amount', msg);
+      throw new Error(msg);
     }
     if (amount - Number(selectedDebt.amount) > 0.005) {
-      Alert.alert('Invalid amount', `The outstanding amount is ${money(selectedDebt.amount, currency)}.`);
-      return;
+      const msg = `Amount cannot exceed the outstanding balance of ${money(selectedDebt.amount, currency)}.`;
+      Alert.alert('Invalid amount', msg);
+      throw new Error(msg);
     }
 
     setSettling(true);
@@ -414,8 +416,9 @@ export default function GroupDetailsScreen() {
 
     if (result.error) {
       await hapticWarning();
-      Alert.alert('Unable to record payment', result.error.message);
-      return;
+      const friendlyMsg = result.error.message || 'Unable to record payment. Please try again.';
+      Alert.alert('Unable to record payment', friendlyMsg);
+      throw new Error(friendlyMsg);
     }
 
     await hapticSuccess();
@@ -450,8 +453,7 @@ export default function GroupDetailsScreen() {
     if (!groupId) return;
     const result = await addGroupMember(groupId, email);
     if (result.error) {
-      Alert.alert('Unable to add member', result.error.message);
-      return;
+      throw result.error;
     }
     await refreshActiveData();
     await loadMembers(true);
@@ -461,8 +463,7 @@ export default function GroupDetailsScreen() {
     if (!groupId) return;
     const result = await batchAddMembers(groupId, names);
     if (result.error) {
-      Alert.alert('Unable to add members', result.error.message);
-      return;
+      throw result.error;
     }
     await refreshActiveData();
     await loadMembers(true);
@@ -481,7 +482,10 @@ export default function GroupDetailsScreen() {
           onPress: async () => {
             const result = await removeGroupMemberFromGroup(groupId, member.id);
             if (result.error) {
-              Alert.alert('Unable to remove member', result.error.message);
+              Alert.alert(
+                'Unable to remove member',
+                result.error.message || 'Could not remove member. Ensure their outstanding balance is completely settled first.'
+              );
               return;
             }
             await refreshActiveData();
