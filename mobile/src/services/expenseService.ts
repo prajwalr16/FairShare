@@ -41,6 +41,7 @@ export type ExpenseDetailsRecord = {
   group_id: string;
   title: string;
   amount: number | string;
+  previous_amount?: number | string | null;
   split_type: SplitType;
   category: ExpenseCategory;
   paid_by: string;

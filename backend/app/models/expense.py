@@ -42,6 +42,7 @@ class Expense(Base):
     )
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    previous_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     split_type: Mapped[str] = mapped_column(String(20), nullable=False, default="Equal")
     category: Mapped[str] = mapped_column(String(30), nullable=False, default="Other", index=True)
     paid_by: Mapped[uuid.UUID] = mapped_column(

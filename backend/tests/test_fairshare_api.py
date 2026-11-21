@@ -126,9 +126,11 @@ def test_all_split_modes_and_edit_delete(client, seed_users):
     assert updated.status_code == 200, updated.text
     assert updated.json()['title'] == 'Edited Expense'
     assert updated.json()['paid_by'] == str(USER_B)
+    assert Decimal(str(updated.json()['previous_amount'])) == Decimal('1000.00')
 
     updated_details = client.get(f'/api/v1/expenses/{expense_ids[0]}')
     assert updated_details.status_code == 200, updated_details.text
+    assert Decimal(str(updated_details.json()['expense']['previous_amount'])) == Decimal('1000.00')
     updated_splits = {
         row['user_id']: Decimal(str(row['amount']))
         for row in updated_details.json()['splits']
