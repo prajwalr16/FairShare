@@ -16,6 +16,7 @@ type Expense = {
   group_id?: string;
   title?: string | null;
   amount?: number | string | null;
+  previous_amount?: number | string | null;
   split_type?: string | null;
   category?: ExpenseCategory | null;
   paid_by?: string | null;
@@ -51,6 +52,11 @@ export default function ExpenseCard({ expense, currency = 'INR', payerName }: Pr
 
   const dateLabel = formatDate(expense.expense_date || expense.created_at);
   const locationLabel = expense.location_name?.trim() || '';
+  const isEdited = Boolean(
+    expense.updated_at &&
+    expense.created_at &&
+    new Date(expense.updated_at).getTime() - new Date(expense.created_at).getTime() > 2000
+  );
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -103,6 +109,13 @@ export default function ExpenseCard({ expense, currency = 'INR', payerName }: Pr
                 <Text style={styles.payerText} numberOfLines={1}>
                   Paid by {payerName}
                 </Text>
+              </View>
+            ) : null}
+
+            {isEdited ? (
+              <View style={styles.editedPill}>
+                <Ionicons name="pencil" size={8} color="#FFB800" style={{ marginRight: 2 }} />
+                <Text style={styles.editedText}>Edited</Text>
               </View>
             ) : null}
 
@@ -191,6 +204,21 @@ const styles = StyleSheet.create({
   payerText: {
     color: '#00E5FF',
     fontSize: 10,
+    fontWeight: '800',
+  },
+  editedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 184, 0, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 184, 0, 0.3)',
+  },
+  editedText: {
+    color: '#FFB800',
+    fontSize: 9.5,
     fontWeight: '800',
   },
   metaSecondary: {

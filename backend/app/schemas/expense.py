@@ -80,6 +80,7 @@ class ExpenseSummary(APIModel):
     group_id: UUID
     title: str
     amount: Decimal
+    previous_amount: Decimal | None = None
     split_type: str
     category: str
     paid_by: UUID

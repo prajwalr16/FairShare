@@ -314,6 +314,8 @@ def update_expense(
         longitude,
     )
 
+    if expense.amount != amount:
+        expense.previous_amount = expense.amount
     expense.title = clean_title
     expense.amount = amount
     expense.paid_by = paid_by

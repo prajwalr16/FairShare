@@ -151,6 +151,18 @@ export default function ExpenseDetailsScreen() {
     0
   );
 
+  const isEdited = Boolean(
+    expense?.updated_at &&
+    expense?.created_at &&
+    new Date(expense.updated_at).getTime() - new Date(expense.created_at).getTime() > 2000
+  );
+
+  const hasPriceChanged = Boolean(
+    isEdited &&
+    expense?.previous_amount != null &&
+    Number(expense.previous_amount) !== Number(expense.amount)
+  );
+
   const handleDelete = () => {
     if (!expense || deleting) return;
 
@@ -277,14 +289,41 @@ export default function ExpenseDetailsScreen() {
             <View style={styles.heroIcon}>
               <Ionicons name="receipt-outline" size={25} color="#00E5FF" />
             </View>
-            <Text style={styles.title}>{expense.title}</Text>
+            <View style={styles.heroTitleWrap}>
+              <Text style={styles.title}>{expense.title}</Text>
+              {isEdited ? (
+                <View style={styles.heroEditedBadge}>
+                  <Ionicons name="pencil" size={10} color="#FFB800" style={{ marginRight: 3 }} />
+                  <Text style={styles.heroEditedText}>Edited</Text>
+                </View>
+              ) : null}
+            </View>
             <Text style={styles.heroAmount}>{money(expense.amount, currency)}</Text>
+            {hasPriceChanged ? (
+              <View style={styles.previousAmountRow}>
+                <Text style={styles.previousAmountLabel}>Original:</Text>
+                <Text style={styles.previousAmountStrike}>{money(expense.previous_amount, currency)}</Text>
+                <Ionicons name="arrow-forward" size={12} color="#64748B" />
+                <Text style={styles.currentAmountDiff}>{money(expense.amount, currency)}</Text>
+              </View>
+            ) : null}
             <Text style={styles.heroMeta}>
               {expense.split_type} split  •  {formatDateTime(expense.expense_date || expense.created_at)}
             </Text>
           </View>
 
           <View style={styles.infoCard}>
+            {isEdited ? (
+              <View style={styles.infoRow}>
+                <View style={styles.infoLabelContainer}>
+                  <Ionicons name="time-outline" size={18} color="#FFB800" />
+                  <Text style={styles.infoLabel}>Last Edited</Text>
+                </View>
+                <Text style={[styles.infoValue, { color: '#FFB800' }]} numberOfLines={1}>
+                  {formatDateTime(expense.updated_at)}
+                </Text>
+              </View>
+            ) : null}
             <View style={styles.infoRow}>
               <View style={styles.infoLabelContainer}>
                 <Ionicons name="calendar-outline" size={18} color="#00E5FF" />
@@ -396,6 +435,13 @@ const styles = StyleSheet.create({
   content: { padding: 18, paddingBottom: 36 },
   heroCard: { backgroundColor: '#0E1524', borderRadius: 22, padding: 22, alignItems: 'center' },
   heroIcon: { width: 54, height: 54, borderRadius: 17, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  heroTitleWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 8 },
+  heroEditedBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 184, 0, 0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255, 184, 0, 0.35)' },
+  heroEditedText: { color: '#FFB800', fontSize: 11, fontWeight: '800' },
+  previousAmountRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#06090F', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
+  previousAmountLabel: { color: '#94A3B8', fontSize: 11, fontWeight: '600' },
+  previousAmountStrike: { color: '#94A3B8', fontSize: 12, fontWeight: '700', textDecorationLine: 'line-through' },
+  currentAmountDiff: { color: '#00E5FF', fontSize: 12, fontWeight: '800' },
   title: { color: '#FFFFFF', fontSize: 22, fontWeight: '900', textAlign: 'center' },
   heroAmount: { color: '#FFFFFF', fontSize: 30, fontWeight: '900', marginTop: 9 },
   heroMeta: { color: '#94A3B8', fontSize: 11, marginTop: 8, textAlign: 'center' },
