@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 
 import { supabase } from '../../config/supabase';
 import StatusBanner, { StatusBannerType } from '../../components/StatusBanner';
+import { formatAuthError } from '../../utils/authErrors';
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation<any>();
@@ -42,9 +43,13 @@ export default function ForgotPasswordScreen() {
     setLoading(false);
 
     if (error) {
+      const formatted = formatAuthError(error);
+      const fullMsg = formatted.actionHint
+        ? `${formatted.message} ${formatted.actionHint}`
+        : formatted.message;
       return setStatus({
         type: 'error',
-        message: error.message || 'Unable to send reset email.',
+        message: fullMsg,
       });
     }
 

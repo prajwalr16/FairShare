@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   View,
@@ -36,12 +36,23 @@ export default function CreateGroupModal({
   const [currency, setCurrency] = useState('INR');
   const [desc, setDesc] = useState('');
   const [initialMembersText, setInitialMembersText] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      setErrorMessage(null);
+    }
+  }, [visible]);
 
   const initialMembers = useMemo(() => parseBulkMemberNames(initialMembersText), [initialMembersText]);
 
   const submit = () => {
+    setErrorMessage(null);
     const cleanName = name.trim();
-    if (!cleanName) return;
+    if (!cleanName) {
+      setErrorMessage('Please enter a group name (e.g. "Goa Trip 2026").');
+      return;
+    }
 
     onCreate({
       name: cleanName,
@@ -54,6 +65,7 @@ export default function CreateGroupModal({
     setName('');
     setDesc('');
     setInitialMembersText('');
+    setErrorMessage(null);
     setType('Trip');
     setCurrency('INR');
     onClose();
@@ -76,13 +88,23 @@ export default function CreateGroupModal({
             </Pressable>
           </View>
 
+          {!!errorMessage && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={17} color="#EF4444" />
+              <Text style={styles.errorBannerText}>{errorMessage}</Text>
+            </View>
+          )}
+
           <Text style={styles.label}>GROUP NAME</Text>
           <TextInput
             style={styles.input}
             placeholder="e.g. Goa Trip 2026, Apartment 402"
             placeholderTextColor="#64748B"
             value={name}
-            onChangeText={setName}
+            onChangeText={(val) => {
+              setName(val);
+              if (errorMessage) setErrorMessage(null);
+            }}
             maxLength={80}
           />
 
@@ -339,5 +361,24 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  errorBannerText: {
+    flex: 1,
+    color: '#FCA5A5',
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 17,
   },
 });

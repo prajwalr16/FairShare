@@ -52,10 +52,10 @@ export function ExportStatementModal({
           onClose();
         }, 1200);
       } else {
-        setStatusMessage('Failed to download CSV');
+        setStatusMessage('Failed to download CSV. Please check app storage permissions.');
       }
-    } catch {
-      setStatusMessage('Error exporting statement');
+    } catch (err: any) {
+      setStatusMessage(err?.message || 'Error exporting statement. Please try again.');
     } finally {
       setExportingCsv(false);
     }
@@ -64,12 +64,16 @@ export function ExportStatementModal({
   const handlePrintPdf = async () => {
     await hapticMedium();
     if (Platform.OS === 'web') {
-      const ok = openPrintableStatement({ group, expenses, settlements });
-      if (ok) {
-        await hapticSuccess();
-        onClose();
-      } else {
-        setStatusMessage('Popup blocked. Allow popups to print report.');
+      try {
+        const ok = openPrintableStatement({ group, expenses, settlements });
+        if (ok) {
+          await hapticSuccess();
+          onClose();
+        } else {
+          setStatusMessage('Browser blocked the popup window. Please allow popups for FairShare to view or print the statement.');
+        }
+      } catch (err: any) {
+        setStatusMessage(err?.message || 'Unable to generate statement report.');
       }
     } else {
       // On mobile, export formatted CSV to native share sheet

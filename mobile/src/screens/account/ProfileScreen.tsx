@@ -24,6 +24,7 @@ import {
   updateUserProfile,
   UserProfile,
 } from '../../services/profileService';
+import { formatAuthError } from '../../utils/authErrors';
 
 function initials(profile: UserProfile | null) {
   const name = profile?.full_name?.trim();
@@ -202,7 +203,11 @@ export default function ProfileScreen() {
     setPasswordBusy(false);
 
     if (error) {
-      Alert.alert('Unable to change password', error.message);
+      const formatted = formatAuthError(error);
+      const msg = formatted.actionHint
+        ? `${formatted.message} ${formatted.actionHint}`
+        : formatted.message;
+      Alert.alert('Unable to change password', msg || error.message);
       return;
     }
 

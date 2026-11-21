@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 from time import perf_counter
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
@@ -40,6 +41,42 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
         status_code=429,
         content={"detail": f"Rate limit exceeded: {exc.detail}. Please slow down."},
         headers={"Retry-After": str(retry_after)},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    messages: list[str] = []
+    for err in errors:
+        loc_parts = [str(l) for l in err.get("loc", []) if l not in ("body", "query", "path")]
+        field = " ".join(loc_parts).replace("_", " ").capitalize()
+        msg = err.get("msg", "Invalid input.")
+        messages.append(f"{field}: {msg}" if field else msg)
+    detail = ". ".join(messages) if messages else "Invalid request data. Please check your inputs."
+    return JSONResponse(
+        status_code=422,
+        content={"detail": detail, "errors": errors},
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": detail},
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import logging
+    logging.exception("Unhandled server exception: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An unexpected server error occurred. Please try again in a few moments."},
     )
 
 

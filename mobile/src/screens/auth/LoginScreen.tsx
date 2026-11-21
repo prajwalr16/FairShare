@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import BrandLogo from '../../components/BrandLogo';
 import PasswordInput from '../../components/PasswordInput';
 import StatusBanner, { StatusBannerType } from '../../components/StatusBanner';
+import { formatAuthError } from '../../utils/authErrors';
 import { supabase } from '../../config/supabase';
 import { getGroups } from '../../services/groupService';
 
@@ -30,7 +31,11 @@ export default function LoginScreen() {
     setLoading(false);
 
     if (error) {
-      return setStatus({ type: 'error', message: error.message || 'Login failed. Please check your credentials.' });
+      const formatted = formatAuthError(error);
+      const fullMsg = formatted.actionHint
+        ? `${formatted.message} ${formatted.actionHint}`
+        : formatted.message;
+      return setStatus({ type: 'error', message: fullMsg });
     }
 
     void getGroups();

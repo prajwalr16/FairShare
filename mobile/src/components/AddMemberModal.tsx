@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { shareGroupInvite } from '../utils/shareInvite';
 import { parseBulkMemberNames } from '../utils/memberOnboarding';
+import { formatAuthError } from '../utils/authErrors';
 import {
   Modal,
   View,
@@ -10,7 +11,6 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   ScrollView,
 } from 'react-native';
 
@@ -35,19 +35,29 @@ export default function AddMemberModal({
   const [namesText, setNamesText] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const parsedNames = useMemo(() => parseBulkMemberNames(namesText), [namesText]);
 
+  const handleClose = () => {
+    setErrorMessage(null);
+    onClose();
+  };
+
+  const handleTabChange = (nextTab: 'names' | 'email') => {
+    setTab(nextTab);
+    setErrorMessage(null);
+  };
+
   const submitNames = async () => {
     if (parsedNames.length === 0) {
-      return Alert.alert(
-        'Missing names',
-        'Enter at least one member name (e.g. Rahul, Sneha, Rohan).'
-      );
+      setErrorMessage('Please enter at least one member name (e.g. Rahul, Sneha, Rohan).');
+      return;
     }
 
     try {
       setLoading(true);
+      setErrorMessage(null);
       if (onBatchAdd) {
         await onBatchAdd(parsedNames);
       } else {
@@ -59,12 +69,9 @@ export default function AddMemberModal({
         }
       }
       setNamesText('');
-      onClose();
+      handleClose();
     } catch (error: any) {
-      Alert.alert(
-        'Unable to add members',
-        error?.message || 'Something went wrong while adding members.'
-      );
+      setErrorMessage(error?.message || 'Something went wrong while adding members. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -74,38 +81,52 @@ export default function AddMemberModal({
     const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail) {
-      return Alert.alert('Missing email', 'Enter the member’s email address.');
+      setErrorMessage('Please enter the member’s email address.');
+      return;
     }
 
     if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
-      return Alert.alert('Invalid email', 'Please enter a valid email address.');
+      setErrorMessage('Please enter a valid email address (e.g. name@example.com).');
+      return;
     }
 
     try {
       setLoading(true);
+      setErrorMessage(null);
       await onAdd(cleanEmail);
       setEmail('');
-      onClose();
+      handleClose();
     } catch (error: any) {
-      Alert.alert('Unable to add member', error?.message || 'Something went wrong.');
+      const formatted = formatAuthError(error);
+      const detail = formatted.actionHint
+        ? `${formatted.message} ${formatted.actionHint}`
+        : formatted.message;
+      setErrorMessage(detail || error?.message || 'Something went wrong while inviting this member.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={styles.overlay}>
         <View style={styles.sheet}>
           <View style={styles.handle} />
 
           <Text style={styles.title}>Add Members</Text>
 
+          {!!errorMessage && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={17} color="#EF4444" />
+              <Text style={styles.errorBannerText}>{errorMessage}</Text>
+            </View>
+          )}
+
           {/* Mode Switcher Tabs */}
           <View style={styles.tabContainer}>
             <Pressable
               style={[styles.tabButton, tab === 'names' && styles.tabButtonActive]}
-              onPress={() => setTab('names')}
+              onPress={() => handleTabChange('names')}
             >
               <Ionicons
                 name="people"
@@ -120,7 +141,7 @@ export default function AddMemberModal({
 
             <Pressable
               style={[styles.tabButton, tab === 'email' && styles.tabButtonActive]}
-              onPress={() => setTab('email')}
+              onPress={() => handleTabChange('email')}
             >
               <Ionicons
                 name="mail-outline"
@@ -149,7 +170,10 @@ export default function AddMemberModal({
                 multiline
                 numberOfLines={2}
                 value={namesText}
-                onChangeText={setNamesText}
+                onChangeText={(text) => {
+                  setNamesText(text);
+                  if (errorMessage) setErrorMessage(null);
+                }}
               />
 
               {parsedNames.length > 0 ? (
@@ -202,7 +226,10 @@ export default function AddMemberModal({
                 autoCapitalize="none"
                 autoCorrect={false}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (errorMessage) setErrorMessage(null);
+                }}
               />
 
               <Pressable
@@ -240,7 +267,7 @@ export default function AddMemberModal({
             </>
           ) : null}
 
-          <Pressable style={styles.cancelButton} onPress={onClose} disabled={loading}>
+          <Pressable style={styles.cancelButton} onPress={handleClose} disabled={loading}>
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
         </View>
@@ -281,6 +308,28 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     letterSpacing: -0.3,
+  },
+
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+
+  errorBannerText: {
+    flex: 1,
+    color: '#FCA5A5',
+    fontSize: 12.5,
+    fontWeight: '600',
+    lineHeight: 18,
   },
 
   tabContainer: {

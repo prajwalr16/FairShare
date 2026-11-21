@@ -133,6 +133,89 @@ async function performRequest(
   });
 }
 
+function cleanApiErrorMessage(rawDetail: unknown, status: number, payload: any): string {
+  // 1. Array of Pydantic validation errors (FastAPI 422)
+  if (Array.isArray(rawDetail)) {
+    const formatted = rawDetail
+      .map((item: any) => {
+        const loc = Array.isArray(item.loc)
+          ? item.loc.filter((p: any) => p !== 'body' && p !== 'query' && p !== 'path').join(' ')
+          : '';
+        const field = loc ? loc.replace(/_/g, ' ') : '';
+        const fieldCapitalized = field ? field.charAt(0).toUpperCase() + field.slice(1) : '';
+        return fieldCapitalized ? `${fieldCapitalized}: ${item.msg}` : item.msg;
+      })
+      .filter(Boolean)
+      .join('. ');
+    if (formatted) return formatted;
+  }
+
+  let text = typeof rawDetail === 'string' ? rawDetail.trim() : '';
+
+  if (!text && payload && typeof payload === 'object') {
+    text = payload.detail || payload.message || payload.error || '';
+  }
+
+  // 2. Parse stringified JSON if detail is a raw JSON string
+  if (text.startsWith('{') && text.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(text);
+      text = parsed.detail || parsed.message || parsed.msg || text;
+    } catch {}
+  }
+
+  const lower = text.toLowerCase();
+
+  // 3. Status Code specific translations
+  if (status === 401) {
+    return 'Your session has expired. Please sign in again to continue.';
+  }
+
+  if (status === 403) {
+    if (!text || lower === 'forbidden') {
+      return 'Access denied. You do not have permission to perform this action. Only group administrators can edit settings or remove members.';
+    }
+  }
+
+  if (status === 404) {
+    if (!text || lower === 'not found') {
+      return 'The requested group, member, or expense could not be found. It may have already been deleted.';
+    }
+  }
+
+  if (status === 409) {
+    if (lower.includes('start') && lower.includes('stop')) {
+      return 'A start stop already exists for this trip. Each journey can only have one starting location.';
+    }
+    if (lower.includes('destination') && lower.includes('stop')) {
+      return 'A destination stop already exists for this trip. Each journey can only have one destination.';
+    }
+    if (lower.includes('balance') || lower.includes('settle')) {
+      return 'This member cannot be removed because they still have an unsettled balance. Please record a settlement first.';
+    }
+    if (lower.includes('already a member') || lower.includes('already exists')) {
+      return 'This person is already a member of this group.';
+    }
+  }
+
+  if (status === 429) {
+    if (lower.includes('email') || lower.includes('rate limit')) {
+      return 'Hourly limit reached. Supabase has temporarily capped automated verification emails. If you are adding members, they can be added directly as placeholder members without waiting!';
+    }
+    return 'Too many requests. Please wait a moment before trying again.';
+  }
+
+  if (status >= 500) {
+    return 'FairShare cloud servers are temporarily busy or warming up. Please wait 5 seconds and retry.';
+  }
+
+  if (text) {
+    return text;
+  }
+
+  return `Request could not be completed (${status || 'network error'}). Please check your connection and try again.`;
+}
+
 export async function apiRequest<T>(
   path: string,
   options: {
@@ -155,7 +238,7 @@ export async function apiRequest<T>(
     }
 
     throw new ApiError(
-      'Unable to reach the FairShare server. Check that the backend is running and the API URL is correct.',
+      'Unable to connect to FairShare servers. Please check your internet connection or try again in a few moments.',
       0,
       error,
     );
@@ -179,7 +262,7 @@ export async function apiRequest<T>(
       }
 
       throw new ApiError(
-        'Unable to reach the FairShare server. Check that the backend is running and the API URL is correct.',
+        'Unable to connect to FairShare servers. Please check your internet connection or try again in a few moments.',
         0,
         error,
       );
@@ -213,13 +296,7 @@ export async function apiRequest<T>(
   }
 
   if (!response.ok) {
-    const detail =
-      typeof payload === 'string'
-        ? payload
-        : payload?.detail ||
-          payload?.message ||
-          `Request failed (${response.status}).`;
-
+    const detail = cleanApiErrorMessage(payload?.detail, response.status, payload);
     throw new ApiError(detail, response.status, payload);
   }
 
