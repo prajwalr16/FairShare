@@ -16,6 +16,7 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 
 import { GroupMember, getGroupMembers } from '../../services/memberService';
 import { formatCurrency } from '../../utils/currency';
+import { hapticSelection } from '../../utils/haptics';
 import { EXPENSE_CATEGORY_ICONS, ExpenseCategory } from '../../constants/expenseCategories';
 import { getCachedGroupOverview, getGroupSettings } from '../../services/groupService';
 import {
@@ -228,6 +229,24 @@ export default function ExpenseDetailsScreen() {
     });
   };
 
+  const handleDuplicate = () => {
+    if (!expense) return;
+    void hapticSelection();
+    navigation.navigate('AddExpense', {
+      groupId: expense.group_id,
+      groupName,
+      duplicateFrom: {
+        title: `${expense.title} (Copy)`,
+        amount: Number(expense.amount),
+        category: expense.category,
+        splitType: expense.split_type,
+        paidBy: expense.paid_by,
+        locationName: expense.location_name,
+        splits: splits.map((s) => ({ userId: s.user_id, value: Number(s.amount) })),
+      },
+    });
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
@@ -276,9 +295,14 @@ export default function ExpenseDetailsScreen() {
             </Text>
           </View>
 
-          <Pressable style={styles.moreButton} onPress={handleEdit}>
-            <Ionicons name="create-outline" size={21} color="#FFFFFF" />
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Pressable style={styles.moreButton} onPress={handleDuplicate} hitSlop={8}>
+              <Ionicons name="copy-outline" size={19} color="#00E5FF" />
+            </Pressable>
+            <Pressable style={styles.moreButton} onPress={handleEdit} hitSlop={8}>
+              <Ionicons name="create-outline" size={21} color="#FFFFFF" />
+            </Pressable>
+          </View>
         </View>
 
         <ScrollView

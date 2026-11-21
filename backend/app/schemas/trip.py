@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
@@ -14,6 +15,7 @@ class TripCreate(BaseModel):
     end_date: date | None = None
     timezone: str | None = Field(default=None, max_length=64)
     notes: str | None = Field(default=None, max_length=2000)
+    budget: Decimal | None = Field(default=None, ge=0)
 
     @field_validator("timezone")
     @classmethod
@@ -96,6 +98,7 @@ class TripResponse(APIModel):
     end_date: date | None
     timezone: str | None
     notes: str | None
+    budget: Decimal | None = None
     created_at: datetime
     updated_at: datetime
     stops: list[TripStopResponse]

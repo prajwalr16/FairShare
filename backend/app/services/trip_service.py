@@ -78,6 +78,7 @@ def _serialize_trip(trip: Trip) -> dict:
         "end_date": trip.end_date,
         "timezone": trip.timezone,
         "notes": trip.notes,
+        "budget": trip.budget,
         "created_at": trip.created_at,
         "updated_at": trip.updated_at,
         "stops": [
@@ -106,6 +107,8 @@ def _apply_trip_dates(trip: Trip, payload: TripCreate | TripUpdate) -> None:
     trip.end_date = payload.end_date
     trip.timezone = payload.timezone
     trip.notes = payload.notes
+    if hasattr(payload, "budget") and payload.budget is not None:
+        trip.budget = payload.budget
 
 
 def create_trip(session: Session, group_id: UUID, user_id: UUID, payload: TripCreate) -> dict:

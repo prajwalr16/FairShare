@@ -47,9 +47,10 @@ import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_ICONS, ExpenseCategory } from '../
 import { getCachedTrip, getTrip, Trip } from '../../services/tripService';
 import { SettleUpModal } from '../../components/SettleUpModal';
 import { ExportStatementModal } from '../../components/ExportStatementModal';
+import ChecklistView from '../../components/ChecklistView';
 import { hapticSelection, hapticSuccess, hapticMedium, hapticWarning } from '../../utils/haptics';
 
-type Tab = 'Overview' | 'Journey' | 'Expenses' | 'Balances' | 'Members' | 'Activity';
+type Tab = 'Overview' | 'Journey' | 'Checklist' | 'Expenses' | 'Balances' | 'Members' | 'Activity';
 
 type Debt = {
   from_user_id: string;
@@ -783,6 +784,7 @@ export default function GroupDetailsScreen() {
             {([
               ['Overview', 'home-outline'],
               ...(overview?.type === 'Trip' ? [['Journey', 'map-outline']] : []),
+              ['Checklist', 'checkbox-outline'],
               ['Expenses', 'receipt-outline'],
               ['Balances', 'cash-outline'],
               ['Members', 'people-outline'],
@@ -890,6 +892,41 @@ export default function GroupDetailsScreen() {
                           <Text style={styles.tripNoteText}>{trip.notes.trim()}</Text>
                         </View>
                       )}
+
+                      {trip.budget && Number(trip.budget) > 0 ? (
+                        <View style={styles.budgetGaugeWrap}>
+                          <View style={styles.budgetGaugeHeader}>
+                            <View style={styles.budgetGaugeTitleRow}>
+                              <Ionicons name="pie-chart-outline" size={13} color="#00E5FF" />
+                              <Text style={styles.budgetGaugeTitle}>Trip Budget</Text>
+                            </View>
+                            <Text style={styles.budgetGaugeAmount}>
+                              {money(categoryAnalytics.total, currency)} / {money(trip.budget, currency)}
+                            </Text>
+                          </View>
+                          <View style={styles.budgetGaugeTrack}>
+                            <View
+                              style={[
+                                styles.budgetGaugeFill,
+                                {
+                                  width: `${Math.min(100, Math.round((categoryAnalytics.total / Number(trip.budget)) * 100))}%`,
+                                  backgroundColor:
+                                    categoryAnalytics.total > Number(trip.budget)
+                                      ? '#EF4444'
+                                      : categoryAnalytics.total / Number(trip.budget) > 0.8
+                                      ? '#F59E0B'
+                                      : '#00E5FF',
+                                },
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.budgetGaugeRemaining}>
+                            {categoryAnalytics.total > Number(trip.budget)
+                              ? `⚠️ Over budget by ${money(categoryAnalytics.total - Number(trip.budget), currency)}`
+                              : `${Math.round((categoryAnalytics.total / Number(trip.budget)) * 100)}% spent • ${money(Number(trip.budget) - categoryAnalytics.total, currency)} remaining`}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
 
                     <View style={styles.journeyActionsRow}>
@@ -1124,6 +1161,14 @@ export default function GroupDetailsScreen() {
                   return renderSettlementCard(item.settlement, 'overview-st');
                 })}
               </>
+            )}
+
+            {tab === 'Checklist' && (
+              <ChecklistView
+                groupId={groupId}
+                members={members}
+                currentUserId={currentUserId}
+              />
             )}
 
             {tab === 'Expenses' && (
@@ -1899,4 +1944,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
   },
+  budgetGaugeWrap: {
+    backgroundColor: '#06090F',
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  budgetGaugeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  budgetGaugeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  budgetGaugeTitle: { color: '#CBD5E1', fontSize: 12, fontWeight: '800' },
+  budgetGaugeAmount: { color: '#00E5FF', fontSize: 12, fontWeight: '900' },
+  budgetGaugeTrack: {
+    height: 6,
+    backgroundColor: '#1E293B',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  budgetGaugeFill: { height: '100%', borderRadius: 3 },
+  budgetGaugeRemaining: { color: '#94A3B8', fontSize: 10.5, fontWeight: '600' },
 });
