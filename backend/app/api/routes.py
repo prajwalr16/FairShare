@@ -83,6 +83,8 @@ async def search_places_route(
     res = search_places(normalized)
     if inspect.isawaitable(res):
         res = await res
+    if isinstance(res, dict):
+        return res
     return {"query": normalized, "results": res}
 
 

@@ -138,8 +138,9 @@ Unlike conventional expense calculators, FairShare includes day-by-day road trip
 | **Dynamic Day Count Calculator** | Automatically computes trip length (e.g., "5 Days") with leap-year and cross-month support. | Verified by unit tests in `tripDates.test.ts`. |
 | **Day-by-Day Itinerary Builder** | Organize journey stops by day number (`Day 1`, `Day 2`, `Day 3`...). | Stored in `backend/app/models/trip.py` via migration `0005_trip_day_number.py`. |
 | **Multi-Type Journey Stops** | Add three semantic stop types: **Start Point** (Teal `#0EA5A4`), **Intermediate Stop** (Blue `#2563EB`), and **Destination** (Orange `#F97316`). | Screen: `TripDetailsScreen.tsx`. |
+| **Smart Stop-Type Guard & Validation** | Prevents duplicate `start` or `destination` stops across the entire trip. For Day 2 and subsequent days, automatically defaults stop type to `stop`. If a starting or destination stop already exists, locks the option with clear badge indicators (e.g. `(D1)`) and displays an inline error alert banner explaining the restriction. | Client validation & error banner in `TripDetailsScreen.tsx`, Backend 409 conflict guard in `trip_service.py`. |
 | **Stop Reordering & Sequence** | Drag, drop, or re-sequence stops within any day or across the trip. | Backend: `PUT /api/v1/groups/{id}/trip/stops/reorder`. |
-| **Interactive Map Location Picker** | Search for locations via Nominatim geocoder or tap anywhere on the embedded map to drop a pin. | Modal: `TripLocationPickerModal.tsx`. |
+| **Interactive Map Location Picker** | Luxury CRED dark UI modal with MapLibre vector map, debounced live search (320ms), instant clear button, category filter chips (`All`, `Attractions`, `Stays`, `Food`, `Transit`), popular quick destinations (`Goa`, `Manali`, `Ladakh`, etc.), recent selection history cached locally, animated pulsing radar pin, and smooth `easeTo` camera transitions. | Component: `TripLocationPickerModal.tsx`. |
 
 ---
 
@@ -154,6 +155,7 @@ Unlike conventional expense calculators, FairShare includes day-by-day road trip
 | **Stable HTML Memoization** | HTML and WebView sources are memoized with stop-hashes so state changes (routing spinners, day toggles) never destroy or reload the iframe. | Implemented via React `useMemo` in `TripMapScreen.tsx`. |
 | **Local Indian Edge CDN** | MapLibre scripts and styles are delivered from `cdn.jsdelivr.net` with local edge POPs in Mumbai and Chennai for sub-200ms loading. | Configured with `<link rel="preconnect">` and `<link rel="dns-prefetch">`. |
 | **Disk & DOM Caching** | Vector tiles, fonts, and sprite glyphs are cached on device disk to eliminate repeat network downloads. | Enabled via `cacheEnabled={true}` and `domStorageEnabled={true}`. |
+| **Hybrid & Semantic Place Search** | Multi-stage geocoding pipeline with fuzzy typo tolerance (`find_spelling_suggestion`), automated query relaxation, curated destination index (150+ aliases/destinations), category icon mapping (`lodging`, `food`, `transit`, `attraction`, `city`), and clean hierarchical subtitle generation. Suggests *"Did you mean [Corrected Place]?"* for typos like `benglore` $\rightarrow$ `Bengaluru` or `manli` $\rightarrow$ `Manali`. | Backend: `backend/app/services/place_service.py`, Schema: `backend/app/schemas/place.py`. |
 
 ---
 
@@ -219,7 +221,7 @@ Unlike conventional expense calculators, FairShare includes day-by-day road trip
 
 | Test Suite | Scope & Coverage | Status |
 | :--- | :--- | :--- |
-| **Backend Pytest Suite** (`backend/tests/`) | **68 Automated Tests Passing (1 skipped):**<br>• Core FairShare API routes (20 tests)<br>• Database cascade deletion (1 test)<br>• Migration metadata verification (1 test)<br>• Placeholder members, batch onboarding & claim transfers (3 tests)<br>• Performance & latency routes (2 tests)<br>• Place geocoding API (2 tests)<br>• Production hardening & rate limiting (2 tests)<br>• Route API & geometry caching (14 tests)<br>• Route strategy & individual legs (10 tests)<br>• JWT authentication security (2 tests)<br>• Financial split calculator logic (6 tests)<br>• Trip planning & stop lifecycle (5 tests) | **68 Passed, 0 Failed** |
+| **Backend Pytest Suite** (`backend/tests/`) | **70 Automated Tests Passing (1 skipped):**<br>• Core FairShare API routes (20 tests)<br>• Database cascade deletion (1 test)<br>• Migration metadata verification (1 test)<br>• Placeholder members, batch onboarding & claim transfers (3 tests)<br>• Performance & latency routes (2 tests)<br>• Place geocoding API with fuzzy spelling & curated fallback (4 tests)<br>• Production hardening & rate limiting (2 tests)<br>• Route API & geometry caching (14 tests)<br>• Route strategy & individual legs (10 tests)<br>• JWT authentication security (2 tests)<br>• Financial split calculator logic (6 tests)<br>• Trip planning & stop lifecycle (5 tests) | **70 Passed, 0 Failed** |
 | **Mobile Unit Test Suite** (`mobile/src/utils/*.test.ts`) | **37 Automated Unit Tests Passing across 6 Suites:**<br>• `currency.test.ts`: Symbol mapping, 2-decimal formatting, negative values, null safety (4 tests)<br>• `expenseCalculation.test.ts`: Equal split largest-remainder distribution, exact split verification, percentage allocations, shares ratios, proportional tax/tip allocation, zero/empty handling (9 tests)<br>• `memberOnboarding.test.ts`: Comma/newline bulk member parsing, deduplication, whitespace safety, and candidate auto-match resolution (6 tests)<br>• `statementFormatter.test.ts`: RFC 4180 CSV generation, quote/comma escaping, chronological sorting, ledger rows, and empty dataset handling (3 tests)<br>• `tripDates.test.ts`: Date parsing, ISO string conversion, multi-day math, leap-year boundary additions, date range validation, Indian locale formatting (7 tests)<br>• `upiScheme.test.ts`: NPCI VPA format validation, fake handle rejection, URI parameter encoding, `margin=4` quiet-zone QR generation, fallback QR generation, bank suffix lookup (7 tests) | **37 Passed, 0 Failed** |
 | **TypeScript Static Check** | Strict static type verification across all screens, components, services, and navigation stacks. | **0 Errors (`npx tsc --noEmit`)** |
 | **GitHub Actions CI Pipeline** (`.github/workflows/ci.yml`) | Multi-job matrix pipeline executing on every push to `main` and `dev`:<br>1. Ubuntu + PostgreSQL 16 container service database test.<br>2. Linear Alembic migration chain verification (`0010_placeholder_members`).<br>3. SQLite fallback verification.<br>4. Mobile TypeScript static check.<br>5. Mobile unit test runner (`npm test`).<br>6. Expo Web static production bundle export. | **Automated CI Active** |
@@ -227,5 +229,5 @@ Unlike conventional expense calculators, FairShare includes day-by-day road trip
 
 ---
 
-*Last Updated & Verified: November 2026 (105 Total Automated Tests Passing)*  
+*Last Updated & Verified: November 2026 (107 Total Automated Tests Passing)*  
 *Maintained by Prajwal & the FairShare Engineering Team.*
