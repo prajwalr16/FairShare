@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Modal,
   View,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GROUP_TYPES } from '../constants/groupTypes';
+import { parseBulkMemberNames } from '../utils/memberOnboarding';
 
 const CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'];
 
@@ -21,6 +22,7 @@ type Props = {
     type: string;
     currency: string;
     description: string;
+    initialMembers?: string[];
   }) => void;
 };
 
@@ -33,6 +35,9 @@ export default function CreateGroupModal({
   const [type, setType] = useState('Trip');
   const [currency, setCurrency] = useState('INR');
   const [desc, setDesc] = useState('');
+  const [initialMembersText, setInitialMembersText] = useState('');
+
+  const initialMembers = useMemo(() => parseBulkMemberNames(initialMembersText), [initialMembersText]);
 
   const submit = () => {
     const cleanName = name.trim();
@@ -43,10 +48,12 @@ export default function CreateGroupModal({
       type,
       currency,
       description: desc.trim(),
+      initialMembers: initialMembers.length > 0 ? initialMembers : undefined,
     });
 
     setName('');
     setDesc('');
+    setInitialMembersText('');
     setType('Trip');
     setCurrency('INR');
     onClose();
@@ -124,6 +131,32 @@ export default function CreateGroupModal({
               );
             })}
           </ScrollView>
+
+          <Text style={styles.label}>INITIAL MEMBERS (OPTIONAL)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Rahul, Sneha, Rohan (comma separated)"
+            placeholderTextColor="#64748B"
+            value={initialMembersText}
+            onChangeText={setInitialMembersText}
+            autoCapitalize="words"
+          />
+
+          {initialMembers.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginBottom: 12 }}
+              contentContainerStyle={{ gap: 6 }}
+            >
+              {initialMembers.map((m, idx) => (
+                <View key={idx} style={styles.memberChip}>
+                  <Ionicons name="person" size={11} color="#00E5FF" style={{ marginRight: 4 }} />
+                  <Text style={styles.memberChipText}>{m}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          ) : null}
 
           <Text style={styles.label}>NOTES & DESCRIPTION (OPTIONAL)</Text>
           <TextInput
@@ -236,6 +269,21 @@ const styles = StyleSheet.create({
   },
   scroll: {
     marginBottom: 14,
+  },
+  memberChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 229, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.25)',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  memberChipText: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontWeight: '600',
   },
   chip: {
     paddingHorizontal: 14,

@@ -14,6 +14,8 @@ type Member = {
   role?: string | null;
   status?: string | null;
   full_name?: string | null;
+  is_placeholder?: boolean;
+  display_name?: string | null;
 };
 
 type Props = {
@@ -27,8 +29,9 @@ export default function MemberCard({
   isOwner = false,
   onRemove,
 }: Props) {
+  const isPlaceholder = Boolean(member.is_placeholder);
   const name =
-    member.full_name?.trim() || '';
+    member.display_name?.trim() || member.full_name?.trim() || '';
 
   const email =
     member.email?.trim() || 'Unknown email';
@@ -48,8 +51,8 @@ export default function MemberCard({
 
   return (
     <View style={styles.card}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>
+      <View style={[styles.avatar, isPlaceholder && styles.virtualAvatar]}>
+        <Text style={[styles.avatarText, isPlaceholder && styles.virtualAvatarText]}>
           {initials}
         </Text>
       </View>
@@ -63,19 +66,21 @@ export default function MemberCard({
         </Text>
 
         <View style={styles.metaRow}>
-          <Text style={styles.role}>
+          <Text style={[styles.role, isPlaceholder && styles.virtualRole]}>
             {isOwner || member.role === 'owner'
               ? 'Owner'
-              : pending
-                ? 'Pending invitation'
-                : member.role === 'admin'
-                  ? 'Admin'
-                  : member.role === 'viewer'
-                    ? 'Viewer'
-                    : 'Member'}
+              : isPlaceholder
+                ? 'Virtual • Unclaimed'
+                : pending
+                  ? 'Pending invitation'
+                  : member.role === 'admin'
+                    ? 'Admin'
+                    : member.role === 'viewer'
+                      ? 'Viewer'
+                      : 'Member'}
           </Text>
 
-          {pending && name ? (
+          {!isPlaceholder && pending && name ? (
             <Text
               style={styles.email}
               numberOfLines={1}
@@ -86,7 +91,17 @@ export default function MemberCard({
         </View>
       </View>
 
-      {pending ? (
+      {isPlaceholder ? (
+        <View style={styles.virtualBadge}>
+          <Ionicons
+            name="sparkles"
+            size={12}
+            color="#00E5FF"
+            style={{ marginRight: 4 }}
+          />
+          <Text style={styles.virtualBadgeText}>Virtual</Text>
+        </View>
+      ) : pending ? (
         <View style={styles.pendingBadge}>
           <Ionicons
             name="mail-outline"
@@ -98,21 +113,14 @@ export default function MemberCard({
         <Pressable
           style={styles.removeButton}
           onPress={onRemove}
-          hitSlop={8}
         >
           <Ionicons
-            name="close-circle-outline"
-            size={22}
-            color="#64748B"
+            name="trash-outline"
+            size={17}
+            color="#EF4444"
           />
         </Pressable>
-      ) : (
-        <Ionicons
-          name="checkmark-circle"
-          size={21}
-          color="#00E5FF"
-        />
-      )}
+      ) : null}
     </View>
   );
 }
@@ -141,6 +149,16 @@ const styles = StyleSheet.create({
     color: '#00E5FF',
     fontSize: 15,
     fontWeight: '800',
+  },
+
+  virtualAvatar: {
+    backgroundColor: 'rgba(0, 229, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.3)',
+  },
+
+  virtualAvatarText: {
+    color: '#00E5FF',
   },
 
   info: {
@@ -179,6 +197,28 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(245,158,11,0.10)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  virtualRole: {
+    color: '#00E5FF',
+    fontWeight: '600',
+  },
+
+  virtualBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 229, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.3)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+
+  virtualBadgeText: {
+    color: '#00E5FF',
+    fontSize: 11,
+    fontWeight: '700',
   },
 
   removeButton: {

@@ -15,7 +15,8 @@ from ..schemas.balance import BalanceResponse
 from ..schemas.expense import ExpenseCreate, ExpenseDetails, ExpenseSummary, SUPPORTED_EXPENSE_CATEGORIES
 from ..schemas.group import (
     AcceptInvitation, GroupCreate, GroupFinancialResponse, GroupOverview, GroupSettings,
-    GroupSummary, GroupUpdate, InviteMember, MemberResponse, PendingInvitation, RoleUpdate,
+    GroupSummary, GroupUpdate, InviteMember, MemberBatchCreate, MemberResponse,
+    PendingInvitation, RoleUpdate, UnclaimedMemberResponse,
 )
 from ..schemas.notification import PushTokenRegister
 from ..schemas.place import PlaceSearchResponse
@@ -27,7 +28,7 @@ from ..services.expense_service import create_expense, delete_expense, get_detai
 from ..services.group_service import create_group, delete_group, get_overview, get_settings, leave_group, list_groups, list_members, remove_member, update_role, update_settings
 from ..services.notification_service import notify_group_expense, notify_settlement, register_push_token
 from ..services.permissions import get_group_and_role
-from ..services.invite_service import accept_invitation, get_pending_invitation, invite_member
+from ..services.invite_service import accept_invitation, batch_add_members, get_pending_invitation, get_unclaimed_members, invite_member
 from ..services.place_service import search_places
 from ..services.settlement_service import create_settlement, delete_settlement, list_group_settlements, update_settlement
 
@@ -155,11 +156,21 @@ def invite(request: Request, group_id: UUID, payload: InviteMember, user=Depends
     return invite_member(session, group_id, payload.email, payload.redirect_to, user)
 
 
+@router.post("/groups/{group_id}/members/batch", response_model=list[MemberResponse], status_code=status.HTTP_201_CREATED)
+def batch_members_route(group_id: UUID, payload: MemberBatchCreate, user=Depends(db_user), session: Session = Depends(get_db)):
+    return batch_add_members(session, group_id, payload.names, user)
+
+
+@router.get("/groups/{group_id}/members/unclaimed", response_model=list[UnclaimedMemberResponse])
+def unclaimed_members_route(group_id: UUID, user: CurrentUser = Depends(get_current_user), session: Session = Depends(get_read_db)):
+    return get_unclaimed_members(session, group_id)
+
+
 @router.post("/groups/{group_id}/members/accept")
 def accept(group_id: UUID, payload: AcceptInvitation, user=Depends(db_user), session: Session = Depends(get_db)):
     if payload.group_id != group_id:
         raise HTTPException(status_code=400, detail="Group information does not match.")
-    return accept_invitation(session, group_id, payload.full_name, user)
+    return accept_invitation(session, group_id, payload.full_name, user, claim_member_id=payload.claim_member_id)
 
 
 @router.delete("/groups/{group_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)

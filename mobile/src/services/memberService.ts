@@ -10,6 +10,16 @@ export type GroupMember = {
   role: 'owner' | 'admin' | 'member' | 'viewer' | string;
   status: 'pending' | 'active' | string;
   full_name?: string | null;
+  is_placeholder?: boolean;
+  display_name?: string | null;
+  created_at?: string;
+};
+
+export type UnclaimedMember = {
+  id: string;
+  group_id: string;
+  display_name: string;
+  email: string | null;
   created_at?: string;
 };
 
@@ -85,6 +95,20 @@ export async function addGroupMember(groupId: string, email: string) {
   }
 }
 
+export async function batchAddMembers(groupId: string, names: string[]) {
+  try {
+    const data = await apiRequest<GroupMember[]>(`/groups/${groupId}/members/batch`, {
+      method: 'POST',
+      body: { names },
+    });
+    invalidateGroupMembers(groupId);
+    invalidateGroupOverview(groupId);
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error };
+  }
+}
+
 export type PendingInvitation = {
   group_id: string;
   group_name: string;
@@ -92,6 +116,15 @@ export type PendingInvitation = {
   member_id: string;
   status: string;
 };
+
+export async function getUnclaimedMembers(groupId: string) {
+  try {
+    const data = await apiRequest<UnclaimedMember[]>(`/groups/${groupId}/members/unclaimed`);
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error };
+  }
+}
 
 export async function getPendingInvitation(groupId: string) {
   try {
@@ -102,11 +135,15 @@ export async function getPendingInvitation(groupId: string) {
   }
 }
 
-export async function acceptGroupInvitation(groupId: string, fullName?: string) {
+export async function acceptGroupInvitation(groupId: string, fullName?: string, claimMemberId?: string | null) {
   try {
     const data = await apiRequest<any>(`/groups/${groupId}/members/accept`, {
       method: 'POST',
-      body: { group_id: groupId, full_name: fullName?.trim() || null },
+      body: {
+        group_id: groupId,
+        full_name: fullName?.trim() || null,
+        claim_member_id: claimMemberId || null,
+      },
     });
     invalidateGroupMembers(groupId);
     invalidateGroupOverview(groupId);

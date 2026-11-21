@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import re
+import uuid
 from urllib.parse import urlparse
 from uuid import UUID
 
 import httpx
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from ..models import Group, GroupMember, User
+from ..models import Expense, ExpenseSplit, Group, GroupMember, Settlement, User
 from ..repositories.group_repository import get_member_by_email
 from .permissions import get_group_and_role, require_permission
 
@@ -328,39 +329,240 @@ def invite_member(
     }
 
 
+def batch_add_members(
+    session: Session,
+    group_id: UUID,
+    names: list[str],
+    caller: User,
+) -> list[dict]:
+    group, role = get_group_and_role(session, group_id, caller.id)
+    require_permission(
+        role,
+        "members",
+        "Only the owner or an admin can add group members.",
+    )
+
+    created_members: list[dict] = []
+    for raw_name in names:
+        clean_name = raw_name.strip()
+        if not clean_name:
+            continue
+
+        shadow_id = uuid.uuid4()
+        shadow_email = f"guest_{shadow_id.hex[:10]}@fairshare.local"
+        shadow_user = User(
+            id=shadow_id,
+            email=shadow_email,
+            full_name=clean_name,
+        )
+        session.add(shadow_user)
+        session.flush()
+
+        member = GroupMember(
+            group_id=group_id,
+            user_id=shadow_id,
+            email=shadow_email,
+            role="member",
+            status="active",
+            is_placeholder=True,
+            display_name=clean_name,
+        )
+        session.add(member)
+        session.flush()
+
+        created_members.append({
+            "id": member.id,
+            "group_id": member.group_id,
+            "user_id": member.user_id,
+            "email": member.email,
+            "full_name": clean_name,
+            "role": member.role,
+            "status": member.status,
+            "is_placeholder": True,
+            "display_name": clean_name,
+            "created_at": member.created_at,
+        })
+
+    session.commit()
+    return created_members
+
+
+def get_unclaimed_members(
+    session: Session,
+    group_id: UUID,
+) -> list[dict]:
+    group = session.get(Group, group_id)
+    if group is None:
+        raise HTTPException(status_code=404, detail="Group not found.")
+
+    placeholders = session.scalars(
+        select(GroupMember)
+        .where(
+            GroupMember.group_id == group_id,
+            GroupMember.is_placeholder == True,  # noqa: E712
+        )
+        .order_by(GroupMember.created_at.asc())
+    ).all()
+
+    return [
+        {
+            "id": m.id,
+            "group_id": m.group_id,
+            "display_name": m.display_name or "Guest",
+            "email": m.email if not m.email.endswith("@fairshare.local") else None,
+            "created_at": m.created_at,
+        }
+        for m in placeholders
+    ]
+
+
 def accept_invitation(
     session: Session,
     group_id: UUID,
     full_name: str | None,
     caller: User,
+    claim_member_id: UUID | None = None,
 ) -> dict:
     group = session.get(Group, group_id)
     if group is None:
         raise HTTPException(status_code=404, detail="Group not found.")
 
-    member = session.scalar(
+    cleaned_name = (full_name or "").strip()
+    if cleaned_name:
+        caller.full_name = cleaned_name
+
+    caller_email = normalize_email(caller.email or "")
+
+    # Look for placeholder: either explicitly requested via claim_member_id or matched by email
+    placeholder: GroupMember | None = None
+    if claim_member_id:
+        placeholder = session.scalar(
+            select(GroupMember).where(
+                GroupMember.id == claim_member_id,
+                GroupMember.group_id == group_id,
+                GroupMember.is_placeholder == True,  # noqa: E712
+            )
+        )
+        if placeholder is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Placeholder member not found or already claimed.",
+            )
+    elif caller_email:
+        placeholder = session.scalar(
+            select(GroupMember).where(
+                GroupMember.group_id == group_id,
+                GroupMember.is_placeholder == True,  # noqa: E712
+                GroupMember.email == caller_email,
+            )
+        )
+
+    existing_caller_member = session.scalar(
         select(GroupMember).where(
             GroupMember.group_id == group_id,
             GroupMember.user_id == caller.id,
         )
     )
 
-    cleaned_name = (full_name or "").strip()
-    if cleaned_name:
-        caller.full_name = cleaned_name
+    if placeholder is not None:
+        shadow_user_id = placeholder.user_id
 
-    if member is None:
-        member = GroupMember(
-            group_id=group_id,
-            user_id=caller.id,
-            email=normalize_email(caller.email or ""),
-            role="member",
-            status="active",
-        )
-        session.add(member)
+        if existing_caller_member is None:
+            # Caller joins by claiming the placeholder spot
+            if shadow_user_id:
+                session.execute(
+                    update(Expense)
+                    .where(Expense.paid_by == shadow_user_id)
+                    .values(paid_by=caller.id)
+                )
+                session.execute(
+                    update(ExpenseSplit)
+                    .where(ExpenseSplit.user_id == shadow_user_id)
+                    .values(user_id=caller.id)
+                )
+                session.execute(
+                    update(Settlement)
+                    .where(Settlement.from_user_id == shadow_user_id)
+                    .values(from_user_id=caller.id)
+                )
+                session.execute(
+                    update(Settlement)
+                    .where(Settlement.to_user_id == shadow_user_id)
+                    .values(to_user_id=caller.id)
+                )
+
+            placeholder.user_id = caller.id
+            placeholder.email = caller_email or placeholder.email
+            placeholder.is_placeholder = False
+            placeholder.status = "active"
+            placeholder.display_name = cleaned_name or caller.full_name or placeholder.display_name
+
+            if shadow_user_id:
+                shadow_user = session.get(User, shadow_user_id)
+                if shadow_user:
+                    session.delete(shadow_user)
+
+            member = placeholder
+        else:
+            # Caller already had membership; merge placeholder transactions into caller
+            if shadow_user_id:
+                session.execute(
+                    update(Expense)
+                    .where(Expense.paid_by == shadow_user_id)
+                    .values(paid_by=caller.id)
+                )
+
+                placeholder_splits = session.scalars(
+                    select(ExpenseSplit).where(ExpenseSplit.user_id == shadow_user_id)
+                ).all()
+                for ps in placeholder_splits:
+                    existing_split = session.scalar(
+                        select(ExpenseSplit).where(
+                            ExpenseSplit.expense_id == ps.expense_id,
+                            ExpenseSplit.user_id == caller.id,
+                        )
+                    )
+                    if existing_split:
+                        existing_split.amount += ps.amount
+                        session.delete(ps)
+                    else:
+                        ps.user_id = caller.id
+
+                session.execute(
+                    update(Settlement)
+                    .where(Settlement.from_user_id == shadow_user_id)
+                    .values(from_user_id=caller.id)
+                )
+                session.execute(
+                    update(Settlement)
+                    .where(Settlement.to_user_id == shadow_user_id)
+                    .values(to_user_id=caller.id)
+                )
+
+                shadow_user = session.get(User, shadow_user_id)
+                if shadow_user:
+                    session.delete(shadow_user)
+
+            session.delete(placeholder)
+            existing_caller_member.status = "active"
+            member = existing_caller_member
     else:
-        member.status = "active"
-        member.email = normalize_email(caller.email or member.email)
+        # Standard membership acceptance
+        if existing_caller_member is None:
+            member = GroupMember(
+                group_id=group_id,
+                user_id=caller.id,
+                email=caller_email,
+                role="member",
+                status="active",
+                is_placeholder=False,
+                display_name=cleaned_name or caller.full_name,
+            )
+            session.add(member)
+        else:
+            existing_caller_member.status = "active"
+            existing_caller_member.email = caller_email or existing_caller_member.email
+            member = existing_caller_member
 
     session.commit()
 

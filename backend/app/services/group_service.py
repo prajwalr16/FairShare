@@ -390,7 +390,9 @@ def list_members(session: Session, group_id: UUID, user_id: UUID) -> list[dict]:
         raise HTTPException(status_code=403, detail="You are not an active member of this group.")
     response = [{
         "id": member.id, "group_id": member.group_id, "user_id": member.user_id, "email": member.email,
-        "full_name": user.full_name if user else None, "role": member.role, "status": member.status, "created_at": member.created_at,
+        "full_name": member.display_name or (user.full_name if user else None),
+        "role": member.role, "status": member.status, "created_at": member.created_at,
+        "is_placeholder": member.is_placeholder, "display_name": member.display_name,
     } for member, user in rows]
     response.sort(key=lambda item: (0 if item["role"] == "owner" else 1 if item["role"] == "admin" else 2 if item["role"] == "member" else 3, item["created_at"]))
     return response

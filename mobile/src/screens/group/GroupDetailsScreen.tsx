@@ -28,7 +28,7 @@ import { initOfflineQueue } from '../../services/offlineQueue';
 import { supabase } from '../../config/supabase';
 import UniversalScrollView from '../../components/UniversalScrollView';
 import { shareGroupInvite } from '../../utils/shareInvite';
-import { addGroupMember, getCachedGroupMembers, getGroupMembers, GroupMember, removeGroupMemberFromGroup } from '../../services/memberService';
+import { addGroupMember, batchAddMembers, getCachedGroupMembers, getGroupMembers, GroupMember, removeGroupMemberFromGroup } from '../../services/memberService';
 import {
   getCachedGroupOverview,
   getGroupHistory,
@@ -451,6 +451,17 @@ export default function GroupDetailsScreen() {
     const result = await addGroupMember(groupId, email);
     if (result.error) {
       Alert.alert('Unable to add member', result.error.message);
+      return;
+    }
+    await refreshActiveData();
+    await loadMembers(true);
+  };
+
+  const handleBatchAddMembers = async (names: string[]) => {
+    if (!groupId) return;
+    const result = await batchAddMembers(groupId, names);
+    if (result.error) {
+      Alert.alert('Unable to add members', result.error.message);
       return;
     }
     await refreshActiveData();
@@ -1215,6 +1226,7 @@ export default function GroupDetailsScreen() {
         visible={showAddMember}
         onClose={() => setShowAddMember(false)}
         onAdd={async (email: string) => { await handleAddMember(email); setShowAddMember(false); }}
+        onBatchAdd={async (names: string[]) => { await handleBatchAddMembers(names); setShowAddMember(false); }}
         groupId={groupId}
         groupName={groupName}
       />
