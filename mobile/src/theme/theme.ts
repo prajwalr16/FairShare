@@ -3,7 +3,7 @@ export const Theme = {
     // Canvas & Surfaces
     bg: '#06090F',             // Deep Obsidian Canvas
     bgSecondary: '#0A0E18',    // Deep Layered Surface
-    card: '#0F1626',           // Luxury Cred Dark Card
+    card: '#0F1626',           // Luxury Obsidian Dark Card
     cardElevated: '#151F34',   // Elevated Interactive Card
     cardHover: '#1B2742',      // Hover / Press Surface
     cardGlass: 'rgba(15, 22, 38, 0.75)',

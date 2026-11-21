@@ -227,7 +227,7 @@ export default function HomeScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#06090F" />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.container}>
-          {/* Top Luxury CRED Glass Navigation Bar */}
+          {/* Top Luxury Glass Navigation Bar */}
           <View style={styles.header}>
             <BrandLogo size="sm" showText={true} />
 

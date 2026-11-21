@@ -47,7 +47,7 @@ export async function downloadGroupCsv(data: StatementData): Promise<boolean> {
 }
 
 /**
- * Generates an executive CRED luxury dark printable HTML statement report.
+ * Generates an executive luxury dark printable HTML statement report.
  */
 export function openPrintableStatement(data: StatementData): boolean {
   if (Platform.OS !== 'web' || typeof window === 'undefined') {
