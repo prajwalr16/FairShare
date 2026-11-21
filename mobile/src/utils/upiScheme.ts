@@ -34,7 +34,7 @@ export function isValidUpiId(upiId: string | null | undefined): boolean {
 }
 
 /**
- * Builds standard NPCI UPI URI scheme compatible with Google Pay, PhonePe, Paytm, BHIM, Cred, etc.
+ * Builds standard NPCI UPI URI scheme compatible with Google Pay, PhonePe, Paytm, BHIM, and other UPI apps.
  * Spec: upi://pay?pa=...&pn=...&am=...&cu=INR&tn=...
  */
 export function buildUpiUri(params: UpiPaymentParams): string {
