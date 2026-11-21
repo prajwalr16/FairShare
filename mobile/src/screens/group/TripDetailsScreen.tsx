@@ -119,6 +119,8 @@ export default function TripDetailsScreen() {
   const [savingStop, setSavingStop] = useState(false);
   const [stopFormError, setStopFormError] = useState<string | null>(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [stopToDelete, setStopToDelete] = useState<TripStop | null>(null);
+  const [deletingStop, setDeletingStop] = useState(false);
 
   const reorderSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingOrder = useRef<string[] | null>(null);
@@ -436,23 +438,38 @@ export default function TripDetailsScreen() {
   };
 
   const removeStop = (stop: TripStop) => {
+    setStopToDelete(stop);
+  };
+
+  const executeDeleteStop = async (stop: TripStop) => {
     if (!groupId) return;
-    Alert.alert('Remove stop?', `Remove ${stop.name} from Day ${stop.day_number}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          const result = await deleteTripStop(groupId, stop.id);
-          if (result.error) {
-            Alert.alert('Unable to remove stop', result.error.message);
-            return;
-          }
-          invalidateTripRoute(groupId);
-          await load();
-        },
-      },
-    ]);
+    setDeletingStop(true);
+
+    // Optimistically remove stop from local state
+    setTrip((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        stops: prev.stops.filter((s) => s.id !== stop.id),
+      };
+    });
+
+    const result = await deleteTripStop(groupId, stop.id);
+    setDeletingStop(false);
+    setStopToDelete(null);
+
+    if (result.error) {
+      await load();
+      if (Platform.OS === 'web') {
+        window.alert(`Unable to remove stop\n\n${result.error.message}`);
+      } else {
+        Alert.alert('Unable to remove stop', result.error.message);
+      }
+      return;
+    }
+
+    invalidateTripRoute(groupId);
+    await load();
   };
 
   const goToExpenses = () => navigation.navigate('GroupDetails', { groupId, groupName, initialTab: 'Expenses' });
@@ -827,6 +844,20 @@ export default function TripDetailsScreen() {
                   <TextInput value={stopNote} onChangeText={setStopNote} placeholder="Any reminder for this stop" placeholderTextColor="#64748B" style={[styles.input, styles.textArea]} multiline textAlignVertical="top" />
 
                   <Pressable style={[styles.primaryButton, savingStop && styles.disabled]} onPress={() => void saveStop()} disabled={savingStop}>{savingStop ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />}<Text style={styles.primaryButtonText}>{editingStop ? 'Save stop' : 'Add stop'}</Text></Pressable>
+
+                  {editingStop && (
+                    <Pressable
+                      style={styles.deleteStopModalButton}
+                      onPress={() => {
+                        const target = editingStop;
+                        closeStopForm();
+                        setStopToDelete(target);
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={17} color="#FB7185" />
+                      <Text style={styles.deleteStopModalText}>Delete this stop</Text>
+                    </Pressable>
+                  )}
                 </ScrollView>
               </View>
             </KeyboardAvoidingView>
@@ -843,6 +874,45 @@ export default function TripDetailsScreen() {
           onClose={() => setShowLocationPicker(false)}
           onConfirm={handleLocationConfirmed}
         />
+
+        <Modal
+          visible={!!stopToDelete}
+          transparent
+          animationType="fade"
+          onRequestClose={() => !deletingStop && setStopToDelete(null)}
+        >
+          <View style={styles.confirmModalOverlay}>
+            <View style={styles.confirmModalCard}>
+              <View style={styles.confirmModalIcon}>
+                <Ionicons name="trash-outline" size={24} color="#FB7185" />
+              </View>
+              <Text style={styles.confirmModalTitle}>Remove Stop?</Text>
+              <Text style={styles.confirmModalText}>
+                Are you sure you want to remove &quot;{stopToDelete?.name}&quot; from Day {stopToDelete?.day_number}?
+              </Text>
+              <View style={styles.confirmModalActions}>
+                <Pressable
+                  style={styles.confirmCancelButton}
+                  onPress={() => setStopToDelete(null)}
+                  disabled={deletingStop}
+                >
+                  <Text style={styles.confirmCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.confirmDeleteButton, deletingStop && styles.disabled]}
+                  onPress={() => stopToDelete && void executeDeleteStop(stopToDelete)}
+                  disabled={deletingStop}
+                >
+                  {deletingStop ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.confirmDeleteText}>Remove</Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Floating Save Dock Bar when Trip Dates or Details are modified */}
         {isDirty && trip && (
@@ -1149,5 +1219,96 @@ const styles = StyleSheet.create({
   },
   stopTypeChipTextLocked: {
     color: '#64748B',
+  },
+  deleteStopModalButton: {
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: 'rgba(251, 113, 133, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 113, 133, 0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 7,
+    marginTop: 10,
+  },
+  deleteStopModalText: {
+    color: '#FB7185',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  confirmModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(2,6,23,.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  confirmModalCard: {
+    backgroundColor: '#0E1524',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#243147',
+    padding: 24,
+    width: '100%',
+    maxWidth: 380,
+    alignItems: 'center',
+  },
+  confirmModalIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(251, 113, 133, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 113, 133, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  confirmModalTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+  confirmModalText: {
+    color: '#94A3B8',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  confirmModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  confirmCancelButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 13,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmCancelText: {
+    color: '#CBD5E1',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  confirmDeleteButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 13,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmDeleteText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
   },
 });

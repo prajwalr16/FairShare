@@ -129,6 +129,15 @@ export default function GroupDetailsScreen() {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [activityExpenses, setActivityExpenses] = useState<any[]>([]);
   const [settlements, setSettlements] = useState<GroupSettlement[]>([]);
+  const [expandedDays, setExpandedDays] = useState<Record<number, boolean>>({});
+  const [showAllDays, setShowAllDays] = useState(false);
+
+  const toggleDayExpanded = (dayNumber: number) => {
+    setExpandedDays((prev) => ({
+      ...prev,
+      [dayNumber]: !prev[dayNumber],
+    }));
+  };
 
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -852,38 +861,90 @@ export default function GroupDetailsScreen() {
                       </View>
                     ) : (
                       <View>
-                        {Array.from(new Set(trip.stops.map((stop) => stop.day_number)))
-                          .sort((a, b) => a - b)
-                          .slice(0, 3)
-                          .map((dayNumber) => {
-                            const dayStops = trip.stops
-                              .filter((stop) => stop.day_number === dayNumber)
-                              .sort((a, b) => a.sequence - b.sequence);
-                            return (
-                              <View key={`day-${dayNumber}`} style={styles.dayPreviewCard}>
-                                <Text style={styles.dayPreviewTitle}>{`Day ${dayNumber}`}</Text>
-                                <Text style={styles.dayPreviewDate}>
-                                  {trip.start_date ? formatTripDate(addDaysIso(trip.start_date, dayNumber - 1)) : 'Date not set'}
-                                </Text>
-                                {dayStops.slice(0, 3).map((stop, stopIndex) => (
-                                  <View key={stop.id} style={styles.dayPreviewStop}>
-                                    <View style={styles.dayPreviewDot}>
-                                      <Text style={styles.dayPreviewDotText}>{stopIndex + 1}</Text>
+                        {(() => {
+                          const allDays = Array.from(new Set(trip.stops.map((stop) => stop.day_number))).sort((a, b) => a - b);
+                          const visibleDays = showAllDays ? allDays : allDays.slice(0, 3);
+                          const hasMoreDays = allDays.length > 3;
+
+                          return (
+                            <>
+                              {visibleDays.map((dayNumber) => {
+                                const dayStops = trip.stops
+                                  .filter((stop) => stop.day_number === dayNumber)
+                                  .sort((a, b) => a.sequence - b.sequence);
+                                const isExpanded = !!expandedDays[dayNumber];
+                                const visibleStops = isExpanded ? dayStops : dayStops.slice(0, 3);
+                                const hasMoreStops = dayStops.length > 3;
+
+                                return (
+                                  <View key={`day-${dayNumber}`} style={styles.dayPreviewCard}>
+                                    <View style={styles.dayPreviewHeaderRow}>
+                                      <View>
+                                        <Text style={styles.dayPreviewTitle}>{`Day ${dayNumber}`}</Text>
+                                        <Text style={styles.dayPreviewDate}>
+                                          {trip.start_date ? formatTripDate(addDaysIso(trip.start_date, dayNumber - 1)) : 'Date not set'}
+                                        </Text>
+                                      </View>
+                                      <View style={styles.dayPreviewBadge}>
+                                        <Text style={styles.dayPreviewBadgeText}>
+                                          {dayStops.length} {dayStops.length === 1 ? 'place' : 'places'}
+                                        </Text>
+                                      </View>
                                     </View>
-                                    <View style={styles.flexOne}>
-                                      <Text style={styles.dayPreviewStopName}>{stop.name}</Text>
-                                      <Text style={styles.dayPreviewStopMeta}>
-                                        {stop.label || stop.stop_type}
-                                      </Text>
-                                    </View>
+
+                                    {visibleStops.map((stop, stopIndex) => (
+                                      <View key={stop.id} style={styles.dayPreviewStop}>
+                                        <View style={styles.dayPreviewDot}>
+                                          <Text style={styles.dayPreviewDotText}>{stopIndex + 1}</Text>
+                                        </View>
+                                        <View style={styles.flexOne}>
+                                          <Text style={styles.dayPreviewStopName}>{stop.name}</Text>
+                                          <Text style={styles.dayPreviewStopMeta}>
+                                            {stop.label || stop.stop_type}
+                                          </Text>
+                                        </View>
+                                      </View>
+                                    ))}
+
+                                    {hasMoreStops && (
+                                      <Pressable
+                                        style={styles.expandStopsPill}
+                                        onPress={() => toggleDayExpanded(dayNumber)}
+                                      >
+                                        <Text style={styles.expandStopsText}>
+                                          {isExpanded ? 'Show less' : `+${dayStops.length - 3} more places`}
+                                        </Text>
+                                        <Ionicons
+                                          name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                                          size={13}
+                                          color="#00E5FF"
+                                        />
+                                      </Pressable>
+                                    )}
                                   </View>
-                                ))}
-                              </View>
-                            );
-                          })}
-                        {trip.stops.length > 3 && (
-                          <Text style={styles.journeyMoreText}>Open Journey to see the complete itinerary.</Text>
-                        )}
+                                );
+                              })}
+
+                              {hasMoreDays && (
+                                <Pressable
+                                  style={styles.expandDaysButton}
+                                  onPress={() => setShowAllDays((prev) => !prev)}
+                                >
+                                  <Ionicons
+                                    name={showAllDays ? 'chevron-up' : 'chevron-down'}
+                                    size={15}
+                                    color="#00E5FF"
+                                  />
+                                  <Text style={styles.expandDaysText}>
+                                    {showAllDays
+                                      ? 'Show fewer days'
+                                      : `Show all ${allDays.length} days (+${allDays.length - 3} more)`}
+                                  </Text>
+                                </Pressable>
+                              )}
+                            </>
+                          );
+                        })()}
                       </View>
                     )}
 
@@ -1451,6 +1512,9 @@ const styles = StyleSheet.create({
   journeyEmptyIcon: { width: 52, height: 52, borderRadius: 17, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
   emptyCardText: { color: '#94A3B8', fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 6 },
   dayPreviewCard: { backgroundColor: '#0E1524', borderRadius: 17, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
+  dayPreviewHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  dayPreviewBadge: { backgroundColor: 'rgba(0, 229, 255, 0.08)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(0, 229, 255, 0.22)' },
+  dayPreviewBadgeText: { color: '#00E5FF', fontSize: 10, fontWeight: '800' },
   dayPreviewTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   dayPreviewDate: { color: '#00E5FF', fontSize: 10, fontWeight: '800', marginTop: 3 },
   dayPreviewStop: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
@@ -1458,6 +1522,10 @@ const styles = StyleSheet.create({
   dayPreviewDotText: { color: '#00E5FF', fontSize: 10, fontWeight: '900' },
   dayPreviewStopName: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   dayPreviewStopMeta: { color: '#64748B', fontSize: 10, marginTop: 3, textTransform: 'capitalize' },
+  expandStopsPill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, paddingVertical: 7, paddingHorizontal: 12, borderRadius: 10, backgroundColor: 'rgba(0, 229, 255, 0.06)', borderWidth: 1, borderColor: 'rgba(0, 229, 255, 0.2)' },
+  expandStopsText: { color: '#00E5FF', fontSize: 11, fontWeight: '800' },
+  expandDaysButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginTop: 4, marginBottom: 8, borderRadius: 12, backgroundColor: '#0E1524', borderWidth: 1, borderColor: '#1E293B' },
+  expandDaysText: { color: '#00E5FF', fontSize: 12, fontWeight: '800' },
   journeyMoreText: { color: '#64748B', fontSize: 10, textAlign: 'center', marginVertical: 4 },
   expensesShortcutCard: { backgroundColor: '#0E1524', borderRadius: 18, padding: 14, flexDirection: 'row', alignItems: 'center', marginTop: 8, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
   expensesShortcutIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#06090F', alignItems: 'center', justifyContent: 'center', marginRight: 11, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
