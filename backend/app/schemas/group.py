@@ -83,6 +83,8 @@ class MemberResponse(APIModel):
     full_name: str | None
     role: str
     status: str
+    is_placeholder: bool = False
+    display_name: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
 
@@ -115,12 +117,37 @@ class InviteMember(BaseModel):
 class AcceptInvitation(BaseModel):
     group_id: UUID
     full_name: str | None = Field(default=None, max_length=120)
+    claim_member_id: UUID | None = None
 
     @field_validator("full_name")
     @classmethod
     def clean_full_name(cls, value: str | None) -> str | None:
         value = value.strip() if value else None
         return value or None
+
+
+class MemberBatchCreate(BaseModel):
+    names: list[str] = Field(min_length=1, max_length=50)
+
+    @field_validator("names")
+    @classmethod
+    def clean_names(cls, values: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for val in values:
+            s = val.strip()
+            if s and s not in cleaned:
+                cleaned.append(s)
+        if not cleaned:
+            raise ValueError("At least one member name is required.")
+        return cleaned
+
+
+class UnclaimedMemberResponse(APIModel):
+    id: UUID
+    group_id: UUID
+    display_name: str
+    email: str | None = None
+    created_at: datetime
 
 
 class PendingInvitation(APIModel):

@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -15,7 +16,13 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { supabase } from '../../config/supabase';
 import { getCurrentSession } from '../../services/authService';
-import { acceptGroupInvitation, getPendingInvitation } from '../../services/memberService';
+import {
+  acceptGroupInvitation,
+  getPendingInvitation,
+  getUnclaimedMembers,
+  UnclaimedMember,
+} from '../../services/memberService';
+import { findAutoMatchPlaceholder } from '../../utils/memberOnboarding';
 
 type Status = {
   type: 'error' | 'info';
@@ -31,6 +38,8 @@ export default function AcceptInviteScreen() {
   const groupNameRef = useRef('Group invitation');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
+  const [unclaimedMembers, setUnclaimedMembers] = useState<UnclaimedMember[]>([]);
+  const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<Status>(null);
@@ -96,21 +105,40 @@ export default function AcceptInviteScreen() {
 
       setFullName(existingName);
 
-      const result = await getPendingInvitation(resolvedGroupId);
+      const [pendingResult, unclaimedResult] = await Promise.all([
+        getPendingInvitation(resolvedGroupId),
+        getUnclaimedMembers(resolvedGroupId),
+      ]);
 
       if (!active) return;
 
-      if (result.data?.group_name) {
-        setGroupName(result.data.group_name);
-        groupNameRef.current = result.data.group_name;
-        if (result.data.status === 'active') {
+      if (pendingResult.data?.group_name) {
+        setGroupName(pendingResult.data.group_name);
+        groupNameRef.current = pendingResult.data.group_name;
+        if (pendingResult.data.status === 'active') {
           setIsAlreadyMember(true);
         }
-      } else if (result.error) {
+      } else if (pendingResult.error) {
         setStatus({
           type: 'error',
-          message: result.error.message,
+          message: pendingResult.error.message,
         });
+      }
+
+      if (unclaimedResult.data && unclaimedResult.data.length > 0) {
+        setUnclaimedMembers(unclaimedResult.data);
+        const userEmail = session.user.email?.toLowerCase().trim();
+        const userName = (session.user.user_metadata?.full_name || '').toLowerCase().trim();
+
+        // Smart Auto-Match: match by email or display name
+        const matched = findAutoMatchPlaceholder(unclaimedResult.data, userEmail, userName);
+
+        if (matched) {
+          setSelectedClaimId(matched.id);
+          if (!existingName) {
+            setFullName(matched.display_name);
+          }
+        }
       }
 
       setLoading(false);
@@ -159,7 +187,7 @@ export default function AcceptInviteScreen() {
       return;
     }
 
-    const result = await acceptGroupInvitation(groupId, name);
+    const result = await acceptGroupInvitation(groupId, name, selectedClaimId);
 
     setSaving(false);
 
@@ -309,64 +337,121 @@ export default function AcceptInviteScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#06090F" />
-      <View style={styles.container}>
-        <View style={styles.icon}>
-          <Ionicons name="people-outline" size={28} color="#00E5FF" />
-        </View>
-
-        <Text style={styles.title}>Join {groupName}</Text>
-        <Text style={styles.subtitle}>
-          Complete your profile to join this FairShare group.
-        </Text>
-
-        <Text style={styles.label}>Full name</Text>
-        <TextInput
-          value={fullName}
-          onChangeText={setFullName}
-          placeholder="Your name"
-          placeholderTextColor="#64748B"
-          style={styles.input}
-          autoCapitalize="words"
-          editable={!saving}
-        />
-
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Set a password (optional if already set)"
-          placeholderTextColor="#64748B"
-          style={styles.input}
-          secureTextEntry
-          editable={!saving}
-        />
-
-        {status?.type === 'error' ? (
-          <View style={styles.statusBox}>
-            <Text style={styles.statusText}>{status.message}</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.container}>
+          <View style={styles.icon}>
+            <Ionicons name="people-outline" size={28} color="#00E5FF" />
           </View>
-        ) : null}
 
-        <Pressable
-          style={[styles.button, saving && styles.disabled]}
-          onPress={continueInvitation}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.buttonText}>Join Group</Text>
-          )}
-        </Pressable>
+          <Text style={styles.title}>Join {groupName}</Text>
+          <Text style={styles.subtitle}>
+            Complete your profile to join this FairShare group.
+          </Text>
 
-        <Pressable
-          style={styles.cancel}
-          onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
-          disabled={saving}
-        >
-          <Text style={styles.cancelText}>Not now</Text>
-        </Pressable>
-      </View>
+          {unclaimedMembers.length > 0 ? (
+            <View style={styles.claimSection}>
+              <View style={styles.claimHeader}>
+                <Ionicons name="sparkles" size={14} color="#00E5FF" style={{ marginRight: 6 }} />
+                <Text style={styles.claimTitle}>WHICH MEMBER ARE YOU?</Text>
+              </View>
+              <Text style={styles.claimSubtitle}>
+                The organizer added placeholder members. Select your name to automatically link past expenses:
+              </Text>
+              <View style={styles.claimChips}>
+                {unclaimedMembers.map((m) => {
+                  const selected = selectedClaimId === m.id;
+                  return (
+                    <Pressable
+                      key={m.id}
+                      style={[styles.claimChip, selected && styles.claimChipSelected]}
+                      onPress={() => {
+                        if (selected) {
+                          setSelectedClaimId(null);
+                        } else {
+                          setSelectedClaimId(m.id);
+                          setFullName(m.display_name);
+                        }
+                      }}
+                    >
+                      <Ionicons
+                        name={selected ? "checkmark-circle" : "person-outline"}
+                        size={15}
+                        color={selected ? "#00E5FF" : "#94A3B8"}
+                        style={{ marginRight: 5 }}
+                      />
+                      <Text style={[styles.claimChipText, selected && styles.claimChipTextSelected]}>
+                        {m.display_name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                <Pressable
+                  style={[styles.claimChip, selectedClaimId === null && styles.claimChipSelected]}
+                  onPress={() => setSelectedClaimId(null)}
+                >
+                  <Ionicons
+                    name="person-add-outline"
+                    size={15}
+                    color={selectedClaimId === null ? "#00E5FF" : "#94A3B8"}
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text style={[styles.claimChipText, selectedClaimId === null && styles.claimChipTextSelected]}>
+                    Join as new member
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
+          <Text style={styles.label}>Full name</Text>
+          <TextInput
+            value={fullName}
+            onChangeText={setFullName}
+            placeholder="Your name"
+            placeholderTextColor="#64748B"
+            style={styles.input}
+            autoCapitalize="words"
+            editable={!saving}
+          />
+
+          <Text style={styles.label}>Password</Text>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Set a password (optional if already set)"
+            placeholderTextColor="#64748B"
+            style={styles.input}
+            secureTextEntry
+            editable={!saving}
+          />
+
+          {status?.type === 'error' ? (
+            <View style={styles.statusBox}>
+              <Text style={styles.statusText}>{status.message}</Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            style={[styles.button, saving && styles.disabled]}
+            onPress={continueInvitation}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color="#06090F" />
+            ) : (
+              <Text style={styles.buttonText}>Join Group</Text>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={styles.cancel}
+            onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
+            disabled={saving}
+          >
+            <Text style={styles.cancelText}>Not now</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -376,10 +461,68 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#06090F',
   },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
   container: {
     flex: 1,
     padding: 24,
     justifyContent: 'center',
+  },
+  claimSection: {
+    backgroundColor: '#0E1524',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.25)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+  },
+  claimHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  claimTitle: {
+    color: '#00E5FF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  claimSubtitle: {
+    color: '#94A3B8',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  claimChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  claimChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  claimChipSelected: {
+    backgroundColor: 'rgba(0, 229, 255, 0.15)',
+    borderColor: '#00E5FF',
+  },
+  claimChipText: {
+    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  claimChipTextSelected: {
+    color: '#00E5FF',
+    fontWeight: '700',
   },
   center: {
     flex: 1,

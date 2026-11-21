@@ -24,6 +24,7 @@ import { initOfflineQueue } from '../../services/offlineQueue';
 import { Theme } from '../../theme/theme';
 import { formatCurrency } from '../../utils/currency';
 import { registerPushNotificationToken } from '../../services/notificationService';
+import { batchAddMembers } from '../../services/memberService';
 import {
   createGroup,
   getCachedGroups,
@@ -175,10 +176,15 @@ export default function HomeScreen() {
   }, [groups]);
 
   const handleCreateGroup = async (group: any) => {
-    const result = await createGroup(group);
+    const { initialMembers, ...groupPayload } = group;
+    const result = await createGroup(groupPayload);
     if (result.error) {
       setError(getErrorMessage(result.error));
       return;
+    }
+
+    if (result.data?.id && Array.isArray(initialMembers) && initialMembers.length > 0) {
+      await batchAddMembers(result.data.id, initialMembers);
     }
 
     setShowCreate(false);
