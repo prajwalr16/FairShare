@@ -25,6 +25,7 @@ import { Theme } from '../../theme/theme';
 import { formatCurrency } from '../../utils/currency';
 import { registerPushNotificationToken } from '../../services/notificationService';
 import { batchAddMembers } from '../../services/memberService';
+import { hapticMedium, hapticSelection } from '../../utils/haptics';
 import {
   createGroup,
   getCachedGroups,
@@ -231,6 +232,18 @@ export default function HomeScreen() {
 
             <View style={styles.headerActions}>
               <Pressable
+                style={styles.headerCreateBtn}
+                onPress={() => {
+                  void hapticSelection();
+                  setShowCreate(true);
+                }}
+                hitSlop={8}
+              >
+                <Ionicons name="add" size={15} color="#06090F" />
+                <Text style={styles.headerCreateText}>Group</Text>
+              </Pressable>
+
+              <Pressable
                 style={styles.headerIconBtn}
                 onPress={() => void handleRefresh()}
                 hitSlop={8}
@@ -359,19 +372,18 @@ export default function HomeScreen() {
                     </View>
                   </View>
 
-                  {/* Compact Bottom Footer: Volume on left, New Group button on right */}
+                  {/* Elegant Financial Stats Footer */}
                   <View style={styles.heroBottomRow}>
-                    <Text style={styles.volumeText} numberOfLines={1}>
-                      Total volume: <Text style={styles.volumeAmount}>{formatCurrency(portfolioStats.overallSpend, 'INR')}</Text>
-                    </Text>
-
-                    <Pressable
-                      onPress={() => setShowCreate(true)}
-                      style={styles.compactCreateBtn}
-                    >
-                      <Ionicons name="add" size={14} color="#06090F" />
-                      <Text style={styles.compactCreateBtnText}>NEW GROUP</Text>
-                    </Pressable>
+                    <View style={styles.volumeRow}>
+                      <Ionicons name="pie-chart-outline" size={13} color="#64748B" />
+                      <Text style={styles.volumeText} numberOfLines={1}>
+                        Total spend: <Text style={styles.volumeAmount}>{formatCurrency(portfolioStats.overallSpend, 'INR')}</Text>
+                      </Text>
+                    </View>
+                    <View style={styles.activeCirclesPill}>
+                      <View style={styles.activeDot} />
+                      <Text style={styles.activeCirclesText}>{groups.length} Circles Active</Text>
+                    </View>
                   </View>
                 </View>
 
@@ -418,14 +430,28 @@ export default function HomeScreen() {
                   />
                 </View>
 
-                {/* Section Header */}
+                {/* Section Header with Direct New Group Action */}
                 <View style={styles.sectionTitleRow}>
-                  <Text style={styles.sectionTitle}>
-                    {filter === 'All' ? 'YOUR GROUPS' : `${filter.toUpperCase()} GROUPS`}
-                  </Text>
-                  <Text style={styles.sectionCount}>
-                    {filteredGroups.length} {filteredGroups.length === 1 ? 'GROUP' : 'GROUPS'}
-                  </Text>
+                  <View style={styles.sectionTitleLeft}>
+                    <Text style={styles.sectionTitle}>
+                      {filter === 'All' ? 'YOUR GROUPS' : `${filter.toUpperCase()} GROUPS`}
+                    </Text>
+                    <View style={styles.sectionBadge}>
+                      <Text style={styles.sectionBadgeText}>{filteredGroups.length}</Text>
+                    </View>
+                  </View>
+
+                  <Pressable
+                    style={styles.sectionCreateBtn}
+                    onPress={() => {
+                      void hapticSelection();
+                      setShowCreate(true);
+                    }}
+                    hitSlop={6}
+                  >
+                    <Ionicons name="add" size={14} color="#00E5FF" />
+                    <Text style={styles.sectionCreateBtnText}>New Group</Text>
+                  </Pressable>
                 </View>
               </Animated.View>
             }
@@ -471,15 +497,33 @@ export default function HomeScreen() {
             }
           />
 
-          {/* Floating Create Button */}
-          {filteredGroups.length > 3 && (
-            <Pressable
-              style={styles.floatingFab}
-              onPress={() => setShowCreate(true)}
-              hitSlop={12}
+          {/* Permanent Floating Luxury "New Group" Action Pill */}
+          {filteredGroups.length > 0 && (
+            <Animated.View
+              style={[
+                styles.floatingFabWrapper,
+                {
+                  bottom: Math.max(22, insets.bottom + 12),
+                  transform: [{ scale: createBtnScale }],
+                },
+              ]}
             >
-              <Ionicons name="add" size={26} color="#06090F" />
-            </Pressable>
+              <Pressable
+                style={styles.floatingFabPill}
+                onPress={() => {
+                  void hapticMedium();
+                  setShowCreate(true);
+                }}
+                onPressIn={handleCreatePressIn}
+                onPressOut={handleCreatePressOut}
+                hitSlop={8}
+              >
+                <View style={styles.floatingFabIconBadge}>
+                  <Ionicons name="add" size={17} color="#06090F" />
+                </View>
+                <Text style={styles.floatingFabLabel}>New Group</Text>
+              </Pressable>
+            </Animated.View>
           )}
 
           {showCreate && (
@@ -545,7 +589,27 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+  },
+  headerCreateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#00E5FF',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    shadowColor: '#00E5FF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  headerCreateText: {
+    color: '#06090F',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.3,
   },
   headerIconBtn: {
     width: 36,
@@ -715,40 +779,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
     marginTop: 6,
   },
+  volumeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
   volumeText: {
     color: '#64748B',
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '500',
-    flex: 1,
-    marginRight: 8,
   },
   volumeAmount: {
     color: '#CBD5E1',
     fontWeight: '700',
   },
-  compactCreateBtn: {
+  activeCirclesPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#00E5FF',
-    paddingHorizontal: 11,
-    paddingVertical: 6,
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 8,
-    shadowColor: '#00E5FF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  compactCreateBtnText: {
-    color: '#06090F',
-    fontSize: 9.5,
-    fontWeight: '900',
-    letterSpacing: 0.6,
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#00F5A0',
+  },
+  activeCirclesText: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '700',
   },
   filterSection: {
     marginTop: 18,
@@ -802,20 +873,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingHorizontal: 4,
+    marginBottom: 12,
+    marginTop: 4,
+    paddingHorizontal: 2,
+  },
+  sectionTitleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
   },
   sectionTitle: {
     color: '#94A3B8',
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.2,
   },
-  sectionCount: {
-    color: '#64748B',
+  sectionBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  sectionBadgeText: {
+    color: '#CBD5E1',
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.8,
+  },
+  sectionCreateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 229, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.28)',
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 9,
+  },
+  sectionCreateBtnText: {
+    color: '#00E5FF',
+    fontSize: 11.5,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   emptyState: {
     alignItems: 'center',
@@ -883,20 +984,39 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.8,
   },
-  floatingFab: {
+  floatingFabWrapper: {
     position: 'absolute',
-    bottom: 24,
-    right: 20,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    right: 18,
+    zIndex: 99,
+  },
+  floatingFabPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
     backgroundColor: '#00E5FF',
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 22,
+    shadowColor: '#00E5FF',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+  },
+  floatingFabIconBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(6, 9, 15, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#00E5FF',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    elevation: 8,
+  },
+  floatingFabLabel: {
+    color: '#06090F',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.2,
   },
 });
