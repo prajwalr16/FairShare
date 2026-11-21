@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
+import { calculateManualExchange } from '../../utils/currencyConversion';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_ICONS, ExpenseCategory } from '../../constants/expenseCategories';
 import { hapticSelection, hapticSuccess, hapticWarning } from '../../utils/haptics';
 import {
@@ -54,23 +55,32 @@ export default function AddExpenseScreen() {
 
   const groupId = route.params?.groupId as string | undefined;
   const groupName = route.params?.groupName as string | undefined;
+  const duplicateFrom = route.params?.duplicateFrom as {
+    title?: string;
+    amount?: number;
+    category?: ExpenseCategory;
+    splitType?: SplitType;
+    paidBy?: string;
+    locationName?: string | null;
+    splits?: Array<{ userId: string; value: number }>;
+  } | undefined;
 
-  const [title, setTitle] = useState('');
-  const [amountText, setAmountText] = useState('');
+  const [title, setTitle] = useState(duplicateFrom?.title || '');
+  const [amountText, setAmountText] = useState(duplicateFrom?.amount ? String(duplicateFrom.amount) : '');
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [splitType, setSplitType] = useState<SplitType>('Equal');
+  const [splitType, setSplitType] = useState<SplitType>(duplicateFrom?.splitType || 'Equal');
   const [splitInputs, setSplitInputs] = useState<SplitInput[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [payerId, setPayerId] = useState<string | null>(null);
+  const [payerId, setPayerId] = useState<string | null>(duplicateFrom?.paidBy || null);
   const [isMultiPayer, setIsMultiPayer] = useState(false);
   const [payerContributions, setPayerContributions] = useState<Record<string, string>>({});
   const [payerPickerVisible, setPayerPickerVisible] = useState(false);
   const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
-  const [category, setCategory] = useState<ExpenseCategory>('Other');
+  const [category, setCategory] = useState<ExpenseCategory>(duplicateFrom?.category || 'Other');
   const [currency, setCurrency] = useState('INR');
   const [tripStops, setTripStops] = useState<TripStop[]>([]);
-  const [locationName, setLocationName] = useState('');
+  const [locationName, setLocationName] = useState(duplicateFrom?.locationName || '');
   const [journeyStopId, setJourneyStopId] = useState<string | null>(null);
   const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
   const [locationLongitude, setLocationLongitude] = useState<number | null>(null);
@@ -83,6 +93,12 @@ export default function AddExpenseScreen() {
   const [taxPercent, setTaxPercent] = useState<number | null>(null);
   const [receiptAttached, setReceiptAttached] = useState(false);
   const [receiptName, setReceiptName] = useState<string | null>(null);
+
+  // Manual Multi-Currency Converter
+  const [showCurrencyConverter, setShowCurrencyConverter] = useState(false);
+  const [foreignCurrency, setForeignCurrency] = useState('USD');
+  const [foreignAmountText, setForeignAmountText] = useState('');
+  const [customExchangeRate, setCustomExchangeRate] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -119,7 +135,9 @@ export default function AddExpenseScreen() {
       const userId = userResult.data.user?.id || null;
       setCurrentUserId(userId);
       setTripStops([]);
-      setLocationName('');
+      if (!duplicateFrom?.locationName) {
+        setLocationName('');
+      }
       setJourneyStopId(null);
       setLocationLatitude(null);
       setLocationLongitude(null);
@@ -132,8 +150,16 @@ export default function AddExpenseScreen() {
           setTripStops(tripResult.data.stops || []);
         }
       }
-      setPayerId(userId);
-      setCategory('Other');
+      if (duplicateFrom?.paidBy) {
+        setPayerId(duplicateFrom.paidBy);
+      } else {
+        setPayerId(userId);
+      }
+      if (duplicateFrom?.category) {
+        setCategory(duplicateFrom.category);
+      } else {
+        setCategory('Other');
+      }
 
       if (memberResult.error) {
         setMembers([]);
@@ -156,9 +182,25 @@ export default function AddExpenseScreen() {
         .filter(Boolean);
 
       setMembers(activeMembers);
-      setSelectedIds(ids);
-      setSplitInputs(buildDefaultInputs(splitType, 0, ids));
-      setValuesCustomized(false);
+
+      if (duplicateFrom?.splits && duplicateFrom.splits.length > 0) {
+        const validSplitUserIds = duplicateFrom.splits
+          .map((s) => s.userId)
+          .filter((id) => ids.includes(id));
+        if (validSplitUserIds.length > 0) {
+          setSelectedIds(validSplitUserIds);
+          setSplitInputs(duplicateFrom.splits.filter((s) => ids.includes(s.userId)));
+          setValuesCustomized(true);
+        } else {
+          setSelectedIds(ids);
+          setSplitInputs(buildDefaultInputs(splitType, duplicateFrom.amount || 0, ids));
+          setValuesCustomized(false);
+        }
+      } else {
+        setSelectedIds(ids);
+        setSplitInputs(buildDefaultInputs(splitType, duplicateFrom?.amount || 0, ids));
+        setValuesCustomized(false);
+      }
       setLoadingMembers(false);
     };
 
@@ -181,6 +223,18 @@ export default function AddExpenseScreen() {
     const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : 0;
   }, [amountText]);
+
+  const convertedTotal = useMemo(() => {
+    return calculateManualExchange(foreignAmountText, customExchangeRate);
+  }, [foreignAmountText, customExchangeRate]);
+
+  const applyConvertedAmount = () => {
+    if (convertedTotal > 0) {
+      setAmountText(String(convertedTotal));
+      setShowCurrencyConverter(false);
+      hapticSuccess();
+    }
+  };
 
   const multiPayerTotal = useMemo(() => {
     return Object.values(payerContributions).reduce((sum, val) => {
@@ -588,7 +642,22 @@ export default function AddExpenseScreen() {
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.label}>Amount</Text>
+              <View style={styles.amountLabelRow}>
+                <Text style={styles.label}>Amount</Text>
+                <Pressable
+                  style={styles.currencyToggleInlineBtn}
+                  onPress={() => {
+                    hapticSelection();
+                    setShowCurrencyConverter((prev) => !prev);
+                  }}
+                >
+                  <Ionicons name="globe-outline" size={13} color="#00E5FF" />
+                  <Text style={styles.currencyToggleInlineText}>
+                    {showCurrencyConverter ? 'Close Converter' : 'Convert Foreign'}
+                  </Text>
+                </Pressable>
+              </View>
+
               <View style={styles.amountInputWrapper}>
                 <Text style={styles.currency}>{getCurrencySymbol(currency)}</Text>
                 <TextInput
@@ -602,6 +671,87 @@ export default function AddExpenseScreen() {
                 />
               </View>
               <Text style={styles.helperText}>Group currency: {currency}</Text>
+
+              {showCurrencyConverter && (
+                <View style={styles.converterCard}>
+                  <View style={styles.converterHeader}>
+                    <View style={styles.converterHeaderTitleRow}>
+                      <Ionicons name="calculator-outline" size={15} color="#00E5FF" />
+                      <Text style={styles.converterTitle}>Manual Currency Converter</Text>
+                    </View>
+                    <Text style={styles.converterSubtitle}>
+                      Enter custom exchange rate. 100% private, zero external API requests.
+                    </Text>
+                  </View>
+
+                  <View style={styles.converterCurrenciesRow}>
+                    {['USD', 'EUR', 'GBP', 'THB', 'AED', 'SGD', 'JPY'].map((curr) => {
+                      const isActive = foreignCurrency === curr;
+                      return (
+                        <Pressable
+                          key={curr}
+                          style={[styles.converterCurrChip, isActive && styles.converterCurrChipActive]}
+                          onPress={() => {
+                            hapticSelection();
+                            setForeignCurrency(curr);
+                          }}
+                        >
+                          <Text style={[styles.converterCurrText, isActive && styles.converterCurrTextActive]}>
+                            {curr}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  <View style={styles.converterInputsRow}>
+                    <View style={styles.converterInputCol}>
+                      <Text style={styles.converterInputLabel}>Foreign ({foreignCurrency})</Text>
+                      <TextInput
+                        value={foreignAmountText}
+                        onChangeText={setForeignAmountText}
+                        placeholder="e.g. 500"
+                        placeholderTextColor="#64748B"
+                        style={styles.converterTextInput}
+                        keyboardType="decimal-pad"
+                        inputMode="decimal"
+                      />
+                    </View>
+
+                    <View style={styles.converterInputCol}>
+                      <Text style={styles.converterInputLabel}>Rate (1 {foreignCurrency} = ? {currency})</Text>
+                      <TextInput
+                        value={customExchangeRate}
+                        onChangeText={setCustomExchangeRate}
+                        placeholder="e.g. 86.50"
+                        placeholderTextColor="#64748B"
+                        style={styles.converterTextInput}
+                        keyboardType="decimal-pad"
+                        inputMode="decimal"
+                      />
+                    </View>
+                  </View>
+
+                  {convertedTotal > 0 && (
+                    <View style={styles.converterResultBox}>
+                      <View style={styles.converterResultTextRow}>
+                        <Text style={styles.converterResultFormula}>
+                          {foreignAmountText} {foreignCurrency} × {customExchangeRate}
+                        </Text>
+                        <Text style={styles.converterResultTotal}>
+                          = {formatCurrency(convertedTotal, currency)}
+                        </Text>
+                      </View>
+                      <Pressable style={styles.applyConvertedBtn} onPress={applyConvertedAmount}>
+                        <Ionicons name="checkmark-circle" size={16} color="#06090F" />
+                        <Text style={styles.applyConvertedBtnText}>
+                          Apply {formatCurrency(convertedTotal, currency)}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
 
             <View style={styles.section}>
@@ -1690,5 +1840,140 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.45,
+  },
+  amountLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  currencyToggleInlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(0, 229, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.25)',
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  currencyToggleInlineText: {
+    color: '#00E5FF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  converterCard: {
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.2)',
+    padding: 14,
+    marginTop: 10,
+  },
+  converterHeader: {
+    marginBottom: 10,
+  },
+  converterHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  converterTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  converterSubtitle: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  converterCurrenciesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  converterCurrChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  converterCurrChipActive: {
+    backgroundColor: 'rgba(0, 229, 255, 0.16)',
+    borderColor: '#00E5FF',
+  },
+  converterCurrText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  converterCurrTextActive: {
+    color: '#00E5FF',
+  },
+  converterInputsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  converterInputCol: {
+    flex: 1,
+  },
+  converterInputLabel: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 5,
+  },
+  converterTextInput: {
+    backgroundColor: '#06090F',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2A3A50',
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  converterResultBox: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  converterResultTextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  converterResultFormula: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  converterResultTotal: {
+    color: '#00E5FF',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  applyConvertedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#00E5FF',
+    borderRadius: 10,
+    paddingVertical: 9,
+  },
+  applyConvertedBtnText: {
+    color: '#06090F',
+    fontSize: 12,
+    fontWeight: '800',
   },
 });

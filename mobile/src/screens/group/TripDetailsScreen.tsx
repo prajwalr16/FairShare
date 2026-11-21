@@ -100,6 +100,7 @@ export default function TripDetailsScreen() {
   const [endDate, setEndDate] = useState(cachedTrip?.end_date || '');
   const [timezone, setTimezone] = useState(cachedTrip?.timezone || defaultTimezone());
   const [notes, setNotes] = useState(cachedTrip?.notes || '');
+  const [budgetText, setBudgetText] = useState(cachedTrip?.budget ? String(cachedTrip.budget) : '');
   const [selectedDay, setSelectedDay] = useState(1);
   const [showDetails, setShowDetails] = useState(false);
 
@@ -148,15 +149,16 @@ export default function TripDetailsScreen() {
 
   const isDirty = useMemo(() => {
     if (!trip) {
-      return Boolean(startDate || endDate || notes);
+      return Boolean(startDate || endDate || notes || budgetText);
     }
     return (
       (startDate || '') !== (trip.start_date || '') ||
       (endDate || '') !== (trip.end_date || '') ||
       (timezone || '') !== (trip.timezone || '') ||
-      (notes || '') !== (trip.notes || '')
+      (notes || '') !== (trip.notes || '') ||
+      (budgetText || '') !== (trip.budget ? String(trip.budget) : '')
     );
-  }, [trip, startDate, endDate, timezone, notes]);
+  }, [trip, startDate, endDate, timezone, notes, budgetText]);
 
   const load = useCallback(async () => {
     if (!groupId) return;
@@ -167,6 +169,7 @@ export default function TripDetailsScreen() {
       setEndDate(cached.end_date || '');
       setTimezone(cached.timezone || defaultTimezone());
       setNotes(cached.notes || '');
+      setBudgetText(cached.budget ? String(cached.budget) : '');
       setLoading(false);
     }
     const result = await getTrip(groupId, Boolean(cached));
@@ -202,6 +205,7 @@ export default function TripDetailsScreen() {
       setEndDate(result.data.end_date || '');
       setTimezone(result.data.timezone || defaultTimezone());
       setNotes(result.data.notes || '');
+      setBudgetText(result.data.budget ? String(result.data.budget) : '');
       setLoading(false);
     }
   }, [groupId]);
@@ -259,6 +263,7 @@ export default function TripDetailsScreen() {
       end_date: endDate || null,
       timezone: timezone.trim() || null,
       notes: notes.trim() || null,
+      budget: budgetText.trim() ? Number(budgetText.trim()) : null,
     };
     const result = trip ? await updateTrip(groupId, payload) : await createTrip(groupId, payload);
     setSaving(false);
@@ -272,6 +277,7 @@ export default function TripDetailsScreen() {
       setEndDate(result.data.end_date || '');
       setTimezone(result.data.timezone || defaultTimezone());
       setNotes(result.data.notes || '');
+      setBudgetText(result.data.budget ? String(result.data.budget) : '');
       setSelectedDay(1);
     }
   };
@@ -636,6 +642,15 @@ export default function TripDetailsScreen() {
                     <TextInput value={timezone} onChangeText={setTimezone} placeholder="Asia/Kolkata" placeholderTextColor="#64748B" style={styles.input} />
                     <Text style={styles.inputLabel}>Notes</Text>
                     <TextInput value={notes} onChangeText={setNotes} placeholder="High-level plan, reminders, packing notes…" placeholderTextColor="#64748B" style={[styles.input, styles.textArea]} multiline textAlignVertical="top" />
+                    <Text style={styles.inputLabel}>Target Trip Budget (optional)</Text>
+                    <TextInput
+                      value={budgetText}
+                      onChangeText={(t) => setBudgetText(t.replace(/[^0-9.]/g, ''))}
+                      placeholder="e.g. 50000"
+                      placeholderTextColor="#64748B"
+                      keyboardType="numeric"
+                      style={styles.input}
+                    />
                   </View>
                 )}
               </View>

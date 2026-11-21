@@ -235,3 +235,40 @@ def test_viewer_can_read_but_cannot_edit_trip(client, seed_users):
         assert blocked_stop.status_code == 403
     finally:
         app.dependency_overrides[get_current_user] = lambda: CurrentUser(id=USER_A, email="a@example.com", full_name="A")
+
+
+def test_trip_budget_tracking(client, seed_users):
+    group = create_trip_group(client)
+    gid = group["id"]
+
+    # 1. Create a trip with an explicit target budget
+    created = client.post(
+        f"/api/v1/groups/{gid}/trip",
+        json={
+            "start_date": "2026-11-01",
+            "end_date": "2026-11-06",
+            "budget": 45000.0,
+            "notes": "Goa Beach & Heritage Tour",
+        },
+    )
+    assert created.status_code == 201, created.text
+    data = created.json()
+    assert float(data["budget"]) == 45000.0
+
+    # 2. Retrieve trip via GET and verify budget persistence
+    get_res = client.get(f"/api/v1/groups/{gid}/trip")
+    assert get_res.status_code == 200
+    assert float(get_res.json()["budget"]) == 45000.0
+
+    # 3. Update target budget via PATCH
+    patch_res = client.patch(
+        f"/api/v1/groups/{gid}/trip",
+        json={"budget": 60000.0},
+    )
+    assert patch_res.status_code == 200
+    assert float(patch_res.json()["budget"]) == 60000.0
+
+    # 4. Verify updated budget in subsequent GET
+    get_res2 = client.get(f"/api/v1/groups/{gid}/trip")
+    assert float(get_res2.json()["budget"]) == 60000.0
+

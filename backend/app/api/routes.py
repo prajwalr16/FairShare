@@ -4,6 +4,7 @@ import inspect
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -17,6 +18,15 @@ from ..schemas.group import (
     AcceptInvitation, GroupCreate, GroupFinancialResponse, GroupOverview, GroupSettings,
     GroupSummary, GroupUpdate, InviteMember, MemberBatchCreate, MemberResponse,
     PendingInvitation, RoleUpdate, UnclaimedMemberResponse,
+)
+from ..schemas.checklist import ChecklistItemCreate, ChecklistBatchImport, ChecklistSummary
+from ..services.checklist_service import (
+    get_group_checklists,
+    create_checklist_item,
+    batch_import_checklist_items,
+    toggle_checklist_status,
+    assign_checklist_item,
+    delete_checklist_item,
 )
 from ..schemas.notification import PushTokenRegister
 from ..schemas.place import PlaceSearchResponse
@@ -271,3 +281,73 @@ def register_token_route(
 ):
     register_push_token(session, user.id, payload.token, payload.platform)
     return {"status": "ok"}
+
+
+@router.get("/groups/{group_id}/checklists", response_model=ChecklistSummary)
+def list_checklists_route(
+    group_id: UUID,
+    user: CurrentUser = Depends(get_current_user),
+    session: Session = Depends(get_read_db),
+):
+    return get_group_checklists(session, group_id, user.id)
+
+
+@router.post("/groups/{group_id}/checklists", status_code=status.HTTP_201_CREATED)
+def create_checklist_item_route(
+    group_id: UUID,
+    payload: ChecklistItemCreate,
+    user: CurrentUser = Depends(write_context),
+    session: Session = Depends(get_db),
+):
+    item = create_checklist_item(session, group_id, user.id, payload)
+    return {"id": str(item.id)}
+
+
+@router.post("/groups/{group_id}/checklists/import", status_code=status.HTTP_200_OK)
+def import_checklist_items_route(
+    group_id: UUID,
+    payload: ChecklistBatchImport,
+    user: CurrentUser = Depends(write_context),
+    session: Session = Depends(get_db),
+):
+    count = batch_import_checklist_items(session, group_id, user.id, payload.items)
+    return {"imported": count}
+
+
+@router.patch("/groups/{group_id}/checklists/{checklist_id}/toggle", status_code=status.HTTP_200_OK)
+def toggle_checklist_item_route(
+    group_id: UUID,
+    checklist_id: UUID,
+    user: CurrentUser = Depends(write_context),
+    session: Session = Depends(get_db),
+):
+    new_status = toggle_checklist_status(session, group_id, checklist_id, user.id)
+    return {"is_packed": new_status}
+
+
+class AssignPayload(BaseModel):
+    assigned_to: UUID | None = None
+
+
+@router.patch("/groups/{group_id}/checklists/{checklist_id}/assign", status_code=status.HTTP_200_OK)
+def assign_checklist_item_route(
+    group_id: UUID,
+    checklist_id: UUID,
+    payload: AssignPayload,
+    user: CurrentUser = Depends(write_context),
+    session: Session = Depends(get_db),
+):
+    assign_checklist_item(session, group_id, checklist_id, user.id, payload.assigned_to)
+    return {"status": "ok"}
+
+
+@router.delete("/groups/{group_id}/checklists/{checklist_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_checklist_item_route(
+    group_id: UUID,
+    checklist_id: UUID,
+    user: CurrentUser = Depends(write_context),
+    session: Session = Depends(get_db),
+):
+    delete_checklist_item(session, group_id, checklist_id, user.id)
+    return None
+

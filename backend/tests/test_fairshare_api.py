@@ -552,3 +552,52 @@ def test_register_push_token(client, seed_users):
     })
     assert res.status_code == 200
     assert res.json() == {'status': 'ok'}
+
+
+def test_expense_edit_tracking_previous_amount(client, seed_users):
+    group = create_group(client)
+    gid = group['id']
+    add_members(gid)
+
+    # 1. Create an initial expense with amount 1000
+    res = client.post(f'/api/v1/groups/{gid}/expenses', json={
+        'title': 'Dinner & Desserts',
+        'amount': '1000',
+        'paid_by': str(USER_A),
+        'split_type': 'Equal',
+        'splits': [
+            {'user_id': str(USER_A), 'value': '0'},
+            {'user_id': str(USER_B), 'value': '0'},
+        ],
+    })
+    assert res.status_code == 201
+    created_data = res.json()
+    expense_id = created_data['id']
+    assert created_data['amount'] == '1000.00'
+    # New expense has no previous amount
+    assert created_data.get('previous_amount') is None
+
+    # 2. Update the expense amount from 1000 to 1450
+    update_res = client.put(f'/api/v1/expenses/{expense_id}', json={
+        'title': 'Dinner, Desserts & Extra Mocktails',
+        'amount': '1450',
+        'paid_by': str(USER_A),
+        'split_type': 'Equal',
+        'splits': [
+            {'user_id': str(USER_A), 'value': '0'},
+            {'user_id': str(USER_B), 'value': '0'},
+        ],
+    })
+    assert update_res.status_code == 200
+    updated_data = update_res.json()
+    assert updated_data['amount'] == '1450.00'
+    # Verify previous_amount is recorded as 1000.00
+    assert Decimal(str(updated_data['previous_amount'])) == Decimal('1000.00')
+
+    # 3. Retrieve expense details and verify audit trail is preserved
+    details_res = client.get(f'/api/v1/expenses/{expense_id}')
+    assert details_res.status_code == 200
+    details_data = details_res.json()
+    assert Decimal(str(details_data['expense']['amount'])) == Decimal('1450.00')
+    assert Decimal(str(details_data['expense']['previous_amount'])) == Decimal('1000.00')
+

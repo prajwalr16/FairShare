@@ -12,7 +12,7 @@ def test_single_alembic_head_and_ordered_migrations():
     config.set_main_option("script_location", str(root / "alembic"))
     scripts = ScriptDirectory.from_config(config)
 
-    assert scripts.get_heads() == ["0011_expense_previous_amount"]
+    assert scripts.get_heads() == ["0012_trip_checklists"]
 
     revisions = list(scripts.walk_revisions(base="base", head="heads"))
     assert {item.revision for item in revisions} >= {
@@ -27,6 +27,7 @@ def test_single_alembic_head_and_ordered_migrations():
         "0009_push_tokens",
         "0010_placeholder_members",
         "0011_expense_previous_amount",
+        "0012_trip_checklists",
     }
 
     # Keep the new migration attached to the existing linear chain.
@@ -36,6 +37,7 @@ def test_single_alembic_head_and_ordered_migrations():
     assert revision_map["0009_push_tokens"].down_revision == "0008_expense_date_and_updated_at"
     assert revision_map["0010_placeholder_members"].down_revision == "0009_push_tokens"
     assert revision_map["0011_expense_previous_amount"].down_revision == "0010_placeholder_members"
+    assert revision_map["0012_trip_checklists"].down_revision == "0011_expense_previous_amount"
 
 
 def test_postgres_migration_smoke_marker():

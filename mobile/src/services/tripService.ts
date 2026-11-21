@@ -32,6 +32,7 @@ export type Trip = {
   end_date: string | null;
   timezone: string | null;
   notes: string | null;
+  budget?: number | string | null;
   created_at: string;
   updated_at: string;
   stops: TripStop[];
@@ -42,6 +43,7 @@ export type TripPayload = {
   end_date?: string | null;
   timezone?: string | null;
   notes?: string | null;
+  budget?: number | null;
 };
 
 export type TripStopPayload = {
