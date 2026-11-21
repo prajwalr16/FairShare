@@ -15,10 +15,11 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import BrandLogo from '../../components/BrandLogo';
 import PasswordInput from '../../components/PasswordInput';
+import StatusBanner, { StatusBannerType } from '../../components/StatusBanner';
 import { signUp } from '../../services/authService';
 
 type Status = {
-  type: 'error' | 'success';
+  type: StatusBannerType;
   message: string;
 } | null;
 
@@ -151,27 +152,11 @@ export default function SignUpScreen() {
             onChangeText={setConfirmPassword}
           />
 
-          {status ? (
-            <View
-              style={[
-                styles.statusBox,
-                status.type === 'error'
-                  ? styles.statusError
-                  : styles.statusSuccess,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  status.type === 'error'
-                    ? styles.statusErrorText
-                    : styles.statusSuccessText,
-                ]}
-              >
-                {status.message}
-              </Text>
-            </View>
-          ) : null}
+          <StatusBanner
+            type={status?.type}
+            message={status?.message}
+            onDismiss={() => setStatus(null)}
+          />
 
           <Pressable
             style={[styles.button, loading && styles.disabled]}
